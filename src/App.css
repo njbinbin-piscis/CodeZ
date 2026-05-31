@@ -64,6 +64,41 @@
 
 .codez-open-folder:hover { border-color: var(--accent); }
 
+.codez-chat-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.codez-chat-toggle.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.codez-ide-split {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.codez-ide-main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.codez-ide-chat {
+  width: 380px;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
 .codez-project-path {
   font-size: 12px;
   color: var(--text-dim);

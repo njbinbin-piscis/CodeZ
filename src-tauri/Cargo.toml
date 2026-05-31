@@ -1,0 +1,58 @@
+[package]
+name = "codez-desktop"
+version = "0.0.1"
+description = "CodeZ — Cursor-like AI IDE desktop host"
+authors = ["CodeZ"]
+license = "Apache-2.0"
+edition = "2021"
+rust-version = "1.77.2"
+autobins = false
+default-run = "codez-desktop"
+
+[lib]
+name = "codez_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "codez-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Shared agent kernel (used today for process spawning; agent loop wiring lands in M1).
+pisci-core = { workspace = true }
+pisci-kernel = { workspace = true }
+
+# Tauri runtime + the plugins the IDE workspace needs.
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+
+# Async runtime + helpers.
+tokio = { workspace = true }
+futures = "0.3"
+
+# LSP ↔ WebSocket bridge transport.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots", "connect"], default-features = false }
+tungstenite = "0.24"
+
+# Filesystem watcher for the IDE file-change bridge.
+notify = "7"
+
+# PTY for the embedded terminal.
+portable-pty = "0.8"
+
+# File metadata formatting + encoding detection for file reads.
+chrono = { version = "0.4", features = ["serde"] }
+encoding_rs = "0.8"
+
+# Serialization + logging.
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints]
+workspace = true

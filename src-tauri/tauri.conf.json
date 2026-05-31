@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CodeZ",
+  "mainBinaryName": "codez-desktop",
+  "version": "0.0.1",
+  "identifier": "com.codez.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5273",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CodeZ",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 860,
+        "minHeight": 600,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "CodeZ — Cursor-like AI IDE",
+    "longDescription": "CodeZ is a Cursor-like AI IDE with an editor-centric IDE mode and a task-centric Agent mode, built on the shared pisci-engine kernel.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libsoup-3.0-0",
+          "libjavascriptcoregtk-4.1-0",
+          "librsvg2-2",
+          "libgtk-3-0"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

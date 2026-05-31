@@ -15,16 +15,30 @@ Both modes reuse one kernel (`pisci-core` + `pisci-kernel`) so the editor
 
 ## Status
 
-**M0 — dual-mode shell + IDE workspace (in progress).** The frontend is a
-Vite + React + TypeScript app with a top-level **IDE / Agent** mode switch.
+**M0 — dual-mode shell + IDE workspace + Tauri host (done).** The frontend is
+a Vite + React + TypeScript app with a top-level **IDE / Agent** mode switch.
 The IDE workspace (Monaco editor, file tree, tabs, integrated terminal, Git
 panel, search, LSP bridge) is ported from openpisci's `Pond/IDE` and decoupled
-from the chat Pool — it now takes a standalone `projectDir`. Agent mode is a
-placeholder slot for the autonomous task workflow (M4).
+from the chat Pool — it now takes a standalone `projectDir`. The `src-tauri`
+host implements the IDE commands (file I/O, git, search, PTY terminal, file
+watcher, LSP ↔ WebSocket bridge) plus `open_path`.
 
-`crates/codez-host` links the `pisci-engine` kernel and prints a banner,
-proving the git dependency resolves and builds; the Tauri host that bridges
-this frontend to the kernel lands in a later milestone.
+**M1 — AI chat sidebar (done).** IDE mode has a chat panel that drives a single
+agent turn on the kernel via `pisci_kernel::headless::run_pisci_turn`. The
+backend `chat_send` command streams `AgentEvent`s (text + tool calls) to the UI
+over a Tauri event channel; the agent edits files in place with its own tools
+and the IDE's file watcher reloads them. Reference files in a prompt with
+`@path/to/file`. Agent mode (full autonomous task board) remains a placeholder
+for M4.
+
+`crates/codez-host` is the original kernel-link smoke binary and still builds.
+
+### Configuration
+
+The chat agent reads `config.json` (LLM provider + API key + model) and writes
+`pisci.db` in the app-data dir for `com.codez.desktop`, or in `$CODEZ_CONFIG_DIR`
+if set (you can point this at an existing openpisci config dir). Without a
+configured API key, `chat_send` returns a clear error.
 
 ## Layout
 
@@ -32,15 +46,23 @@ this frontend to the kernel lands in a later milestone.
 CodeZ/
 ├── Cargo.toml                  # Rust workspace; depends on pisci-engine via git
 ├── crates/
-│   └── codez-host/             # kernel-linked host seed
+│   └── codez-host/             # kernel-link smoke binary
+├── src-tauri/                  # Tauri desktop host
+│   ├── src/
+│   │   ├── lib.rs              # builder + command registration
+│   │   ├── state.rs           # AppState (terminals / watchers / LSP)
+│   │   ├── lsp/               # LSP ↔ WebSocket bridge
+│   │   └── commands/          # ide.rs, chat.rs, platform.rs
+│   ├── tauri.conf.json
+│   └── capabilities/
 ├── package.json                # frontend (Vite + React + TS)
 ├── index.html
 └── src/
     ├── App.tsx                 # dual-mode top-level shell (IDE / Agent)
     ├── i18n.ts                 # minimal i18next init (English fallbacks)
-    ├── services/tauri/         # ide / lsp IPC + folder dialog
+    ├── services/tauri/         # ide / lsp / chat IPC + folder dialog
     └── workspaces/
-        ├── ide/                # ported IDE workspace (decoupled from Pool)
+        ├── ide/                # ported IDE workspace + AssistantPanel (chat)
         └── agent/              # Agent-mode placeholder (M4)
 ```
 
@@ -55,15 +77,17 @@ npm run build       # tsc + vite build
 npm run dev         # dev server
 ```
 
-Kernel host:
+Desktop host (Rust):
 
 ```bash
-cargo run -p codez-host
+cargo check -p codez-desktop   # or: cargo tauri dev (needs the Tauri CLI)
+cargo run -p codez-host        # kernel-link smoke binary
 ```
 
 `cargo` fetches `pisci-engine` from GitHub and compiles the kernel. To develop
 the kernel and CodeZ together locally, add a `[patch]` pointing the git source
-at a local `../pisci-engine` checkout.
+at a local `../pisci-engine` checkout. The desktop host needs the usual Tauri
+Linux system libs (webkit2gtk-4.1, gtk-3, libsoup-3).
 
 ## Design
 

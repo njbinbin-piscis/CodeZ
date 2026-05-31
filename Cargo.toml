@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/codez-host"]
+members = ["crates/codez-host", "src-tauri"]
 resolver = "2"
 
 [workspace.lints.rust]
