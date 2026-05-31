@@ -118,6 +118,17 @@ cargo check -p codez-desktop   # or: cargo tauri dev (needs the Tauri CLI)
 cargo run -p codez-host        # kernel-link smoke binary
 ```
 
+Packaging (installers):
+
+```bash
+npm run tauri build            # → src-tauri/target/release/bundle/{deb,appimage,rpm}
+```
+
+CI builds the Linux `.deb` + `.AppImage` bundles via
+`.github/workflows/release.yml` (using `tauri-action`) on a pushed `v*` tag or
+manual dispatch, attaching them to a draft GitHub release and as workflow
+artifacts.
+
 `cargo` fetches `pisci-engine` from GitHub and compiles the kernel. To develop
 the kernel and CodeZ together locally, add a `[patch]` pointing the git source
 at a local `../pisci-engine` checkout. The desktop host needs the usual Tauri
