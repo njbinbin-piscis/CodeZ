@@ -8,15 +8,18 @@
 //! [`EventSink`] below, which re-emits every kernel event as a Tauri event.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use pisci_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
 use pisci_kernel::agent::tool::{new_tool_registry_handle, ToolRegistryHandleExt};
 use pisci_kernel::headless::{self, register_default_cli_tools, HeadlessDeps};
+
+use crate::state::AppState;
 
 /// Tauri event channel that carries every streamed kernel event to the UI.
 pub const CHAT_EVENT: &str = "codez:chat-event";
@@ -74,6 +77,7 @@ pub(crate) fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 pub async fn chat_send(
     app: AppHandle,
+    state: State<'_, AppState>,
     prompt: String,
     session_id: Option<String>,
     workspace: Option<String>,
@@ -101,13 +105,34 @@ pub async fn chat_send(
         ..Default::default()
     };
 
-    let response = headless::run_pisci_turn(request, deps)
-        .await
-        .map_err(|e| format!("agent turn failed: {e}"))?;
+    // Register a cancel flag so `chat_cancel` can stop this turn mid-run.
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let mut slot = state.chat_cancel.lock().await;
+        *slot = Some(cancel.clone());
+    }
 
+    let result = headless::run_pisci_turn_cancellable(request, deps, cancel).await;
+
+    {
+        let mut slot = state.chat_cancel.lock().await;
+        *slot = None;
+    }
+
+    let response = result.map_err(|e| format!("agent turn failed: {e}"))?;
     Ok(ChatResult {
         ok: response.ok,
         session_id: response.session_id,
         response_text: response.response_text,
     })
+}
+
+/// Stop the in-flight chat turn, if any.
+#[tauri::command]
+pub async fn chat_cancel(state: State<'_, AppState>) -> Result<(), String> {
+    let slot = state.chat_cancel.lock().await;
+    if let Some(flag) = slot.as_ref() {
+        flag.store(true, Ordering::SeqCst);
+    }
+    Ok(())
 }

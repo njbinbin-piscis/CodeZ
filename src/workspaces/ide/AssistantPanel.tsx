@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   chatSend,
+  chatCancel,
   onChatEvent,
   listSessions,
   getMessages,
@@ -450,6 +451,11 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
           onKeyDown={onKeyDown}
           rows={3}
         />
+        {busy && (
+          <button className="codez-stop" onClick={() => void chatCancel()} title="Stop the agent">
+            Stop
+          </button>
+        )}
         <button onClick={submit} disabled={!input.trim()}>
           {busy ? "Queue" : "Send"}
         </button>

@@ -59,6 +59,7 @@ pub fn run() {
             commands::platform::open_path,
             // AI chat (agent turn on the pisci-engine kernel)
             commands::chat::chat_send,
+            commands::chat::chat_cancel,
             // chat session management
             commands::session::chat_list_sessions,
             commands::session::chat_get_messages,

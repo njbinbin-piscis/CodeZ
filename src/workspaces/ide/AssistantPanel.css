@@ -284,3 +284,13 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.codez-assistant-input button.codez-stop {
+  background: transparent;
+  color: #f87171;
+  border: 1px solid #6b2222;
+}
+
+.codez-assistant-input button.codez-stop:hover {
+  background: rgba(248, 113, 113, 0.12);
+}

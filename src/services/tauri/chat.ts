@@ -81,3 +81,8 @@ export function forkSession(sessionId: string, title?: string): Promise<SessionM
 export function deleteSession(sessionId: string): Promise<void> {
   return invoke<void>("chat_delete_session", { sessionId });
 }
+
+/** Stop the in-flight agent turn, if any. */
+export function chatCancel(): Promise<void> {
+  return invoke<void>("chat_cancel");
+}
