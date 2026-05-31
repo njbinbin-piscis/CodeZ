@@ -33,14 +33,22 @@ export const ideApi = {
   searchFiles: (
     projectDir: string,
     query: string,
-    filePattern?: string,
-    caseSensitive?: boolean,
+    opts?: {
+      filePattern?: string;
+      caseSensitive?: boolean;
+      wholeWord?: boolean;
+      useRegex?: boolean;
+      excludePattern?: string;
+    },
   ) =>
     invoke<SearchResult[]>("ide_search_files", {
       projectDir,
       query,
-      filePattern,
-      caseSensitive,
+      filePattern: opts?.filePattern,
+      caseSensitive: opts?.caseSensitive,
+      wholeWord: opts?.wholeWord,
+      useRegex: opts?.useRegex,
+      excludePattern: opts?.excludePattern,
     }),
 
   // ─── Git operations ──────────────────────────────────────────────────
@@ -62,6 +70,9 @@ export const ideApi = {
 
   gitReset: (projectDir: string, path: string) =>
     invoke<void>("ide_git_reset", { projectDir, path }),
+
+  gitDiscard: (projectDir: string, path: string) =>
+    invoke<void>("ide_git_discard", { projectDir, path }),
 
   gitAddAll: (projectDir: string) =>
     invoke<void>("ide_git_add_all", { projectDir }),

@@ -33,9 +33,12 @@ interface CodeEditorProps {
   projectDir: string | null;
   onChange: (value: string) => void;
   onSave?: () => void;
+  /// When set (and matching this tab), move the cursor to line/column and
+  /// reveal it. `nonce` forces re-reveal even for the same line.
+  reveal?: { line: number; column: number; nonce: number } | null;
 }
 
-export default function CodeEditor({ tab, projectDir, onChange, onSave }: CodeEditorProps) {
+export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }: CodeEditorProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
   const lspRef = useRef<LspProvidersRegistration | null>(null);
@@ -43,6 +46,25 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave }: CodeEd
   const inlineStateRef = useRef<InlineEditState | null>(null);
   inlineStateRef.current = inline;
   const editorTheme = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot);
+
+  // Move the cursor to a target line/column and center it (used by Search
+  // "go to result" and other navigation). Reads the latest `reveal` via a ref.
+  const revealRef = useRef(reveal);
+  revealRef.current = reveal;
+  const applyReveal = useCallback(() => {
+    const editor = editorRef.current;
+    const r = revealRef.current;
+    if (!editor || !r) return;
+    const line = Math.max(1, r.line || 1);
+    const column = Math.max(1, r.column || 1);
+    editor.revealLineInCenter?.(line);
+    editor.setPosition?.({ lineNumber: line, column });
+    editor.focus?.();
+  }, []);
+
+  useEffect(() => {
+    if (reveal) applyReveal();
+  }, [reveal, applyReveal]);
 
   // Monaco decorations (green "added" lines) + view zone (red "removed" block)
   // backing the in-editor inline diff preview.
@@ -314,6 +336,12 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave }: CodeEd
         // ignore corrupt persisted theme
       }
 
+      // If this editor was opened to navigate to a specific position
+      // (e.g. a search result), apply it now that the editor exists.
+      if (revealRef.current) {
+        requestAnimationFrame(() => applyReveal());
+      }
+
       // ── LSP integration ────────────────────────────────────────────
       const lang = tab.language || languageForFile(tab.path);
       const fullPath = projectDir ? `${projectDir}/${tab.path}` : tab.path;
@@ -349,7 +377,7 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave }: CodeEd
           });
       }
     },
-    [tab.path, tab.language, tab.content, projectDir],
+    [tab.path, tab.language, tab.content, projectDir, applyReveal],
   );
 
   useEffect(() => {

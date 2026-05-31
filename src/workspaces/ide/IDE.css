@@ -836,6 +836,162 @@
   text-overflow: ellipsis;
 }
 
+/* ─── Full-featured search (toggles + include/exclude + grouped results) ── */
+.search-input-row {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.search-panel .search-main-input {
+  margin-bottom: 0;
+  padding-right: 92px;
+}
+
+.search-toggles {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+}
+
+.search-toggles button {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+.search-toggles button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.search-toggles button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.search-panel .search-glob-input {
+  margin-bottom: 6px;
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.search-status {
+  opacity: 0.55;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.search-error {
+  color: var(--error, #f87171);
+  font-size: 12px;
+  padding: 6px 8px;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.search-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 6px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.search-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.search-group-head:hover {
+  background: var(--bg-hover);
+}
+
+.search-group-caret {
+  width: 10px;
+  color: var(--text-muted);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.search-group-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.search-group-dir {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.search-group-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.search-match {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px 2px 22px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.search-match:hover {
+  background: var(--bg-hover);
+}
+
+.search-match-line {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.search-match-text {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-title-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
 /* ─── No project dir placeholder ──────────────────────────────────────── */
 
 .ide-no-project {

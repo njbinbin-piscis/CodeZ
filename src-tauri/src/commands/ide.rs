@@ -414,6 +414,9 @@ pub async fn ide_search_files(
     query: String,
     file_pattern: Option<String>,
     case_sensitive: Option<bool>,
+    whole_word: Option<bool>,
+    use_regex: Option<bool>,
+    exclude_pattern: Option<String>,
 ) -> Result<Vec<SearchResult>, String> {
     let root = PathBuf::from(&project_dir);
     if !root.exists() {
@@ -424,11 +427,23 @@ pub async fn ide_search_files(
     }
 
     let case = case_sensitive.unwrap_or(false);
-    let max_results = 500;
+    let word = whole_word.unwrap_or(false);
+    let regex = use_regex.unwrap_or(false);
+    let max_results = 1000;
     let mut results = Vec::new();
 
     // Try ripgrep first
-    let rg_result = try_ripgrep(&root, &query, file_pattern.as_deref(), case, max_results).await;
+    let rg_result = try_ripgrep(
+        &root,
+        &query,
+        file_pattern.as_deref(),
+        exclude_pattern.as_deref(),
+        case,
+        word,
+        regex,
+        max_results,
+    )
+    .await;
     match rg_result {
         Ok(rg_results) => {
             eprintln!(
@@ -466,25 +481,48 @@ pub async fn ide_search_files(
     Ok(results)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn try_ripgrep(
     root: &Path,
     query: &str,
     file_pattern: Option<&str>,
+    exclude_pattern: Option<&str>,
     case_sensitive: bool,
+    whole_word: bool,
+    use_regex: bool,
     max_results: usize,
 ) -> Result<Vec<SearchResult>, String> {
     let mut cmd = tokio_command("rg");
     cmd.arg("--json")
         .arg("--max-count")
-        .arg("5")
+        .arg("50")
         .arg("--max-filesize")
         .arg("1M");
 
     if !case_sensitive {
         cmd.arg("-i");
     }
+    if whole_word {
+        cmd.arg("-w");
+    }
+    if !use_regex {
+        // Treat the query as a literal string, not a regex.
+        cmd.arg("-F");
+    }
     if let Some(pat) = file_pattern {
-        cmd.arg("--glob").arg(pat);
+        if !pat.trim().is_empty() {
+            cmd.arg("--glob").arg(pat);
+        }
+    }
+    if let Some(ex) = exclude_pattern {
+        if !ex.trim().is_empty() {
+            // Support comma/space separated exclude globs.
+            for g in ex.split([',', ' ']).filter(|s| !s.trim().is_empty()) {
+                let g = g.trim();
+                let neg = if g.starts_with('!') { g.to_string() } else { format!("!{g}") };
+                cmd.arg("--glob").arg(neg);
+            }
+        }
     }
     cmd.arg("--").arg(query).arg(root.as_os_str());
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -516,6 +554,14 @@ async fn try_ripgrep(
                     .trim_end()
                     .to_string();
 
+                // 1-based column from the first submatch byte offset (0 if none).
+                let column = data["submatches"]
+                    .as_array()
+                    .and_then(|a| a.first())
+                    .and_then(|m| m["start"].as_u64())
+                    .map(|s| s as usize + 1)
+                    .unwrap_or(0);
+
                 // Extract relative path
                 let rel_path = path
                     .strip_prefix(&root.to_string_lossy().to_string())
@@ -526,7 +572,7 @@ async fn try_ripgrep(
                 results.push(SearchResult {
                     path: rel_path,
                     line: line_num,
-                    column: 0,
+                    column,
                     text,
                     context_before: None,
                     context_after: None,
@@ -633,11 +679,11 @@ fn search_dir_recursive(
                     } else {
                         line_text.to_lowercase()
                     };
-                    if line_cmp.contains(&query_cmp) {
+                    if let Some(byte_idx) = line_cmp.find(&query_cmp) {
                         results.push(SearchResult {
                             path: rel_path.clone(),
                             line: line_num + 1,
-                            column: 0,
+                            column: byte_idx + 1,
                             text: line_text.to_string(),
                             context_before: None,
                             context_after: None,
@@ -900,6 +946,35 @@ pub async fn ide_git_add(project_dir: String, path: String) -> Result<(), String
     run_git_cmd(&root, &["add", &path])
         .await
         .map_err(|e| format!("git add failed: {}", e))?;
+    Ok(())
+}
+
+/// Discard local changes to a file. For tracked files this restores the file
+/// to HEAD (dropping both staged and worktree changes); untracked files are
+/// removed from disk. Mirrors VS Code's "Discard Changes".
+#[tauri::command]
+pub async fn ide_git_discard(project_dir: String, path: String) -> Result<(), String> {
+    let root = PathBuf::from(&project_dir);
+
+    // Is the path tracked? `git ls-files --error-unmatch` exits non-zero for
+    // untracked paths (run_git_cmd returns Err in that case).
+    let tracked = run_git_cmd(&root, &["ls-files", "--error-unmatch", "--", &path])
+        .await
+        .is_ok();
+
+    if tracked {
+        run_git_cmd(&root, &["checkout", "HEAD", "--", &path])
+            .await
+            .map_err(|e| format!("git discard failed: {}", e))?;
+    } else {
+        // Untracked — delete the file (or directory) from the working tree.
+        let abs = root.join(&path);
+        if abs.is_dir() {
+            std::fs::remove_dir_all(&abs).map_err(|e| format!("remove dir failed: {}", e))?;
+        } else if abs.exists() {
+            std::fs::remove_file(&abs).map_err(|e| format!("remove file failed: {}", e))?;
+        }
+    }
     Ok(())
 }
 

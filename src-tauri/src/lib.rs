@@ -38,6 +38,7 @@ pub fn run() {
             commands::ide::ide_git_file_at_ref,
             commands::ide::ide_git_add,
             commands::ide::ide_git_reset,
+            commands::ide::ide_git_discard,
             commands::ide::ide_git_add_all,
             commands::ide::ide_git_reset_all,
             commands::ide::ide_git_commit,

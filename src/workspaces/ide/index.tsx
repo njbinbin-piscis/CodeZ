@@ -42,6 +42,15 @@ export default function IDE({ projectDir }: IDEProps) {
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
 
+  // Pending cursor reveal (search "go to result" / navigation). Applied to the
+  // active editor; `nonce` re-triggers reveal even for the same position.
+  const [reveal, setReveal] = useState<{
+    path: string;
+    line: number;
+    column: number;
+    nonce: number;
+  } | null>(null);
+
   // Git status
   const [gitModified, setGitModified] = useState<Set<string>>(new Set());
   const [gitAdded, setGitAdded] = useState<Set<string>>(new Set());
@@ -248,6 +257,16 @@ export default function IDE({ projectDir }: IDEProps) {
       }
     },
     [projectDir, tabs],
+  );
+
+  // ─── Open a file and jump to a line/column (search results) ──────
+  const revealInFile = useCallback(
+    async (path: string, line: number, column: number) => {
+      await openFile(path);
+      setActiveTabPath(path);
+      setReveal({ path, line, column: column || 1, nonce: Date.now() });
+    },
+    [openFile],
   );
 
   // ─── Open diff for a file ────────────────────────────────────────
@@ -636,13 +655,14 @@ export default function IDE({ projectDir }: IDEProps) {
           {sidebarTab === "search" && (
             <SearchPanel
               projectDir={projectDir}
-              onResultClick={(path, _line) => openFile(path)}
+              onResultClick={(path, line, column) => revealInFile(path, line, column)}
             />
           )}
           {sidebarTab === "git" && (
             <GitPanel
               projectDir={projectDir}
               onDiffClick={(path) => openDiff(path)}
+              onOpenFile={(path) => openFile(path)}
               onRefresh={loadGitStatus}
             />
           )}
@@ -677,6 +697,7 @@ export default function IDE({ projectDir }: IDEProps) {
               tab={activeTab}
               theme="violet"
               projectDir={projectDir}
+              reveal={reveal && reveal.path === activeTab.path ? reveal : null}
               onChange={handleEditorChange}
               onSave={() => {
                 const p = activeTabPathRef.current;

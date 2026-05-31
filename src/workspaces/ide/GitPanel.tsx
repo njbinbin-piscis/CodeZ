@@ -6,10 +6,11 @@ import type { GitFileStatus, BranchInfo } from "./types";
 interface GitPanelProps {
   projectDir: string;
   onDiffClick: (path: string) => void;
+  onOpenFile: (path: string) => void;
   onRefresh: () => Promise<void>;
 }
 
-export default function GitPanel({ projectDir, onDiffClick, onRefresh }: GitPanelProps) {
+export default function GitPanel({ projectDir, onDiffClick, onOpenFile, onRefresh }: GitPanelProps) {
   const { t } = useTranslation();
   const [statuses, setStatuses] = useState<GitFileStatus[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
@@ -65,6 +66,40 @@ export default function GitPanel({ projectDir, onDiffClick, onRefresh }: GitPane
     await refresh();
     await onRefresh();
   }, [projectDir, refresh, onRefresh]);
+
+  const handleDiscard = useCallback(async (path: string) => {
+    if (!projectDir) return;
+    const ok = window.confirm(
+      (t("ide.discardConfirm", { name: path }) as string) ||
+        `Discard all changes in "${path}"? This cannot be undone.`,
+    );
+    if (!ok) return;
+    try {
+      await ideApi.gitDiscard(projectDir, path);
+      await refresh();
+      await onRefresh();
+    } catch (e) {
+      window.alert(`Discard failed: ${e}`);
+    }
+  }, [projectDir, refresh, onRefresh, t]);
+
+  const handleDiscardAll = useCallback(async (paths: string[]) => {
+    if (!projectDir || paths.length === 0) return;
+    const ok = window.confirm(
+      (t("ide.discardAllConfirm", { count: paths.length }) as string) ||
+        `Discard changes in ${paths.length} file(s)? This cannot be undone.`,
+    );
+    if (!ok) return;
+    try {
+      for (const p of paths) {
+        await ideApi.gitDiscard(projectDir, p).catch(() => {});
+      }
+      await refresh();
+      await onRefresh();
+    } catch (e) {
+      window.alert(`Discard failed: ${e}`);
+    }
+  }, [projectDir, refresh, onRefresh, t]);
 
   const handleCommit = useCallback(async () => {
     if (!projectDir || !commitMsg.trim()) return;
@@ -198,9 +233,18 @@ export default function GitPanel({ projectDir, onDiffClick, onRefresh }: GitPane
         <div className="git-panel-title">
           {t("ide.changes") || "Changes"} ({changed.length})
           {changed.length > 0 && (
-            <button className="git-inline-btn" onClick={handleStageAll} title={t("ide.stageAll") || "Stage All"}>
-              +
-            </button>
+            <span className="git-title-actions">
+              <button
+                className="git-inline-btn"
+                onClick={() => handleDiscardAll(changed.map((s) => s.path))}
+                title={t("ide.discardAll") || "Discard All Changes"}
+              >
+                ↺
+              </button>
+              <button className="git-inline-btn" onClick={handleStageAll} title={t("ide.stageAll") || "Stage All"}>
+                +
+              </button>
+            </span>
           )}
         </div>
         {changed.length === 0 && (
@@ -216,7 +260,27 @@ export default function GitPanel({ projectDir, onDiffClick, onRefresh }: GitPane
             <span className={`git-file-status-badge ${s.status}`}>
               {statusBadge(s.status)}
             </span>
-            <span className="git-file-path" onClick={() => onDiffClick(s.path)}>{s.path}</span>
+            <span
+              className="git-file-path"
+              onClick={() => onDiffClick(s.path)}
+              onDoubleClick={() => onOpenFile(s.path)}
+            >
+              {s.path}
+            </span>
+            <button
+              className="git-inline-btn"
+              onClick={() => onOpenFile(s.path)}
+              title={t("ide.openFile") || "Open File"}
+            >
+              ↗
+            </button>
+            <button
+              className="git-inline-btn"
+              onClick={() => handleDiscard(s.path)}
+              title={t("ide.discard") || "Discard Changes"}
+            >
+              ↺
+            </button>
             <button className="git-inline-btn" onClick={() => handleStage(s.path)} title={t("ide.stage") || "Stage"}>
               +
             </button>
