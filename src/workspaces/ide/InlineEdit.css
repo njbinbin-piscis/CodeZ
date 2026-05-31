@@ -68,45 +68,33 @@
   background: rgba(248, 113, 113, 0.08);
 }
 
-.codez-inline-edit-preview {
-  border-top: 1px solid var(--border, #2a2a38);
-  max-height: 320px;
-  overflow: auto;
-}
-
-.codez-inline-edit-preview pre {
-  margin: 0;
-  padding: 10px 12px;
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 12.5px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #86efac;
-}
-
-.codez-inline-edit-actions {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  border-top: 1px solid var(--border, #2a2a38);
-  position: sticky;
-  bottom: 0;
-  background: var(--bg-elev, #14141c);
-}
-
-.codez-inline-edit-actions button {
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-weight: 600;
+.codez-inline-edit-hint {
+  flex: 1;
   font-size: 12px;
-  cursor: pointer;
-  border: 1px solid var(--border, #2a2a38);
-  background: var(--bg-elev-2, #1b1b26);
-  color: var(--text, #e8e8f0);
+  color: var(--text-dim, #9a9ab0);
 }
 
 .codez-inline-accept {
-  background: var(--accent, #7c6af7) !important;
+  background: #16a34a !important;
   color: #fff !important;
-  border-color: var(--accent, #7c6af7) !important;
+  border: 0 !important;
+}
+
+/* In-editor inline diff: green new lines + red removed block. */
+.codez-inline-added-line {
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.codez-inline-removed-zone {
+  background: rgba(248, 113, 113, 0.14);
+  border-left: 3px solid #ef4444;
+  color: #fca5a5;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: pre;
+  overflow-x: auto;
+  padding: 0 0 0 12px;
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.5);
 }

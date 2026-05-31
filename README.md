@@ -39,7 +39,8 @@ typed while the agent is busy, and shows a **Stop** button that cancels the
 in-flight turn via the engine's `run_pisci_turn_cancellable` hook. The editor
 supports **Cmd-K inline edit**: select code, press ⌘K/Ctrl-K, type an
 instruction, and a single-shot LLM transform (`inline_edit`, no agent loop) is
-previewed for accept/discard.
+applied in place as a true inline diff — new lines highlighted green with the
+replaced original shown above in red — then Enter accepts or Esc rejects (undo).
 
 `crates/codez-host` is the original kernel-link smoke binary and still builds.
 

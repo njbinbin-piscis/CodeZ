@@ -21,6 +21,8 @@ interface InlineEditState {
   proposed: string | null;
   busy: boolean;
   error: string | null;
+  /// Set once the proposal is applied in-place for preview (green range).
+  applied: { startLine: number; endLine: number } | null;
 }
 
 interface CodeEditorProps {
@@ -39,6 +41,24 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
   const inlineStateRef = useRef<InlineEditState | null>(null);
   inlineStateRef.current = inline;
 
+  // Monaco decorations (green "added" lines) + view zone (red "removed" block)
+  // backing the in-editor inline diff preview.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const decoRef = useRef<any>(null);
+  const viewZoneIdRef = useRef<string | null>(null);
+
+  const clearInlinePreview = useCallback(() => {
+    const editor = editorRef.current;
+    decoRef.current?.clear?.();
+    decoRef.current = null;
+    if (editor && viewZoneIdRef.current) {
+      const id = viewZoneIdRef.current;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.changeViewZones((acc: any) => acc.removeZone(id));
+      viewZoneIdRef.current = null;
+    }
+  }, []);
+
   // Open the Cmd-K inline-edit widget for the current selection (or line).
   const openInlineRef = useRef<() => void>(() => {});
   openInlineRef.current = () => {
@@ -46,6 +66,7 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
     if (!editor || tab.isReadOnly) return;
     const model = editor.getModel?.();
     if (!model) return;
+    if (inlineStateRef.current) clearInlinePreview();
     let sel = editor.getSelection?.();
     if (!sel) return;
     if (sel.isEmpty?.()) {
@@ -89,8 +110,49 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
       proposed: null,
       busy: false,
       error: null,
+      applied: null,
     });
   };
+
+  // Apply the proposal in-place and render the inline diff: green decorations
+  // over the new lines + a red view zone above showing the replaced original.
+  const applyInlinePreview = useCallback((s: InlineEditState, proposed: string) => {
+    const editor = editorRef.current;
+    const model = editor?.getModel?.();
+    if (!editor || !model) return null;
+
+    editor.executeEdits("codez-inline-edit", [{ range: s.range, text: proposed }]);
+
+    const startLine: number = s.range.startLineNumber;
+    const proposedLineCount = proposed.length === 0 ? 0 : proposed.split("\n").length;
+    const endLine = startLine + proposedLineCount - 1;
+
+    if (proposedLineCount > 0) {
+      decoRef.current = editor.createDecorationsCollection([
+        {
+          range: { startLineNumber: startLine, startColumn: 1, endLineNumber: endLine, endColumn: 1 },
+          options: { isWholeLine: true, className: "codez-inline-added-line" },
+        },
+      ]);
+    }
+
+    // Red "removed" block: the original selection, shown above the new code.
+    const dom = document.createElement("div");
+    dom.className = "codez-inline-removed-zone";
+    dom.textContent = s.original;
+    const removedLines = s.original.length === 0 ? 1 : s.original.split("\n").length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    editor.changeViewZones((acc: any) => {
+      viewZoneIdRef.current = acc.addZone({
+        afterLineNumber: Math.max(0, startLine - 1),
+        heightInLines: removedLines,
+        domNode: dom,
+      });
+    });
+
+    editor.revealLineInCenter?.(startLine);
+    return { startLine, endLine };
+  }, []);
 
   const runInline = useCallback(async () => {
     const s = inlineStateRef.current;
@@ -104,22 +166,64 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
         beforeContext: s.before,
         afterContext: s.after,
       });
-      setInline((cur) => (cur ? { ...cur, proposed, busy: false } : cur));
+      const fresh = inlineStateRef.current;
+      if (!fresh) return; // cancelled while generating
+      const applied = applyInlinePreview(fresh, proposed);
+      setInline((cur) => (cur ? { ...cur, proposed, busy: false, applied } : cur));
     } catch (e) {
       setInline((cur) => (cur ? { ...cur, busy: false, error: String(e) } : cur));
     }
-  }, [tab.language, tab.path]);
+  }, [tab.language, tab.path, applyInlinePreview]);
 
+  // Accept: keep the applied text, just drop the diff overlay.
   const acceptInline = useCallback(() => {
-    setInline((cur) => {
-      if (cur && cur.proposed != null && editorRef.current) {
-        editorRef.current.executeEdits("codez-inline-edit", [
-          { range: cur.range, text: cur.proposed },
-        ]);
+    clearInlinePreview();
+    setInline(null);
+  }, [clearInlinePreview]);
+
+  // Reject: undo the applied edit and drop the overlay.
+  const rejectInline = useCallback(() => {
+    const editor = editorRef.current;
+    clearInlinePreview();
+    if (editor && inlineStateRef.current?.applied) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.trigger("codez-inline-edit", "undo", null);
+    }
+    setInline(null);
+  }, [clearInlinePreview]);
+
+  // Cancel before any proposal was applied.
+  const cancelInline = useCallback(() => {
+    clearInlinePreview();
+    setInline(null);
+  }, [clearInlinePreview]);
+
+  // Drop any open inline-edit preview when the file changes (its decorations
+  // belong to the previous model).
+  useEffect(() => {
+    clearInlinePreview();
+    setInline(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.path]);
+
+  // While the inline diff is applied, Enter accepts and Esc rejects even though
+  // keyboard focus is back in the editor.
+  useEffect(() => {
+    if (!inline?.applied) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        acceptInline();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        rejectInline();
       }
-      return null;
-    });
-  }, []);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [inline?.applied, acceptInline, rejectInline]);
 
   // Track the content currently in the editor so we can distinguish:
   //   * Monaco's `onChange` firing during initial `value` hydration / tab
@@ -293,44 +397,48 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
 
       {inline && (
         <div className="codez-inline-edit">
-          <div className="codez-inline-edit-bar">
-            <input
-              autoFocus
-              className="codez-inline-edit-input"
-              placeholder="Edit instruction… (Enter to generate, Esc to cancel)"
-              value={inline.instruction}
-              onChange={(e) => setInline((cur) => (cur ? { ...cur, instruction: e.target.value } : cur))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void runInline();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  setInline(null);
+          {inline.applied ? (
+            <div className="codez-inline-edit-bar">
+              <span className="codez-inline-edit-hint">Review the inline diff:</span>
+              <button className="codez-inline-accept" onClick={acceptInline}>
+                Accept ⏎
+              </button>
+              <button className="codez-inline-edit-cancel" onClick={rejectInline}>
+                Reject ⎋
+              </button>
+            </div>
+          ) : (
+            <div className="codez-inline-edit-bar">
+              <input
+                autoFocus
+                className="codez-inline-edit-input"
+                placeholder="Edit instruction… (Enter to generate, Esc to cancel)"
+                value={inline.instruction}
+                onChange={(e) =>
+                  setInline((cur) => (cur ? { ...cur, instruction: e.target.value } : cur))
                 }
-              }}
-            />
-            <button onClick={() => void runInline()} disabled={inline.busy || !inline.instruction.trim()}>
-              {inline.busy ? "…" : "Generate"}
-            </button>
-            <button className="codez-inline-edit-cancel" onClick={() => setInline(null)}>
-              Cancel
-            </button>
-          </div>
-          {inline.error && <div className="codez-inline-edit-error">{inline.error}</div>}
-          {inline.proposed != null && (
-            <div className="codez-inline-edit-preview">
-              <pre>{inline.proposed}</pre>
-              <div className="codez-inline-edit-actions">
-                <button className="codez-inline-accept" onClick={acceptInline}>
-                  Accept
-                </button>
-                <button onClick={() => setInline((cur) => (cur ? { ...cur, proposed: null } : cur))}>
-                  Discard
-                </button>
-              </div>
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void runInline();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelInline();
+                  }
+                }}
+              />
+              <button
+                onClick={() => void runInline()}
+                disabled={inline.busy || !inline.instruction.trim()}
+              >
+                {inline.busy ? "…" : "Generate"}
+              </button>
+              <button className="codez-inline-edit-cancel" onClick={cancelInline}>
+                Cancel
+              </button>
             </div>
           )}
+          {inline.error && <div className="codez-inline-edit-error">{inline.error}</div>}
         </div>
       )}
     </div>
