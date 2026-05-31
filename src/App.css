@@ -64,6 +64,11 @@
 
 .codez-open-folder:hover { border-color: var(--accent); }
 
+.codez-open-folder-secondary {
+  opacity: 0.85;
+  font-size: 11px;
+}
+
 .codez-chat-toggle {
   border: 1px solid var(--border);
   background: var(--bg-elev-2);

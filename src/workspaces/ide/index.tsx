@@ -23,6 +23,7 @@ interface TabContextMenu {
 
 interface IDEProps {
   projectDir: string | null;
+  onOpenFolder: () => void;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -32,7 +33,7 @@ interface FileTreeHandle {
   startCreate?: (isDir: boolean) => void;
 }
 
-export default function IDE({ projectDir }: IDEProps) {
+export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
   const { t } = useTranslation();
 
   // File tree
@@ -50,6 +51,8 @@ export default function IDE({ projectDir }: IDEProps) {
     column: number;
     nonce: number;
   } | null>(null);
+  const [fileLoading, setFileLoading] = useState<string | null>(null);
+  const [fileLoadError, setFileLoadError] = useState<string | null>(null);
 
   // Git status
   const [gitModified, setGitModified] = useState<Set<string>>(new Set());
@@ -238,7 +241,6 @@ export default function IDE({ projectDir }: IDEProps) {
   // ─── Open a file ─────────────────────────────────────────────────
   const openFile = useCallback(
     async (path: string, readOnly = false) => {
-      // Check if already open
       const existing = tabs.find((t) => t.path === path);
       if (existing) {
         setActiveTabPath(path);
@@ -246,10 +248,13 @@ export default function IDE({ projectDir }: IDEProps) {
       }
 
       const fullPath = projectDir ? `${projectDir}/${path}` : path;
+      setFileLoading(path);
+      setFileLoadError(null);
       try {
         const fc = await ideApi.readFile(fullPath);
         if (fc.is_binary) {
-          return; // Don't open binary files
+          setFileLoadError(`"${path.split("/").pop()}" is a binary file and cannot be opened in the editor.`);
+          return;
         }
         const newTab: OpenTab = {
           path,
@@ -262,7 +267,11 @@ export default function IDE({ projectDir }: IDEProps) {
         setTabs((prev) => [...prev, newTab]);
         setActiveTabPath(path);
       } catch (e) {
+        const msg = String(e);
+        setFileLoadError(msg);
         console.error("Failed to read file:", e);
+      } finally {
+        setFileLoading(null);
       }
     },
     [projectDir, tabs],
@@ -591,6 +600,14 @@ export default function IDE({ projectDir }: IDEProps) {
       {/* Activity bar (icon strip) */}
       <div className="ide-activity-bar">
         <button
+          className={`ide-activity-open-folder ${!projectDir ? "prominent" : ""}`}
+          onClick={onOpenFolder}
+          title={projectDir ? (t("ide.changeFolder") || "Change Folder") : (t("ide.openFolder") || "Open Folder")}
+        >
+          <span className="activity-label-open">{projectDir ? "Chg" : "Open"}</span>
+        </button>
+        <div className="ide-activity-sep" />
+        <button
           className={sidebarTab === "explorer" && !sidebarCollapsed ? "active" : ""}
           onClick={() => switchSidebarTab("explorer")}
           title={t("ide.explorer") || "Explorer"}
@@ -635,9 +652,12 @@ export default function IDE({ projectDir }: IDEProps) {
                 {sidebarTab === "git" && (t("ide.sourceControl") || "Source Control")}
               </div>
               <p>{t("ide.noProjectDir") || "No folder open."}</p>
+              <button type="button" className="ide-open-folder-btn" onClick={onOpenFolder}>
+                {t("ide.openFolder") || "Open Folder"}
+              </button>
               <p className="ide-sidebar-empty-hint">
                 {t("ide.noProjectDirHint") ||
-                  "Use “Open Folder” in the title bar to browse, search, and use Git."}
+                  "Pick a project directory to browse files, search, and use Git."}
               </p>
             </div>
           ) : (
@@ -706,10 +726,26 @@ export default function IDE({ projectDir }: IDEProps) {
             <div className="ide-no-project">
               <div className="icon">📂</div>
               <div>{t("ide.noProjectDir") || "No folder open."}</div>
+              <button type="button" className="ide-open-folder-btn ide-open-folder-btn-lg" onClick={onOpenFolder}>
+                {t("ide.openFolder") || "Open Folder"}
+              </button>
               <div style={{ fontSize: 12, opacity: 0.6 }}>
                 {t("ide.noProjectDirHint") ||
-                  "Use “Open Folder” in the title bar to start editing."}
+                  "Choose a folder to start editing, searching, and reviewing Git changes."}
               </div>
+            </div>
+          ) : fileLoading ? (
+            <div className="ide-file-loading">
+              <div className="ide-file-loading-spinner" />
+              <div>Opening {fileLoading.split("/").pop()}…</div>
+            </div>
+          ) : fileLoadError ? (
+            <div className="ide-file-error">
+              <div className="ide-file-error-title">Could not open file</div>
+              <div className="ide-file-error-msg">{fileLoadError}</div>
+              <button type="button" className="ide-open-folder-btn" onClick={() => setFileLoadError(null)}>
+                Dismiss
+              </button>
             </div>
           ) : activeTab ? (
             <CodeEditor

@@ -426,6 +426,7 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
         theme={editorTheme}
         language={tab.language || "plaintext"}
         value={tab.content}
+        loading={<div className="ide-file-loading"><div className="ide-file-loading-spinner" /></div>}
         onChange={(v) => {
           const next = v || "";
           // Only propagate to parent (which sets isDirty=true) when the

@@ -56,13 +56,15 @@ export default function App() {
           >
             Extensions
           </button>
-          <button className="codez-open-folder" onClick={pickFolder}>
-            {projectDir ? "Change Folder" : "Open Folder"}
-          </button>
           {projectDir && (
-            <span className="codez-project-path" title={projectDir}>
-              {projectDir}
-            </span>
+            <>
+              <button className="codez-open-folder codez-open-folder-secondary" onClick={pickFolder}>
+                Change Folder
+              </button>
+              <span className="codez-project-path" title={projectDir}>
+                {projectDir}
+              </span>
+            </>
           )}
         </div>
       </header>
@@ -73,7 +75,7 @@ export default function App() {
         <div className="codez-pane" hidden={mode !== "ide"}>
           <div className="codez-ide-split">
             <div className="codez-ide-main">
-              <IdeWorkspace projectDir={projectDir} />
+              <IdeWorkspace projectDir={projectDir} onOpenFolder={pickFolder} />
             </div>
             {chatOpen && (
               <div className="codez-ide-chat">
