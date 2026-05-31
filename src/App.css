@@ -1,0 +1,87 @@
+.codez-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.codez-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.codez-brand {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+}
+
+.codez-mode-switch {
+  display: flex;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.codez-mode-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.codez-mode-switch button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.codez-project {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.codez-open-folder {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.codez-open-folder:hover { border-color: var(--accent); }
+
+.codez-project-path {
+  font-size: 12px;
+  color: var(--text-dim);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codez-main {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.codez-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.codez-pane[hidden] { display: none; }

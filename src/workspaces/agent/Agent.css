@@ -1,0 +1,37 @@
+.codez-agent {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.codez-agent-empty {
+  max-width: 460px;
+  text-align: center;
+  padding: 24px;
+}
+
+.codez-agent-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.codez-agent-sub {
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.codez-agent-status {
+  color: var(--text);
+  font-size: 13px;
+  margin-top: 16px;
+}
+
+.codez-agent-note {
+  color: var(--text-dim);
+  font-size: 12px;
+  opacity: 0.7;
+}
