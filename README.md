@@ -42,6 +42,13 @@ instruction, and a single-shot LLM transform (`inline_edit`, no agent loop) is
 applied in place as a true inline diff — new lines highlighted green with the
 replaced original shown above in red — then Enter accepts or Esc rejects (undo).
 
+**M3 — Agent mode (done).** The Agent workspace is a Codex-style task board:
+each task is a kernel session, submit a goal and the agent plans → edits → runs
+tools in the open project with streamed steps (text + tool calls), a Stop
+button, a task list (open / delete past runs), and a Changes panel showing the
+resulting `git status` for review. The kernel event channel is shared with the
+IDE chat, so each surface only consumes events while it is the one running.
+
 `crates/codez-host` is the original kernel-link smoke binary and still builds.
 
 ### Configuration
@@ -74,7 +81,7 @@ CodeZ/
     ├── services/tauri/         # ide / lsp / chat IPC + folder dialog
     └── workspaces/
         ├── ide/                # ported IDE workspace + AssistantPanel (chat)
-        └── agent/              # Agent-mode placeholder (M4)
+        └── agent/              # Agent-mode task board (goal → autonomous run)
 ```
 
 ## Build

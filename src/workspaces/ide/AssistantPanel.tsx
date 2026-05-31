@@ -86,6 +86,8 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
   const [showSessions, setShowSessions] = useState(false);
 
   const sessionRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
   const queueRef = useRef<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -104,7 +106,10 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
   }, [projectDir]);
 
   // Update the in-flight (last) assistant message as kernel events stream in.
+  // The kernel event stream is global; only consume it while THIS panel is the
+  // one running a turn (Agent mode shares the same channel).
   const applyEvent = useCallback((env: ChatEventEnvelope) => {
+    if (!busyRef.current) return;
     if (env.channel === "agent_final") {
       const fin = env.payload as { ok: boolean; error?: string };
       if (!fin.ok && fin.error) setError(fin.error);
