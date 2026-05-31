@@ -50,3 +50,34 @@ export function chatSend(args: {
 export function onChatEvent(cb: (evt: ChatEventEnvelope) => void): Promise<UnlistenFn> {
   return listen<ChatEventEnvelope>(CHAT_EVENT, (e) => cb(e.payload));
 }
+
+// ── Session management ───────────────────────────────────────────────────
+
+export interface SessionMeta {
+  id: string;
+  title: string | null;
+  status: string;
+  message_count: number;
+  updated_at: string;
+}
+
+export interface MessageDto {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export function listSessions(): Promise<SessionMeta[]> {
+  return invoke<SessionMeta[]>("chat_list_sessions");
+}
+
+export function getMessages(sessionId: string): Promise<MessageDto[]> {
+  return invoke<MessageDto[]>("chat_get_messages", { sessionId });
+}
+
+export function forkSession(sessionId: string, title?: string): Promise<SessionMeta> {
+  return invoke<SessionMeta>("chat_fork_session", { sessionId, title: title ?? null });
+}
+
+export function deleteSession(sessionId: string): Promise<void> {
+  return invoke<void>("chat_delete_session", { sessionId });
+}

@@ -59,6 +59,11 @@ pub fn run() {
             commands::platform::open_path,
             // AI chat (agent turn on the pisci-engine kernel)
             commands::chat::chat_send,
+            // chat session management
+            commands::session::chat_list_sessions,
+            commands::session::chat_get_messages,
+            commands::session::chat_fork_session,
+            commands::session::chat_delete_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the CodeZ desktop application");

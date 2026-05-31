@@ -18,12 +18,105 @@
   flex-shrink: 0;
 }
 
+.codez-assistant-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.codez-assistant-actions button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 5px;
+  padding: 2px 7px;
+  line-height: 1.2;
+}
+
+.codez-assistant-actions button:hover:not(:disabled) {
+  color: var(--text, #e8e8f0);
+  border-color: var(--border, #2a2a38);
+}
+
+.codez-assistant-actions button.active {
+  color: #fff;
+  background: var(--accent, #7c6af7);
+}
+
+.codez-assistant-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .codez-assistant-close {
   background: transparent;
   border: 0;
   color: var(--text-dim, #9a9ab0);
   cursor: pointer;
   font-size: 13px;
+}
+
+.codez-session-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border, #2a2a38);
+  background: var(--bg, #0e0e14);
+  flex-shrink: 0;
+}
+
+.codez-session-empty {
+  padding: 10px 12px;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 12px;
+}
+
+.codez-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  border-left: 2px solid transparent;
+}
+
+.codez-session-row:hover {
+  background: var(--bg-elev-2, #1b1b26);
+}
+
+.codez-session-row.active {
+  border-left-color: var(--accent, #7c6af7);
+  background: var(--bg-elev-2, #1b1b26);
+}
+
+.codez-session-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codez-session-count {
+  color: var(--text-dim, #9a9ab0);
+  font-size: 11px;
+}
+
+.codez-session-del {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+}
+
+.codez-session-row:hover .codez-session-del {
+  opacity: 1;
+}
+
+.codez-session-del:hover {
+  color: #f87171;
 }
 
 .codez-assistant-messages {

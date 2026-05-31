@@ -57,7 +57,7 @@ pub struct ChatResult {
 ///
 /// `CODEZ_CONFIG_DIR` wins (handy for tests / sharing an existing openpisci
 /// config); otherwise the platform app-data dir for `com.codez.desktop`.
-fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(dir) = std::env::var("CODEZ_CONFIG_DIR") {
         let dir = dir.trim();
         if !dir.is_empty() {

@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { chatSend, onChatEvent, type AgentEvent, type ChatEventEnvelope } from "../../services/tauri/chat";
+import {
+  chatSend,
+  onChatEvent,
+  listSessions,
+  getMessages,
+  forkSession,
+  deleteSession,
+  type AgentEvent,
+  type ChatEventEnvelope,
+  type SessionMeta,
+} from "../../services/tauri/chat";
 import { ideApi } from "../../services/tauri/ide";
 import type { FileNode } from "./types";
 import Markdown from "./Markdown";
@@ -71,6 +81,8 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
   const [queuedView, setQueuedView] = useState<string[]>([]);
   const [files, setFiles] = useState<string[]>([]);
   const [mention, setMention] = useState<MentionState | null>(null);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [showSessions, setShowSessions] = useState(false);
 
   const sessionRef = useRef<string | null>(null);
   const queueRef = useRef<string[]>([]);
@@ -200,6 +212,62 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
     }
   }, [input, busy, projectDir]);
 
+  // ── Session management ─────────────────────────────────────────────────
+  const refreshSessions = useCallback(() => {
+    listSessions()
+      .then(setSessions)
+      .catch(() => setSessions([]));
+  }, []);
+
+  useEffect(() => {
+    if (showSessions) refreshSessions();
+  }, [showSessions, refreshSessions]);
+
+  const newSession = useCallback(() => {
+    sessionRef.current = null;
+    queueRef.current = [];
+    setQueuedView([]);
+    setMessages([]);
+    setError(null);
+    setShowSessions(false);
+  }, []);
+
+  const switchSession = useCallback(async (id: string) => {
+    try {
+      const history = await getMessages(id);
+      sessionRef.current = id;
+      setMessages(history.map((m) => ({ role: m.role, text: m.content, tools: [] })));
+      setError(null);
+      setShowSessions(false);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  const fork = useCallback(async () => {
+    if (!sessionRef.current) return;
+    try {
+      const forked = await forkSession(sessionRef.current);
+      refreshSessions();
+      await switchSession(forked.id);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [refreshSessions, switchSession]);
+
+  const removeSession = useCallback(
+    async (id: string) => {
+      try {
+        await deleteSession(id);
+        if (sessionRef.current === id) newSession();
+        refreshSessions();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [newSession, refreshSessions],
+  );
+
   // ── @-mention detection on every input change ──────────────────────────
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -270,10 +338,51 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
     <div className="codez-assistant">
       <div className="codez-assistant-header">
         <span>AI Chat</span>
-        <button className="codez-assistant-close" onClick={onClose} title="Hide chat">
-          ✕
-        </button>
+        <div className="codez-assistant-actions">
+          <button
+            className={showSessions ? "active" : ""}
+            onClick={() => setShowSessions((v) => !v)}
+            title="Sessions"
+          >
+            ☰
+          </button>
+          <button onClick={newSession} title="New chat">
+            ＋
+          </button>
+          <button onClick={() => void fork()} disabled={!sessionRef.current} title="Fork this chat">
+            ⑂
+          </button>
+          <button className="codez-assistant-close" onClick={onClose} title="Hide chat">
+            ✕
+          </button>
+        </div>
       </div>
+
+      {showSessions && (
+        <div className="codez-session-list">
+          {sessions.length === 0 && <div className="codez-session-empty">No sessions yet.</div>}
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className={`codez-session-row ${s.id === sessionRef.current ? "active" : ""}`}
+              onClick={() => void switchSession(s.id)}
+            >
+              <span className="codez-session-title">{s.title || "Untitled"}</span>
+              <span className="codez-session-count">{s.message_count}</span>
+              <button
+                className="codez-session-del"
+                title="Delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void removeSession(s.id);
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="codez-assistant-messages" ref={scrollRef}>
         {messages.length === 0 && (
