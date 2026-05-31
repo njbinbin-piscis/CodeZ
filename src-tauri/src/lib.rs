@@ -60,6 +60,8 @@ pub fn run() {
             // AI chat (agent turn on the pisci-engine kernel)
             commands::chat::chat_send,
             commands::chat::chat_cancel,
+            // Cmd-K inline edit
+            commands::edit::inline_edit,
             // chat session management
             commands::session::chat_list_sessions,
             commands::session::chat_get_messages,

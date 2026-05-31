@@ -1,0 +1,112 @@
+.codez-editor-wrap {
+  position: relative;
+  height: 100%;
+}
+
+.codez-inline-edit {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, 90%);
+  z-index: 30;
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--accent, #7c6af7);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.codez-inline-edit-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  align-items: center;
+}
+
+.codez-inline-edit-input {
+  flex: 1;
+  background: var(--bg, #0e0e14);
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.codez-inline-edit-input:focus {
+  border-color: var(--accent, #7c6af7);
+}
+
+.codez-inline-edit-bar button {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.codez-inline-edit-bar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codez-inline-edit-cancel {
+  background: transparent !important;
+  color: var(--text-dim, #9a9ab0) !important;
+  border: 1px solid var(--border, #2a2a38) !important;
+}
+
+.codez-inline-edit-error {
+  padding: 6px 12px;
+  color: #f87171;
+  font-size: 12px;
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.codez-inline-edit-preview {
+  border-top: 1px solid var(--border, #2a2a38);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.codez-inline-edit-preview pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #86efac;
+}
+
+.codez-inline-edit-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border, #2a2a38);
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-elev, #14141c);
+}
+
+.codez-inline-edit-actions button {
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border, #2a2a38);
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
+}
+
+.codez-inline-accept {
+  background: var(--accent, #7c6af7) !important;
+  color: #fff !important;
+  border-color: var(--accent, #7c6af7) !important;
+}

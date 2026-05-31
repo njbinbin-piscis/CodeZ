@@ -31,6 +31,16 @@ and the IDE's file watcher reloads them. Reference files in a prompt with
 `@path/to/file`. Agent mode (full autonomous task board) remains a placeholder
 for M4.
 
+**M2 — Cursor-like chat & editing (done).** Assistant messages render as
+GitHub-flavored markdown with syntax-highlighted, copyable code blocks. The chat
+panel has a session sidebar (`☰` list / switch / delete, `＋` new, `⑂` fork —
+fork copies the current session's messages into a fresh one), queues messages
+typed while the agent is busy, and shows a **Stop** button that cancels the
+in-flight turn via the engine's `run_pisci_turn_cancellable` hook. The editor
+supports **Cmd-K inline edit**: select code, press ⌘K/Ctrl-K, type an
+instruction, and a single-shot LLM transform (`inline_edit`, no agent loop) is
+previewed for accept/discard.
+
 `crates/codez-host` is the original kernel-link smoke binary and still builds.
 
 ### Configuration
@@ -52,7 +62,7 @@ CodeZ/
 │   │   ├── lib.rs              # builder + command registration
 │   │   ├── state.rs           # AppState (terminals / watchers / LSP)
 │   │   ├── lsp/               # LSP ↔ WebSocket bridge
-│   │   └── commands/          # ide.rs, chat.rs, platform.rs
+│   │   └── commands/          # ide / chat / session / edit / platform
 │   ├── tauri.conf.json
 │   └── capabilities/
 ├── package.json                # frontend (Vite + React + TS)

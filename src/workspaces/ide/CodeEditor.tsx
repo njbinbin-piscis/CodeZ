@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import Editor, { DiffEditor, type OnMount } from "@monaco-editor/react";
 import type { OpenTab } from "./types";
 import {
@@ -8,6 +8,20 @@ import {
   registerLspProviders,
   type LspProvidersRegistration,
 } from "../../services/tauri/lsp";
+import { inlineEdit } from "../../services/tauri/edit";
+import "./InlineEdit.css";
+
+interface InlineEditState {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  range: any;
+  original: string;
+  before: string;
+  after: string;
+  instruction: string;
+  proposed: string | null;
+  busy: boolean;
+  error: string | null;
+}
 
 interface CodeEditorProps {
   tab: OpenTab;
@@ -18,8 +32,94 @@ interface CodeEditorProps {
 }
 
 export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }: CodeEditorProps) {
-  const editorRef = useRef<ReturnType<OnMount> extends void ? unknown : null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const editorRef = useRef<any>(null);
   const lspRef = useRef<LspProvidersRegistration | null>(null);
+  const [inline, setInline] = useState<InlineEditState | null>(null);
+  const inlineStateRef = useRef<InlineEditState | null>(null);
+  inlineStateRef.current = inline;
+
+  // Open the Cmd-K inline-edit widget for the current selection (or line).
+  const openInlineRef = useRef<() => void>(() => {});
+  openInlineRef.current = () => {
+    const editor = editorRef.current;
+    if (!editor || tab.isReadOnly) return;
+    const model = editor.getModel?.();
+    if (!model) return;
+    let sel = editor.getSelection?.();
+    if (!sel) return;
+    if (sel.isEmpty?.()) {
+      // Expand an empty selection to the whole current line.
+      const ln = sel.startLineNumber;
+      sel = {
+        startLineNumber: ln,
+        startColumn: 1,
+        endLineNumber: ln,
+        endColumn: model.getLineMaxColumn(ln),
+      };
+    }
+    const original = model.getValueInRange(sel);
+    const totalLines = model.getLineCount();
+    const beforeStart = Math.max(1, sel.startLineNumber - 40);
+    const afterEnd = Math.min(totalLines, sel.endLineNumber + 40);
+    const before =
+      sel.startLineNumber > 1
+        ? model.getValueInRange({
+            startLineNumber: beforeStart,
+            startColumn: 1,
+            endLineNumber: sel.startLineNumber,
+            endColumn: 1,
+          })
+        : "";
+    const after =
+      sel.endLineNumber < totalLines
+        ? model.getValueInRange({
+            startLineNumber: sel.endLineNumber,
+            startColumn: model.getLineMaxColumn(sel.endLineNumber),
+            endLineNumber: afterEnd,
+            endColumn: model.getLineMaxColumn(afterEnd),
+          })
+        : "";
+    setInline({
+      range: sel,
+      original,
+      before,
+      after,
+      instruction: "",
+      proposed: null,
+      busy: false,
+      error: null,
+    });
+  };
+
+  const runInline = useCallback(async () => {
+    const s = inlineStateRef.current;
+    if (!s || !s.instruction.trim() || s.busy) return;
+    setInline((cur) => (cur ? { ...cur, busy: true, error: null } : cur));
+    try {
+      const proposed = await inlineEdit({
+        instruction: s.instruction,
+        selection: s.original,
+        language: tab.language || languageForFile(tab.path),
+        beforeContext: s.before,
+        afterContext: s.after,
+      });
+      setInline((cur) => (cur ? { ...cur, proposed, busy: false } : cur));
+    } catch (e) {
+      setInline((cur) => (cur ? { ...cur, busy: false, error: String(e) } : cur));
+    }
+  }, [tab.language, tab.path]);
+
+  const acceptInline = useCallback(() => {
+    setInline((cur) => {
+      if (cur && cur.proposed != null && editorRef.current) {
+        editorRef.current.executeEdits("codez-inline-edit", [
+          { range: cur.range, text: cur.proposed },
+        ]);
+      }
+      return null;
+    });
+  }, []);
 
   // Track the content currently in the editor so we can distinguish:
   //   * Monaco's `onChange` firing during initial `value` hydration / tab
@@ -66,6 +166,15 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
         2048 | 49, // KeyMod.CtrlCmd | KeyCode.KeyS
         () => {
           onSaveRef.current?.();
+        },
+      );
+
+      // Cmd-K / Ctrl-K — open the inline edit widget for the selection.
+      editor.addCommand(
+        // eslint-disable-next-line no-bitwise
+        2048 | 41, // KeyMod.CtrlCmd | KeyCode.KeyK
+        () => {
+          openInlineRef.current();
         },
       );
 
@@ -147,38 +256,83 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
   }
 
   return (
-    <Editor
-      height="100%"
-      theme={theme === "gold" ? "vs-dark" : "vs-dark"}
-      language={tab.language || "plaintext"}
-      value={tab.content}
-      onChange={(v) => {
-        const next = v || "";
-        // Only propagate to parent (which sets isDirty=true) when the
-        // new content actually differs from what we last pushed in.
-        // Monaco fires onChange with the same content during initial
-        // hydration and after setValue() — those must be ignored or
-        // switching tabs would show a spurious dirty dot.
-        if (next !== lastContentRef.current) {
-          lastContentRef.current = next;
-          onChangeRef.current(next);
-        }
-      }}
-      onMount={handleMount}
-      options={{
-        readOnly: tab.isReadOnly,
-        minimap: { enabled: true },
-        fontSize: 13,
-        fontFamily: 'Consolas, "Courier New", monospace',
-        scrollBeyondLastLine: false,
-        wordWrap: "on",
-        lineNumbers: "on",
-        renderWhitespace: "selection",
-        bracketPairColorization: { enabled: true },
-        folding: true,
-        automaticLayout: true,
-        tabSize: 2,
-      }}
-    />
+    <div className="codez-editor-wrap">
+      <Editor
+        height="100%"
+        theme={theme === "gold" ? "vs-dark" : "vs-dark"}
+        language={tab.language || "plaintext"}
+        value={tab.content}
+        onChange={(v) => {
+          const next = v || "";
+          // Only propagate to parent (which sets isDirty=true) when the
+          // new content actually differs from what we last pushed in.
+          // Monaco fires onChange with the same content during initial
+          // hydration and after setValue() — those must be ignored or
+          // switching tabs would show a spurious dirty dot.
+          if (next !== lastContentRef.current) {
+            lastContentRef.current = next;
+            onChangeRef.current(next);
+          }
+        }}
+        onMount={handleMount}
+        options={{
+          readOnly: tab.isReadOnly,
+          minimap: { enabled: true },
+          fontSize: 13,
+          fontFamily: 'Consolas, "Courier New", monospace',
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          lineNumbers: "on",
+          renderWhitespace: "selection",
+          bracketPairColorization: { enabled: true },
+          folding: true,
+          automaticLayout: true,
+          tabSize: 2,
+        }}
+      />
+
+      {inline && (
+        <div className="codez-inline-edit">
+          <div className="codez-inline-edit-bar">
+            <input
+              autoFocus
+              className="codez-inline-edit-input"
+              placeholder="Edit instruction… (Enter to generate, Esc to cancel)"
+              value={inline.instruction}
+              onChange={(e) => setInline((cur) => (cur ? { ...cur, instruction: e.target.value } : cur))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void runInline();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setInline(null);
+                }
+              }}
+            />
+            <button onClick={() => void runInline()} disabled={inline.busy || !inline.instruction.trim()}>
+              {inline.busy ? "…" : "Generate"}
+            </button>
+            <button className="codez-inline-edit-cancel" onClick={() => setInline(null)}>
+              Cancel
+            </button>
+          </div>
+          {inline.error && <div className="codez-inline-edit-error">{inline.error}</div>}
+          {inline.proposed != null && (
+            <div className="codez-inline-edit-preview">
+              <pre>{inline.proposed}</pre>
+              <div className="codez-inline-edit-actions">
+                <button className="codez-inline-accept" onClick={acceptInline}>
+                  Accept
+                </button>
+                <button onClick={() => setInline((cur) => (cur ? { ...cur, proposed: null } : cur))}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
