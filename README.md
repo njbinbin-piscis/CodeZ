@@ -42,6 +42,22 @@ instruction, and a single-shot LLM transform (`inline_edit`, no agent loop) is
 applied in place as a true inline diff — new lines highlighted green with the
 replaced original shown above in red — then Enter accepts or Esc rejects (undo).
 
+**M2.5 — VS Code `.vsix` compat (partial, done).** Per the design's
+"contribution-point data pack" approach (no extension JS is executed), the
+Extensions panel imports a `.vsix` (zip) via the `import_vsix` host command and
+consumes its declarative contributions:
+
+| Contribution | Status | How |
+| --- | --- | --- |
+| Color themes | ✅ | `tokenColors` + workbench `colors` → `monaco.editor.defineTheme`; applied globally and persisted across reloads |
+| Snippets | ✅ | `contributes.snippets` → Monaco completion provider per language |
+| Language servers (LSP) | ✅ (existing) | reuse the `ide_lsp_*` bridge |
+| TextMate grammars | ⏳ planned | needs `vscode-textmate` + `vscode-oniguruma` WASM |
+| Commands / webview / `vscode.*` API | ❌ out of scope | requires a full extension host |
+
+Theme syntax colors are approximate (TextMate scopes don't map 1:1 onto
+Monaco's tokenizer) but the workbench colors carry the dominant look.
+
 **M3 — Agent mode (done).** The Agent workspace is a Codex-style task board:
 each task is a kernel session, submit a goal and the agent plans → edits → runs
 tools in the open project with streamed steps (text + tool calls), a Stop
@@ -70,7 +86,7 @@ CodeZ/
 │   │   ├── lib.rs              # builder + command registration
 │   │   ├── state.rs           # AppState (terminals / watchers / LSP)
 │   │   ├── lsp/               # LSP ↔ WebSocket bridge
-│   │   └── commands/          # ide / chat / session / edit / platform
+│   │   └── commands/          # ide / chat / session / edit / vsix / platform
 │   ├── tauri.conf.json
 │   └── capabilities/
 ├── package.json                # frontend (Vite + React + TS)
@@ -80,7 +96,7 @@ CodeZ/
     ├── i18n.ts                 # minimal i18next init (English fallbacks)
     ├── services/tauri/         # ide / lsp / chat IPC + folder dialog
     └── workspaces/
-        ├── ide/                # ported IDE workspace + AssistantPanel (chat)
+        ├── ide/                # IDE workspace + AssistantPanel + ExtensionsPanel (.vsix)
         └── agent/              # Agent-mode task board (goal → autonomous run)
 ```
 

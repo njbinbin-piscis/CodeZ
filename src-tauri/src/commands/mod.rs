@@ -5,3 +5,4 @@ pub mod edit;
 pub mod ide;
 pub mod platform;
 pub mod session;
+pub mod vsix;

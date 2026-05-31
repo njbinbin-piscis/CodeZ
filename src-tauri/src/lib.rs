@@ -62,6 +62,8 @@ pub fn run() {
             commands::chat::chat_cancel,
             // Cmd-K inline edit
             commands::edit::inline_edit,
+            // VS Code .vsix contribution-point ingestion
+            commands::vsix::import_vsix,
             // chat session management
             commands::session::chat_list_sessions,
             commands::session::chat_get_messages,

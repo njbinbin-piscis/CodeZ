@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from "react";
 import Editor, { DiffEditor, type OnMount } from "@monaco-editor/react";
+import { themeStore } from "./themeStore";
 import type { OpenTab } from "./types";
 import {
   lspApi,
@@ -34,13 +35,14 @@ interface CodeEditorProps {
   onSave?: () => void;
 }
 
-export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }: CodeEditorProps) {
+export default function CodeEditor({ tab, projectDir, onChange, onSave }: CodeEditorProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
   const lspRef = useRef<LspProvidersRegistration | null>(null);
   const [inline, setInline] = useState<InlineEditState | null>(null);
   const inlineStateRef = useRef<InlineEditState | null>(null);
   inlineStateRef.current = inline;
+  const editorTheme = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot);
 
   // Monaco decorations (green "added" lines) + view zone (red "removed" block)
   // backing the in-editor inline diff preview.
@@ -298,6 +300,20 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
         },
       );
 
+      // Restore a previously imported .vsix theme (persisted by ExtensionsPanel)
+      // so it applies on startup without opening the Extensions panel.
+      try {
+        const raw = localStorage.getItem("codez.activeTheme");
+        if (raw) {
+          const saved = JSON.parse(raw) as { id: string; data: unknown };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          monaco.editor.defineTheme(saved.id, saved.data as any);
+          themeStore.set(saved.id);
+        }
+      } catch {
+        // ignore corrupt persisted theme
+      }
+
       // ── LSP integration ────────────────────────────────────────────
       const lang = tab.language || languageForFile(tab.path);
       const fullPath = projectDir ? `${projectDir}/${tab.path}` : tab.path;
@@ -359,7 +375,7 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
     return (
       <DiffEditor
         height="100%"
-        theme="vs-dark"
+        theme={editorTheme}
         language={tab.language || "plaintext"}
         original={tab.originalContent}
         modified={tab.content}
@@ -379,7 +395,7 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
     <div className="codez-editor-wrap">
       <Editor
         height="100%"
-        theme={theme === "gold" ? "vs-dark" : "vs-dark"}
+        theme={editorTheme}
         language={tab.language || "plaintext"}
         value={tab.content}
         onChange={(v) => {

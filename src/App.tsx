@@ -3,6 +3,7 @@ import { openFolderDialog } from "./services/tauri";
 import IdeWorkspace from "./workspaces/ide";
 import AgentWorkspace from "./workspaces/agent";
 import AssistantPanel from "./workspaces/ide/AssistantPanel";
+import ExtensionsPanel from "./workspaces/ide/ExtensionsPanel";
 import "./App.css";
 
 type Mode = "ide" | "agent";
@@ -11,6 +12,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("ide");
   const [projectDir, setProjectDir] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
+  const [extOpen, setExtOpen] = useState(false);
 
   const pickFolder = useCallback(async () => {
     const dir = await openFolderDialog();
@@ -47,6 +49,13 @@ export default function App() {
               Chat
             </button>
           )}
+          <button
+            className="codez-chat-toggle"
+            onClick={() => setExtOpen(true)}
+            title="VS Code extensions (.vsix)"
+          >
+            Extensions
+          </button>
           <button className="codez-open-folder" onClick={pickFolder}>
             {projectDir ? "Change Folder" : "Open Folder"}
           </button>
@@ -77,6 +86,8 @@ export default function App() {
           <AgentWorkspace projectDir={projectDir} />
         </div>
       </main>
+
+      {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
     </div>
   );
 }

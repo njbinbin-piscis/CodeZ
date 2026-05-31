@@ -48,6 +48,9 @@ portable-pty = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 encoding_rs = "0.8"
 
+# .vsix (zip) ingestion for the VS Code contribution-point compat layer.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 # Serialization + logging.
 serde = { workspace = true }
 serde_json = { workspace = true }
