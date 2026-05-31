@@ -84,6 +84,15 @@ export default function IDE({ projectDir }: IDEProps) {
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) || null;
 
+  const switchSidebarTab = useCallback((tab: SidebarTab) => {
+    if (sidebarTab === tab && !sidebarCollapsed) {
+      setSidebarCollapsed(true);
+    } else {
+      setSidebarTab(tab);
+      setSidebarCollapsed(false);
+    }
+  }, [sidebarTab, sidebarCollapsed]);
+
   // ─── Load file tree ──────────────────────────────────────────────
   const loadFileTree = useCallback(async () => {
     if (!projectDir) return;
@@ -577,46 +586,30 @@ export default function IDE({ projectDir }: IDEProps) {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // ─── No project dir placeholder ──────────────────────────────────
-  if (!projectDir) {
-    return (
-      <div className="pond-ide">
-        <div className="ide-no-project">
-          <div className="icon">📂</div>
-          <div>{t("ide.noProjectDir") || "No folder open."}</div>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>
-            {t("ide.noProjectDirHint") ||
-              "Use “Open Folder” in the title bar to start editing."}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="pond-ide" ref={ideRef}>
       {/* Activity bar (icon strip) */}
       <div className="ide-activity-bar">
         <button
           className={sidebarTab === "explorer" && !sidebarCollapsed ? "active" : ""}
-          onClick={() => { sidebarCollapsed ? setSidebarCollapsed(false) : setSidebarTab("explorer"); if (sidebarCollapsed) setSidebarTab("explorer"); else if (sidebarTab === "explorer") setSidebarCollapsed(true); else setSidebarTab("explorer"); }}
+          onClick={() => switchSidebarTab("explorer")}
           title={t("ide.explorer") || "Explorer"}
         >
-          <span className="activity-icon">📁</span>
+          <span className="activity-label">EX</span>
         </button>
         <button
           className={sidebarTab === "search" && !sidebarCollapsed ? "active" : ""}
-          onClick={() => { if (sidebarCollapsed) { setSidebarCollapsed(false); setSidebarTab("search"); } else if (sidebarTab === "search") setSidebarCollapsed(true); else setSidebarTab("search"); }}
+          onClick={() => switchSidebarTab("search")}
           title={t("ide.search") || "Search"}
         >
-          <span className="activity-icon">🔍</span>
+          <span className="activity-label">SR</span>
         </button>
         <button
           className={sidebarTab === "git" && !sidebarCollapsed ? "active" : ""}
-          onClick={() => { if (sidebarCollapsed) { setSidebarCollapsed(false); setSidebarTab("git"); } else if (sidebarTab === "git") setSidebarCollapsed(true); else setSidebarTab("git"); }}
+          onClick={() => switchSidebarTab("git")}
           title={t("ide.sourceControl") || "Source Control"}
         >
-          <span className="activity-icon">⑂</span>
+          <span className="activity-label">SC</span>
           {(gitModified.size + gitAdded.size) > 0 && (
             <span className="activity-badge">{gitModified.size + gitAdded.size}</span>
           )}
@@ -634,37 +627,54 @@ export default function IDE({ projectDir }: IDEProps) {
       {/* Sidebar content */}
       {!sidebarCollapsed && (
         <div className="ide-sidebar" style={{ width: sidebarWidth }}>
-          {sidebarTab === "explorer" && (
-            <FileTree
-              nodes={fileTree}
-              activePath={activeTabPath}
-              selectedPaths={fileTreeSelection}
-              gitModified={gitModified}
-              gitAdded={gitAdded}
-              projectDir={projectDir}
-              onFileClick={(node) => openFile(node.path)}
-              onRefresh={() => {
-                loadFileTree();
-                loadGitStatus();
-              }}
-              onSelect={handleFileTreeSelect}
-              onContextMenu={handleFileTreeContextMenu}
-              containerRef={fileTreeRef}
-            />
-          )}
-          {sidebarTab === "search" && (
-            <SearchPanel
-              projectDir={projectDir}
-              onResultClick={(path, line, column) => revealInFile(path, line, column)}
-            />
-          )}
-          {sidebarTab === "git" && (
-            <GitPanel
-              projectDir={projectDir}
-              onDiffClick={(path) => openDiff(path)}
-              onOpenFile={(path) => openFile(path)}
-              onRefresh={loadGitStatus}
-            />
+          {!projectDir ? (
+            <div className="ide-sidebar-empty">
+              <div className="ide-sidebar-empty-title">
+                {sidebarTab === "explorer" && (t("ide.explorer") || "Explorer")}
+                {sidebarTab === "search" && (t("ide.search") || "Search")}
+                {sidebarTab === "git" && (t("ide.sourceControl") || "Source Control")}
+              </div>
+              <p>{t("ide.noProjectDir") || "No folder open."}</p>
+              <p className="ide-sidebar-empty-hint">
+                {t("ide.noProjectDirHint") ||
+                  "Use “Open Folder” in the title bar to browse, search, and use Git."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {sidebarTab === "explorer" && (
+                <FileTree
+                  nodes={fileTree}
+                  activePath={activeTabPath}
+                  selectedPaths={fileTreeSelection}
+                  gitModified={gitModified}
+                  gitAdded={gitAdded}
+                  projectDir={projectDir}
+                  onFileClick={(node) => openFile(node.path)}
+                  onRefresh={() => {
+                    loadFileTree();
+                    loadGitStatus();
+                  }}
+                  onSelect={handleFileTreeSelect}
+                  onContextMenu={handleFileTreeContextMenu}
+                  containerRef={fileTreeRef}
+                />
+              )}
+              {sidebarTab === "search" && (
+                <SearchPanel
+                  projectDir={projectDir}
+                  onResultClick={(path, line, column) => revealInFile(path, line, column)}
+                />
+              )}
+              {sidebarTab === "git" && (
+                <GitPanel
+                  projectDir={projectDir}
+                  onDiffClick={(path) => openDiff(path)}
+                  onOpenFile={(path) => openFile(path)}
+                  onRefresh={loadGitStatus}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -692,7 +702,16 @@ export default function IDE({ projectDir }: IDEProps) {
           contextMenu={tabContextMenu}
         />
         <div className="ide-editor">
-          {activeTab ? (
+          {!projectDir ? (
+            <div className="ide-no-project">
+              <div className="icon">📂</div>
+              <div>{t("ide.noProjectDir") || "No folder open."}</div>
+              <div style={{ fontSize: 12, opacity: 0.6 }}>
+                {t("ide.noProjectDirHint") ||
+                  "Use “Open Folder” in the title bar to start editing."}
+              </div>
+            </div>
+          ) : activeTab ? (
             <CodeEditor
               tab={activeTab}
               theme="violet"
@@ -727,8 +746,8 @@ export default function IDE({ projectDir }: IDEProps) {
         )}
 
         <TerminalPanel
-          projectDir={projectDir}
-          visible={showTerminal}
+          projectDir={projectDir ?? ""}
+          visible={showTerminal && !!projectDir}
           onClose={() => setShowTerminal(false)}
           height={terminalHeight}
         />
