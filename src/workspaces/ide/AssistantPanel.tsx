@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chatSend, onChatEvent, type AgentEvent, type ChatEventEnvelope } from "../../services/tauri/chat";
 import { ideApi } from "../../services/tauri/ide";
+import type { FileNode } from "./types";
+import Markdown from "./Markdown";
 import "./AssistantPanel.css";
 
 interface ToolEvent {
@@ -19,6 +21,18 @@ interface ChatMessage {
 interface AssistantPanelProps {
   projectDir: string | null;
   onClose: () => void;
+}
+
+/** Flatten the file tree to relative file paths (files only) for @-mentions. */
+function flattenFiles(nodes: FileNode[], acc: string[] = []): string[] {
+  for (const n of nodes) {
+    if (n.is_dir) {
+      if (n.children) flattenFiles(n.children, acc);
+    } else {
+      acc.push(n.path);
+    }
+  }
+  return acc;
 }
 
 /** Resolve `@path` tokens to fenced file context prepended to the prompt. */
@@ -42,13 +56,39 @@ async function buildPrompt(raw: string, projectDir: string | null): Promise<stri
   return `Context from referenced files:\n\n${blocks.join("\n\n")}\n\n---\n\n${raw}`;
 }
 
+interface MentionState {
+  query: string;
+  start: number;
+  caret: number;
+  active: number;
+}
+
 export default function AssistantPanel({ projectDir, onClose }: AssistantPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuedView, setQueuedView] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
+  const [mention, setMention] = useState<MentionState | null>(null);
+
   const sessionRef = useRef<string | null>(null);
+  const queueRef = useRef<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const runTurnRef = useRef<(text: string) => Promise<void>>(async () => {});
+
+  // Load the file list for @-mentions whenever the project changes.
+  useEffect(() => {
+    if (!projectDir) {
+      setFiles([]);
+      return;
+    }
+    ideApi
+      .listFiles(projectDir)
+      .then((nodes) => setFiles(flattenFiles(nodes).sort()))
+      .catch(() => setFiles([]));
+  }, [projectDir]);
 
   // Update the in-flight (last) assistant message as kernel events stream in.
   const applyEvent = useCallback((env: ChatEventEnvelope) => {
@@ -107,22 +147,17 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+  }, [messages, queuedView]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || busy) return;
-    if (!projectDir) {
-      setError("Open a project folder before chatting.");
-      return;
-    }
+  // Reassigned every render so the recursive queue drain always sees fresh
+  // projectDir / session state.
+  runTurnRef.current = async (text: string) => {
     setError(null);
     setMessages((m) => [
       ...m,
       { role: "user", text, tools: [] },
       { role: "assistant", text: "", tools: [] },
     ]);
-    setInput("");
     setBusy(true);
     try {
       const prompt = await buildPrompt(text, projectDir);
@@ -140,13 +175,94 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
       setError(String(e));
     } finally {
       setBusy(false);
+      const next = queueRef.current.shift();
+      if (next !== undefined) {
+        setQueuedView([...queueRef.current]);
+        void runTurnRef.current(next);
+      }
+    }
+  };
+
+  const submit = useCallback(() => {
+    const text = input.trim();
+    if (!text) return;
+    if (!projectDir) {
+      setError("Open a project folder before chatting.");
+      return;
+    }
+    setInput("");
+    setMention(null);
+    if (busy) {
+      queueRef.current.push(text);
+      setQueuedView([...queueRef.current]);
+    } else {
+      void runTurnRef.current(text);
     }
   }, [input, busy, projectDir]);
 
+  // ── @-mention detection on every input change ──────────────────────────
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInput(value);
+    const caret = e.target.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const m = before.match(/(?:^|\s)@([^\s]*)$/);
+    if (m) {
+      setMention({ query: m[1], start: caret - m[1].length - 1, caret, active: 0 });
+    } else {
+      setMention(null);
+    }
+  };
+
+  const matches = useMemo(() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    return files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8);
+  }, [mention, files]);
+
+  const pickMention = useCallback(
+    (path: string) => {
+      if (!mention) return;
+      setInput((cur) => {
+        const next = cur.slice(0, mention.start) + "@" + path + " " + cur.slice(mention.caret);
+        const pos = mention.start + path.length + 2;
+        requestAnimationFrame(() => {
+          taRef.current?.focus();
+          taRef.current?.setSelectionRange(pos, pos);
+        });
+        return next;
+      });
+      setMention(null);
+    },
+    [mention],
+  );
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention && matches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMention({ ...mention, active: (mention.active + 1) % matches.length });
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMention({ ...mention, active: (mention.active - 1 + matches.length) % matches.length });
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        pickMention(matches[mention.active]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      void send();
+      submit();
     }
   };
 
@@ -179,10 +295,21 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
                 ))}
               </div>
             )}
-            {m.text && <div className="codez-msg-text">{m.text}</div>}
+            {m.text &&
+              (m.role === "assistant" ? (
+                <Markdown content={m.text} />
+              ) : (
+                <div className="codez-msg-text">{m.text}</div>
+              ))}
             {m.role === "assistant" && !m.text && busy && i === messages.length - 1 && (
               <div className="codez-msg-text codez-thinking">Thinking…</div>
             )}
+          </div>
+        ))}
+        {queuedView.map((q, i) => (
+          <div key={`q-${i}`} className="codez-msg user queued">
+            <div className="codez-msg-role">Queued</div>
+            <div className="codez-msg-text">{q}</div>
           </div>
         ))}
       </div>
@@ -190,16 +317,32 @@ export default function AssistantPanel({ projectDir, onClose }: AssistantPanelPr
       {error && <div className="codez-assistant-error">{error}</div>}
 
       <div className="codez-assistant-input">
+        {mention && matches.length > 0 && (
+          <div className="codez-mention-popup">
+            {matches.map((f, i) => (
+              <div
+                key={f}
+                className={`codez-mention-item ${i === mention.active ? "active" : ""}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickMention(f);
+                }}
+              >
+                {f}
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
+          ref={taRef}
           value={input}
-          placeholder={busy ? "Agent is working…" : "Message the agent  (Cmd/Ctrl+Enter to send)"}
-          onChange={(e) => setInput(e.target.value)}
+          placeholder={busy ? "Agent is working — messages queue…" : "Message the agent  (Cmd/Ctrl+Enter, @ to reference files)"}
+          onChange={onChange}
           onKeyDown={onKeyDown}
-          disabled={busy}
           rows={3}
         />
-        <button onClick={() => void send()} disabled={busy || !input.trim()}>
-          {busy ? "…" : "Send"}
+        <button onClick={submit} disabled={!input.trim()}>
+          {busy ? "Queue" : "Send"}
         </button>
       </div>
     </div>

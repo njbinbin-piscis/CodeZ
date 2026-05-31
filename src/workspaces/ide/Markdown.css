@@ -1,0 +1,102 @@
+.codez-markdown {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text, #e8e8f0);
+  word-break: break-word;
+}
+
+.codez-markdown p {
+  margin: 0 0 8px;
+}
+
+.codez-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.codez-markdown ul,
+.codez-markdown ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.codez-markdown li {
+  margin: 2px 0;
+}
+
+.codez-markdown h1,
+.codez-markdown h2,
+.codez-markdown h3 {
+  font-size: 14px;
+  margin: 12px 0 6px;
+}
+
+.codez-markdown :not(pre) > code {
+  background: var(--bg-elev-2, #1b1b26);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.codez-markdown blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+}
+
+.codez-markdown table {
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+
+.codez-markdown th,
+.codez-markdown td {
+  border: 1px solid var(--border, #2a2a38);
+  padding: 4px 8px;
+}
+
+.codez-codeblock {
+  position: relative;
+  margin: 8px 0;
+}
+
+.codez-codeblock pre {
+  margin: 0;
+  background: #0c0c12;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.codez-codeblock pre code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  background: transparent;
+  padding: 0;
+}
+
+.codez-codeblock-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--bg-elev-2, #1b1b26);
+  border: 1px solid var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.codez-codeblock:hover .codez-codeblock-copy {
+  opacity: 1;
+}
+
+.codez-codeblock-copy:hover {
+  color: var(--text, #e8e8f0);
+  border-color: var(--accent, #7c6af7);
+}

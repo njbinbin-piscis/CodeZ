@@ -15,6 +15,7 @@ export default defineConfig({
         manualChunks: {
           "app-vendor": ["react", "react-dom", "i18next", "react-i18next", "@tauri-apps/api"],
           monaco: ["monaco-editor", "@monaco-editor/react"],
+          markdown: ["react-markdown", "remark-gfm", "rehype-highlight", "highlight.js"],
         },
       },
     },
