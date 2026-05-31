@@ -1,0 +1,36 @@
+[workspace]
+members = ["crates/codez-host"]
+resolver = "2"
+
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+needless_return = "allow"
+module_inception = "allow"
+too_many_arguments = "allow"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+
+# Shared agent runtime — the standalone pisci-engine repo. CodeZ and openpisci
+# both consume the same kernel from here. For local engine hacking, add a
+# `[patch."https://github.com/njbinbin-pisci/pisci-engine.git"]` section that
+# points these at a local checkout.
+pisci-core = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-core" }
+pisci-kernel = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-kernel" }
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

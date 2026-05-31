@@ -1,0 +1,16 @@
+[package]
+name = "codez-host"
+version = "0.0.1"
+edition = "2021"
+description = "CodeZ host shell — Cursor-like AI IDE (IDE + Agent modes) built on the pisci-engine kernel."
+
+[[bin]]
+name = "codez-host"
+path = "src/main.rs"
+
+[dependencies]
+pisci-core = { workspace = true }
+pisci-kernel = { workspace = true }
+
+[lints]
+workspace = true
