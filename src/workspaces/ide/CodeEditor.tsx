@@ -9,6 +9,7 @@ import {
   type LspProvidersRegistration,
 } from "../../services/tauri/lsp";
 import { inlineEdit } from "../../services/tauri/edit";
+import { diffLines } from "./lineDiff";
 import "./InlineEdit.css";
 
 interface InlineEditState {
@@ -127,28 +128,43 @@ export default function CodeEditor({ tab, theme, projectDir, onChange, onSave }:
     const proposedLineCount = proposed.length === 0 ? 0 : proposed.split("\n").length;
     const endLine = startLine + proposedLineCount - 1;
 
-    if (proposedLineCount > 0) {
-      decoRef.current = editor.createDecorationsCollection([
-        {
-          range: { startLineNumber: startLine, startColumn: 1, endLineNumber: endLine, endColumn: 1 },
-          options: { isWholeLine: true, className: "codez-inline-added-line" },
+    // Line-level diff so only changed lines are highlighted (not the whole
+    // block): added lines get a green decoration in place; removed lines are
+    // collected into the red view zone above.
+    const origLines = s.original.length === 0 ? [] : s.original.split("\n");
+    const newLines = proposed.length === 0 ? [] : proposed.split("\n");
+    const ops = diffLines(origLines, newLines);
+
+    const addedDecos = ops
+      .filter((o) => o.type === "add")
+      .map((o) => ({
+        range: {
+          startLineNumber: startLine + o.bIndex,
+          startColumn: 1,
+          endLineNumber: startLine + o.bIndex,
+          endColumn: 1,
         },
-      ]);
+        options: { isWholeLine: true, className: "codez-inline-added-line" },
+      }));
+    if (addedDecos.length > 0) {
+      decoRef.current = editor.createDecorationsCollection(addedDecos);
     }
 
-    // Red "removed" block: the original selection, shown above the new code.
-    const dom = document.createElement("div");
-    dom.className = "codez-inline-removed-zone";
-    dom.textContent = s.original;
-    const removedLines = s.original.length === 0 ? 1 : s.original.split("\n").length;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    editor.changeViewZones((acc: any) => {
-      viewZoneIdRef.current = acc.addZone({
-        afterLineNumber: Math.max(0, startLine - 1),
-        heightInLines: removedLines,
-        domNode: dom,
+    // Red "removed" block: only the lines that were actually deleted/changed.
+    const removed = ops.filter((o) => o.type === "remove").map((o) => o.text);
+    if (removed.length > 0) {
+      const dom = document.createElement("div");
+      dom.className = "codez-inline-removed-zone";
+      dom.textContent = removed.join("\n");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.changeViewZones((acc: any) => {
+        viewZoneIdRef.current = acc.addZone({
+          afterLineNumber: Math.max(0, startLine - 1),
+          heightInLines: removed.length,
+          domNode: dom,
+        });
       });
-    });
+    }
 
     editor.revealLineInCenter?.(startLine);
     return { startLine, endLine };
