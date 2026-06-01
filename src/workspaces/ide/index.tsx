@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import FileTree, { type FileTreeContextMenu } from "./FileTree";
+import { ExplorerIcon, SearchIcon, SourceControlIcon, TerminalIcon } from "./ActivityIcons";
 import EditorTabs from "./EditorTabs";
-import CodeEditor from "./CodeEditor";
+import FileViewer from "./FileViewer";
 import TerminalPanel from "./Terminal";
 import GitPanel from "./GitPanel";
 import SearchPanel from "./SearchPanel";
 import { ideApi, onFileChanged } from "../../services/tauri/ide";
 import { openPath } from "../../services/tauri";
-import type { FileNode, OpenTab, GitFileStatus } from "./types";
+import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
 import "./IDE.css";
 
 type SidebarTab = "explorer" | "search" | "git";
@@ -24,6 +25,8 @@ interface TabContextMenu {
 interface IDEProps {
   projectDir: string | null;
   onOpenFolder: () => void;
+  /** Insert @file references into the chat composer (opens chat if needed). */
+  onSendToChat?: (paths: string[]) => void;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -33,7 +36,19 @@ interface FileTreeHandle {
   startCreate?: (isDir: boolean) => void;
 }
 
-export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
+function collectSelectedFilePaths(nodes: FileNode[], selected: Set<string>): string[] {
+  const out: string[] = [];
+  const walk = (list: FileNode[]) => {
+    for (const n of list) {
+      if (selected.has(n.path) && !n.is_dir) out.push(n.path);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
+export default function IDE({ projectDir, onOpenFolder, onSendToChat }: IDEProps) {
   const { t } = useTranslation();
 
   // File tree
@@ -252,8 +267,24 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
       setFileLoadError(null);
       try {
         const fc = await ideApi.readFile(fullPath);
+        if (fc.is_binary && fc.preview_data) {
+          const newTab: OpenTab = {
+            path,
+            name: path.split("/").pop() || path,
+            language: null,
+            content: "",
+            isDirty: false,
+            isReadOnly: true,
+            viewMode: "image",
+            previewData: fc.preview_data,
+            fileSize: fc.size,
+          };
+          setTabs((prev) => [...prev, newTab]);
+          setActiveTabPath(path);
+          return;
+        }
         if (fc.is_binary) {
-          setFileLoadError(`"${path.split("/").pop()}" is a binary file and cannot be opened in the editor.`);
+          setFileLoadError(t("ide.binaryFileError", { name: path.split("/").pop() || path }));
           return;
         }
         const newTab: OpenTab = {
@@ -263,6 +294,8 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
           content: fc.content,
           isDirty: false,
           isReadOnly: readOnly,
+          viewMode: "editor",
+          fileSize: fc.size,
         };
         setTabs((prev) => [...prev, newTab]);
         setActiveTabPath(path);
@@ -274,8 +307,14 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
         setFileLoading(null);
       }
     },
-    [projectDir, tabs],
+    [projectDir, tabs, t],
   );
+
+  const setTabViewMode = useCallback((path: string, mode: TabViewMode) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.path === path ? { ...t, viewMode: mode } : t)),
+    );
+  }, []);
 
   // ─── Open a file and jump to a line/column (search results) ──────
   const revealInFile = useCallback(
@@ -424,32 +463,14 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
     loadGitStatus();
   }, [loadGitStatus, t]);
 
-  const closeUnsavedTabs = useCallback(async () => {
-    const dir = projectDirRef.current;
-    const snapshot = tabsRef.current.slice();
-    const dirty = snapshot.filter((t) => t.isDirty);
-    if (dirty.length > 0) {
-      // eslint-disable-next-line no-alert
-      const msg = t("ide.unsavedBulkConfirm", { count: dirty.length })
-        || `${dirty.length} file(s) have unsaved changes. Save before closing?`;
-      // eslint-disable-next-line no-alert
-      const save = window.confirm(msg);
-      if (save && dir) {
-        await Promise.all(
-          dirty
-            .filter((t) => !t.isReadOnly && !t.path.startsWith("diff:"))
-            .map((t) => ideApi.writeFile(`${dir}/${t.path}`, t.content).catch(() => {})),
-        );
-      }
-    }
-    setTabs((prev) => prev.filter((t) => !t.isDirty));
+  const closeSavedTabs = useCallback(() => {
+    setTabs((prev) => prev.filter((t) => t.isDirty));
     setActiveTabPath((current) => {
-      const stillOpen = tabsRef.current.filter((t) => !t.isDirty);
-      if (current && stillOpen.some((t) => t.path === current)) return current;
-      return stillOpen[0]?.path || null;
+      const remaining = tabsRef.current.filter((t) => t.isDirty);
+      if (current && remaining.some((t) => t.path === current)) return current;
+      return remaining[0]?.path || null;
     });
-    loadGitStatus();
-  }, [loadGitStatus, t]);
+  }, []);
 
   const closeOtherTabs = useCallback(async (keepPath: string) => {
     const dir = projectDirRef.current;
@@ -604,7 +625,7 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
           onClick={onOpenFolder}
           title={projectDir ? (t("ide.changeFolder") || "Change Folder") : (t("ide.openFolder") || "Open Folder")}
         >
-          <span className="activity-label-open">{projectDir ? "Chg" : "Open"}</span>
+          <span className="activity-label-open">{projectDir ? t("app.activityChange") : t("app.activityOpen")}</span>
         </button>
         <div className="ide-activity-sep" />
         <button
@@ -612,21 +633,21 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
           onClick={() => switchSidebarTab("explorer")}
           title={t("ide.explorer") || "Explorer"}
         >
-          <span className="activity-label">EX</span>
+          <ExplorerIcon />
         </button>
         <button
           className={sidebarTab === "search" && !sidebarCollapsed ? "active" : ""}
           onClick={() => switchSidebarTab("search")}
           title={t("ide.search") || "Search"}
         >
-          <span className="activity-label">SR</span>
+          <SearchIcon />
         </button>
         <button
           className={sidebarTab === "git" && !sidebarCollapsed ? "active" : ""}
           onClick={() => switchSidebarTab("git")}
           title={t("ide.sourceControl") || "Source Control"}
         >
-          <span className="activity-label">SC</span>
+          <SourceControlIcon />
           {(gitModified.size + gitAdded.size) > 0 && (
             <span className="activity-badge">{gitModified.size + gitAdded.size}</span>
           )}
@@ -634,10 +655,14 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
         <div style={{ flex: 1 }} />
         <button
           className={showTerminal ? "active" : ""}
-          onClick={() => setShowTerminal((v) => !v)}
-          title={t("ide.terminal") || "Terminal"}
+          disabled={!projectDir}
+          onClick={() => {
+            if (!projectDir) return;
+            setShowTerminal((v) => !v);
+          }}
+          title={projectDir ? (t("ide.terminal") || "Terminal") : t("ide.terminalNeedProject")}
         >
-          <span className="activity-icon">⌨</span>
+          <TerminalIcon />
         </button>
       </div>
 
@@ -655,10 +680,7 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
               <button type="button" className="ide-open-folder-btn" onClick={onOpenFolder}>
                 {t("ide.openFolder") || "Open Folder"}
               </button>
-              <p className="ide-sidebar-empty-hint">
-                {t("ide.noProjectDirHint") ||
-                  "Pick a project directory to browse files, search, and use Git."}
-              </p>
+              <p className="ide-sidebar-empty-hint">{t("ide.noProjectDirHint")}</p>
             </div>
           ) : (
             <>
@@ -717,9 +739,10 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
           onSave={saveFile}
           onTabContextMenu={handleTabContextMenu}
           onCloseAll={closeAllTabs}
-          onCloseUnsaved={closeUnsavedTabs}
+          onCloseSaved={closeSavedTabs}
           onCloseOther={closeOtherTabs}
           contextMenu={tabContextMenu}
+          onDismissContextMenu={() => setTabContextMenu(null)}
         />
         <div className="ide-editor">
           {!projectDir ? (
@@ -729,31 +752,28 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
               <button type="button" className="ide-open-folder-btn ide-open-folder-btn-lg" onClick={onOpenFolder}>
                 {t("ide.openFolder") || "Open Folder"}
               </button>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>
-                {t("ide.noProjectDirHint") ||
-                  "Choose a folder to start editing, searching, and reviewing Git changes."}
-              </div>
+              <div style={{ fontSize: 12, opacity: 0.6 }}>{t("ide.noProjectDirHint")}</div>
             </div>
           ) : fileLoading ? (
             <div className="ide-file-loading">
               <div className="ide-file-loading-spinner" />
-              <div>Opening {fileLoading.split("/").pop()}…</div>
+              <div>{t("ide.openingFile", { name: fileLoading.split("/").pop() || fileLoading })}</div>
             </div>
           ) : fileLoadError ? (
             <div className="ide-file-error">
-              <div className="ide-file-error-title">Could not open file</div>
+              <div className="ide-file-error-title">{t("ide.fileErrorTitle")}</div>
               <div className="ide-file-error-msg">{fileLoadError}</div>
               <button type="button" className="ide-open-folder-btn" onClick={() => setFileLoadError(null)}>
-                Dismiss
+                {t("common.dismiss")}
               </button>
             </div>
           ) : activeTab ? (
-            <CodeEditor
+            <FileViewer
               tab={activeTab}
-              theme="violet"
               projectDir={projectDir}
               reveal={reveal && reveal.path === activeTab.path ? reveal : null}
               onChange={handleEditorChange}
+              onViewModeChange={(mode) => setTabViewMode(activeTab.path, mode)}
               onSave={() => {
                 const p = activeTabPathRef.current;
                 if (p && !p.startsWith("diff:")) saveFile(p);
@@ -765,28 +785,28 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
               <div className="welcome-title">
                 {t("ide.welcome") || "Select a file to start editing"}
               </div>
-              <div className="welcome-hint">
-                {t("ide.welcomeHint") ||
-                  "AI-assisted editing — Cmd-K, Tab, and chat land in upcoming milestones"}
-              </div>
+              <div className="welcome-hint">{t("ide.welcomeHint")}</div>
             </div>
           )}
         </div>
 
-        {/* Terminal resize handle */}
-        {showTerminal && (
-          <div
-            className="ide-resize-handle-v"
-            onMouseDown={startTerminalResize}
-          />
+        {/* Terminal — kept mounted while project is open; visibility toggles only */}
+        {projectDir && (
+          <>
+            {showTerminal && (
+              <div
+                className="ide-resize-handle-v"
+                onMouseDown={startTerminalResize}
+              />
+            )}
+            <TerminalPanel
+              projectDir={projectDir}
+              visible={showTerminal}
+              onHide={() => setShowTerminal(false)}
+              height={terminalHeight}
+            />
+          </>
         )}
-
-        <TerminalPanel
-          projectDir={projectDir ?? ""}
-          visible={showTerminal && !!projectDir}
-          onClose={() => setShowTerminal(false)}
-          height={terminalHeight}
-        />
       </div>
 
       {/* File tree right-click context menu */}
@@ -798,6 +818,20 @@ export default function IDE({ projectDir, onOpenFolder }: IDEProps) {
           <button onClick={() => { openFile(fileTreeContextMenu.targetPath); setFileTreeContextMenu(null); }}>
             {t("ide.openFile") || "Open"}
           </button>
+          {!fileTreeContextMenu.isDir && onSendToChat && (
+            <button
+              onClick={() => {
+                const paths =
+                  fileTreeSelection.size > 1 && fileTreeSelection.has(fileTreeContextMenu.targetPath)
+                    ? collectSelectedFilePaths(fileTree, fileTreeSelection)
+                    : [fileTreeContextMenu.targetPath];
+                if (paths.length > 0) onSendToChat(paths);
+                setFileTreeContextMenu(null);
+              }}
+            >
+              {t("ide.sendToChat")}
+            </button>
+          )}
           <button onClick={() => { fileTreeRef.current?.renameActive?.(); setFileTreeContextMenu(null); }}>
             {t("ide.renameFile") || "Rename"} <span style={{ opacity: 0.5, fontSize: 11, marginLeft: 8 }}>F2</span>
           </button>

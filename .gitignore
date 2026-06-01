@@ -8,3 +8,6 @@ dist
 # Tauri generated artifacts
 /src-tauri/gen
 /src-tauri/target
+
+# Runtime data (chat / file-journal SQLite databases)
+.codez/

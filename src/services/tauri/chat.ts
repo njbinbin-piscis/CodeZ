@@ -8,12 +8,26 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 /** Mirror of the backend `codez:chat-event` channel name. */
 export const CHAT_EVENT = "codez:chat-event";
 
+export interface ChatAttachment {
+  media_type: string;
+  path?: string | null;
+  data?: string | null;
+  filename?: string | null;
+}
+
+export interface PlanTodoItem {
+  id: string;
+  content: string;
+  status: string;
+}
+
 /** Tagged union mirroring `pisci_kernel::agent::messages::AgentEvent`. */
 export type AgentEvent =
   | { type: "text_segment_start"; iteration: number }
   | { type: "text_delta"; delta: string }
   | { type: "tool_start"; id: string; name: string; input: unknown }
   | { type: "tool_end"; id: string; name: string; result: string; is_error: boolean }
+  | { type: "plan_update"; items: PlanTodoItem[] }
   | { type: "done"; total_input_tokens: number; total_output_tokens: number }
   | { type: "cancelled" }
   | { type: "error"; message: string }
@@ -31,18 +45,43 @@ export interface ChatResult {
   ok: boolean;
   session_id: string;
   response_text: string;
+  /** Journal turn id for this turn — drives the Review bar / Undo. */
+  turn_id?: string | null;
 }
+
+/** One file changed during a turn (from the file journal). */
+export interface JournalChange {
+  id: number;
+  rel_path: string;
+  tool_name: string;
+  existed: boolean;
+  applied: boolean;
+}
+
+export type ChatMode = "agent" | "plan";
 
 /** Start one agent turn. Resolves with the final assistant text. */
 export function chatSend(args: {
   prompt: string;
+  /** User-visible text stored in session history (defaults to prompt). */
+  displayPrompt?: string | null;
   sessionId?: string | null;
-  workspace?: string | null;
+  projectDir: string;
+  attachment?: ChatAttachment | null;
+  chatMode?: ChatMode;
+  modelId?: string | null;
+  clearPlan?: boolean;
 }): Promise<ChatResult> {
   return invoke<ChatResult>("chat_send", {
     prompt: args.prompt,
+    displayPrompt: args.displayPrompt ?? null,
     sessionId: args.sessionId ?? null,
-    workspace: args.workspace ?? null,
+    workspace: args.projectDir,
+    projectDir: args.projectDir,
+    attachment: args.attachment ?? null,
+    chatMode: args.chatMode ?? "agent",
+    modelId: args.modelId ?? null,
+    clearPlan: args.clearPlan ?? true,
   });
 }
 
@@ -62,27 +101,70 @@ export interface SessionMeta {
 }
 
 export interface MessageDto {
+  id: string;
   role: "user" | "assistant";
   content: string;
 }
 
-export function listSessions(): Promise<SessionMeta[]> {
-  return invoke<SessionMeta[]>("chat_list_sessions");
+export function listSessions(projectDir: string): Promise<SessionMeta[]> {
+  return invoke<SessionMeta[]>("chat_list_sessions", { projectDir });
 }
 
-export function getMessages(sessionId: string): Promise<MessageDto[]> {
-  return invoke<MessageDto[]>("chat_get_messages", { sessionId });
+export function getMessages(sessionId: string, projectDir: string): Promise<MessageDto[]> {
+  return invoke<MessageDto[]>("chat_get_messages", { sessionId, projectDir });
 }
 
-export function forkSession(sessionId: string, title?: string): Promise<SessionMeta> {
-  return invoke<SessionMeta>("chat_fork_session", { sessionId, title: title ?? null });
+export function forkSession(
+  sessionId: string,
+  projectDir: string,
+  title?: string,
+  upToMessageId?: string | null,
+): Promise<SessionMeta> {
+  return invoke<SessionMeta>("chat_fork_session", {
+    sessionId,
+    projectDir,
+    title: title ?? null,
+    upToMessageId: upToMessageId ?? null,
+  });
 }
 
-export function deleteSession(sessionId: string): Promise<void> {
-  return invoke<void>("chat_delete_session", { sessionId });
+export function restoreCheckpoint(sessionId: string, messageId: string, projectDir: string): Promise<void> {
+  return invoke<void>("chat_restore_checkpoint", { sessionId, messageId, projectDir });
+}
+
+export function deleteSession(sessionId: string, projectDir: string): Promise<void> {
+  return invoke<void>("chat_delete_session", { sessionId, projectDir });
 }
 
 /** Stop the in-flight agent turn, if any. */
 export function chatCancel(): Promise<void> {
   return invoke<void>("chat_cancel");
+}
+
+// ── File journal (Review / Undo) ─────────────────────────────────────────
+
+/** List files changed by a turn (applied, not yet undone). */
+export function journalListChanges(
+  projectDir: string,
+  sessionId: string,
+  turnId: string,
+): Promise<JournalChange[]> {
+  return invoke<JournalChange[]>("journal_list_changes", {
+    projectDir,
+    sessionId,
+    turnId,
+  });
+}
+
+/** Undo every change in a turn, restoring pre-edit content. Returns paths. */
+export function journalUndoTurn(
+  projectDir: string,
+  sessionId: string,
+  turnId: string,
+): Promise<string[]> {
+  return invoke<string[]>("journal_undo_turn", {
+    projectDir,
+    sessionId,
+    turnId,
+  });
 }

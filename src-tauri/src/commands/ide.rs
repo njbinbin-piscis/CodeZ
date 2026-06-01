@@ -38,6 +38,9 @@ pub struct FileContent {
     pub is_binary: bool,
     pub size: u64,
     pub language: Option<String>,
+    /// When set, the frontend should render a media preview (`data:` URL).
+    #[serde(default)]
+    pub preview_data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,6 +247,8 @@ fn sort_file_nodes(nodes: &mut [FileNode]) {
 /// Read a file's content with encoding detection.
 #[tauri::command]
 pub async fn ide_read_file(path: String) -> Result<FileContent, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
     let file_path = PathBuf::from(&path);
     if !file_path.exists() {
         return Err(format!("File not found: {}", path));
@@ -252,8 +257,38 @@ pub async fn ide_read_file(path: String) -> Result<FileContent, String> {
     let metadata = std::fs::metadata(&file_path).map_err(|e| e.to_string())?;
     let size = metadata.len();
 
-    // Binary detection: read first 8KB and check for null bytes
     let raw = std::fs::read(&file_path).map_err(|e| e.to_string())?;
+
+    // Image preview — common raster formats + SVG.
+    if let Some(mime) = preview_mime_for_path(&file_path) {
+        if mime == "image/svg+xml" {
+            if let Ok(text) = std::str::from_utf8(&raw) {
+                let encoded = STANDARD.encode(text.as_bytes());
+                return Ok(FileContent {
+                    path: path.clone(),
+                    content: String::new(),
+                    encoding: "svg".to_string(),
+                    is_binary: true,
+                    size,
+                    language: None,
+                    preview_data: Some(format!("data:image/svg+xml;base64,{encoded}")),
+                });
+            }
+        } else {
+            let encoded = STANDARD.encode(&raw);
+            return Ok(FileContent {
+                path: path.clone(),
+                content: String::new(),
+                encoding: "binary".to_string(),
+                is_binary: true,
+                size,
+                language: None,
+                preview_data: Some(format!("data:{mime};base64,{encoded}")),
+            });
+        }
+    }
+
+    // Binary detection: read first 8KB and check for null bytes
     let is_binary = raw[..raw.len().min(8192)].contains(&0);
 
     if is_binary {
@@ -264,6 +299,7 @@ pub async fn ide_read_file(path: String) -> Result<FileContent, String> {
             is_binary: true,
             size,
             language: None,
+            preview_data: None,
         });
     }
 
@@ -279,7 +315,22 @@ pub async fn ide_read_file(path: String) -> Result<FileContent, String> {
         is_binary: false,
         size,
         language,
+        preview_data: None,
     })
+}
+
+fn preview_mime_for_path(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "bmp" => Some("image/bmp"),
+        "ico" => Some("image/x-icon"),
+        "svg" => Some("image/svg+xml"),
+        _ => None,
+    }
 }
 
 fn decode_content(raw: &[u8]) -> (String, String) {
@@ -935,6 +986,7 @@ pub async fn ide_git_file_at_ref(
         is_binary: false,
         size: 0,
         language,
+        preview_data: None,
     })
 }
 
@@ -1207,6 +1259,42 @@ pub async fn ide_terminal_destroy(
         Ok(())
     } else {
         Err(format!("Terminal '{}' not found", terminal_id))
+    }
+}
+
+/// Number of live PTY terminal sessions.
+#[tauri::command]
+pub async fn ide_terminal_count(state: State<'_, AppState>) -> Result<usize, String> {
+    let registry = state.terminals.lock().await;
+    Ok(registry.sessions.len())
+}
+
+/// Terminate every terminal session (e.g. when closing the project).
+#[tauri::command]
+pub async fn ide_terminal_destroy_all(state: State<'_, AppState>) -> Result<(), String> {
+    let mut registry = state.terminals.lock().await;
+    for (_, mut session) in registry.sessions.drain() {
+        session.writer.take();
+        let _ = session.child.kill();
+    }
+    Ok(())
+}
+
+/// Whether the PTY shell process for a session is still running.
+#[tauri::command]
+pub async fn ide_terminal_is_alive(
+    state: State<'_, AppState>,
+    terminal_id: String,
+) -> Result<bool, String> {
+    let mut registry = state.terminals.lock().await;
+    let session = registry
+        .sessions
+        .get_mut(&terminal_id)
+        .ok_or_else(|| format!("Terminal '{}' not found", terminal_id))?;
+    match session.child.try_wait() {
+        Ok(None) => Ok(true),
+        Ok(Some(_)) => Ok(false),
+        Err(e) => Err(format!("Failed to check terminal status: {e}")),
     }
 }
 

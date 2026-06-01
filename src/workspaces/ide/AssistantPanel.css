@@ -18,6 +18,101 @@
   flex-shrink: 0;
 }
 
+/* ── File journal Review bar ─────────────────────────────────────────── */
+.codez-review-bar {
+  flex-shrink: 0;
+  margin: 6px 8px 0;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg, #0f0f16);
+  overflow: hidden;
+}
+
+.codez-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.codez-review-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #e6e6ef);
+}
+
+.codez-review-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.codez-review-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #2a2a38);
+  background: transparent;
+  color: var(--text, #e6e6ef);
+  cursor: pointer;
+}
+
+.codez-review-btn:hover:not(:disabled) {
+  background: var(--bg-elev, #1c1c26);
+}
+
+.codez-review-btn.danger {
+  border-color: #b4413c;
+  color: #ff9b95;
+}
+
+.codez-review-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codez-review-files {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.codez-review-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+.codez-review-tag {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 3px;
+}
+
+.codez-review-tag.edit {
+  color: #e2b341;
+}
+
+.codez-review-tag.new {
+  color: #4ec47a;
+}
+
+.codez-review-path {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
 .codez-assistant-actions {
   display: flex;
   gap: 2px;
@@ -212,33 +307,136 @@
   color: #fbbf24;
 }
 
-.codez-assistant-input {
-  position: relative;
+.codez-checkpoint {
   display: flex;
-  gap: 8px;
-  padding: 10px;
-  border-top: 1px solid var(--border, #2a2a38);
-  flex-shrink: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(124, 106, 247, 0.08);
+  border: 1px solid rgba(124, 106, 247, 0.18);
+}
+
+.codez-checkpoint-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-hover, #9585ff);
+  margin-right: 4px;
+}
+
+.codez-checkpoint-btn {
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  background: rgba(124, 106, 247, 0.18);
+  color: var(--text, #e8e8f0);
+}
+
+.codez-checkpoint-btn:hover {
+  background: rgba(124, 106, 247, 0.32);
+}
+
+.codez-checkpoint-btn.muted {
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  border: 1px solid var(--border, #2a2a38);
+}
+
+.codez-checkpoint-btn.muted:hover {
+  color: var(--text, #e8e8f0);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Plan resume dialog */
+.codez-plan-resume-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.codez-plan-resume-dialog {
+  width: min(400px, 100%);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #2a2a38);
+  background: var(--bg-elev, #14141c);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.codez-plan-resume-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.codez-plan-resume-dialog p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.5;
+}
+
+.codez-plan-resume-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.codez-plan-resume-actions button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid var(--border, #2a2a38);
+}
+
+.codez-plan-resume-actions button.primary {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border-color: transparent;
+}
+
+.codez-plan-resume-actions button.danger {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.codez-plan-resume-actions button.muted {
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
 }
 
 .codez-mention-popup {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: calc(100% - 2px);
-  max-height: 220px;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 4px);
+  max-height: 200px;
   overflow-y: auto;
-  background: var(--bg-elev-2, #1b1b26);
+  background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
-  border-radius: 8px;
-  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.4);
-  z-index: 20;
+  border-radius: 10px;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.4);
+  z-index: 25;
 }
 
 .codez-mention-item {
   padding: 6px 10px;
   font-size: 12px;
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, monospace;
   color: var(--text-dim, #9a9ab0);
   cursor: pointer;
   white-space: nowrap;
@@ -250,47 +448,4 @@
 .codez-mention-item:hover {
   background: var(--accent, #7c6af7);
   color: #fff;
-}
-
-.codez-assistant-input textarea {
-  flex: 1;
-  resize: none;
-  background: var(--bg, #0e0e14);
-  color: var(--text, #e8e8f0);
-  border: 1px solid var(--border, #2a2a38);
-  border-radius: 6px;
-  padding: 8px;
-  font-family: inherit;
-  font-size: 13px;
-  outline: none;
-}
-
-.codez-assistant-input textarea:focus {
-  border-color: var(--accent, #7c6af7);
-}
-
-.codez-assistant-input button {
-  align-self: flex-end;
-  background: var(--accent, #7c6af7);
-  color: #fff;
-  border: 0;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.codez-assistant-input button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.codez-assistant-input button.codez-stop {
-  background: transparent;
-  color: #f87171;
-  border: 1px solid #6b2222;
-}
-
-.codez-assistant-input button.codez-stop:hover {
-  background: rgba(248, 113, 113, 0.12);
 }

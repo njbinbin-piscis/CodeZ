@@ -26,6 +26,10 @@ tokio = { version = "1", features = ["full"] }
 pisci-core = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-core" }
 pisci-kernel = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-kernel" }
 
+# For local engine hacking, add a
+# `[patch."https://github.com/njbinbin-pisci/pisci-engine.git"]` section here
+# pointing pisci-core / pisci-kernel at a local `../pisci-engine` checkout.
+
 [profile.dev]
 incremental = true
 

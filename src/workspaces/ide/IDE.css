@@ -48,16 +48,24 @@
   color: var(--text-primary);
 }
 
-.ide-activity-bar .activity-icon {
-  font-size: 18px;
-  line-height: 1;
+.ide-activity-bar button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
-.ide-activity-bar .activity-label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  font-family: var(--font-mono);
+.ide-activity-bar button:disabled:hover {
+  color: var(--text-secondary);
+}
+
+.ide-activity-bar .activity-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ide-activity-bar .activity-icon svg {
+  display: block;
 }
 
 .ide-activity-open-folder {
@@ -306,11 +314,32 @@
 }
 
 .file-tree-item .icon {
-  width: 16px;
-  margin-right: 6px;
-  text-align: center;
-  font-size: 12px;
+  width: 28px;
+  margin-right: 2px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.file-tree-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.file-tree-chevron {
+  color: var(--text-muted, #606078);
+  flex-shrink: 0;
+}
+
+.file-tree-chevron-spacer {
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.file-tree-icon-file svg {
+  display: block;
 }
 
 .file-tree-item .name {
@@ -492,6 +521,9 @@
   flex: 1;
   overflow: hidden;
   background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .ide-editor-welcome {
@@ -538,6 +570,10 @@
 
 /* ─── Terminal Panel ──────────────────────────────────────────────────── */
 
+.ide-terminal-panel.is-hidden {
+  display: none;
+}
+
 .ide-terminal-panel {
   border-top: 1px solid var(--border);
   background: #14141c;
@@ -549,41 +585,148 @@
 
 .ide-terminal-header {
   display: flex;
-  align-items: center;
-  padding: 4px 10px;
+  align-items: stretch;
+  min-height: 32px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   font-size: 11px;
-  gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: var(--text-muted);
+  gap: 0;
 }
 
-.ide-terminal-header .term-title {
-  font-weight: 600;
+.ide-terminal-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.ide-terminal-header button {
-  background: none;
+.ide-terminal-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ide-terminal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 0 8px 0 10px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.ide-terminal-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ide-terminal-tab.active {
+  background: #14141c;
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.ide-terminal-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.ide-terminal-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.ide-terminal-tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ide-terminal-tab-add,
+.ide-terminal-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 0 8px;
+  border: none;
+  background: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
   transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
 
-.ide-terminal-header button:hover {
+.ide-terminal-tab-add {
+  border-right: 1px solid var(--border);
+  font-size: 18px;
+}
+
+.ide-terminal-tab-add:hover:not(:disabled),
+.ide-terminal-panel-close:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.ide-terminal-tab-add:disabled,
+.ide-terminal-tab-close:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ide-terminal-tab-close:disabled:hover {
+  background: transparent;
+  opacity: 0.35;
+}
+
+.ide-terminal-panel-close {
+  border-left: 1px solid var(--border);
+}
+
+.ide-terminal-session {
+  position: absolute;
+  inset: 0;
 }
 
 .ide-terminal-body {
   flex: 1;
   overflow: hidden;
   padding: 0;
+  position: relative;
+  min-height: 0;
+}
+
+.ide-terminal-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: none;
 }
 
 /* xterm.js overrides for proper rendering */

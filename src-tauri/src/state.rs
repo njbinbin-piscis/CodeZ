@@ -9,6 +9,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use pisci_kernel::agent::plan::new_plan_store;
+use pisci_kernel::agent::plan::PlanStore;
+
 use crate::commands::ide::TerminalRegistry;
 use crate::lsp::manager::LspManager;
 
@@ -25,6 +28,8 @@ pub struct AppState {
     /// Cancel flag for the in-flight chat turn (CodeZ runs one at a time).
     /// `Some` while a turn is running; the chat panel's Stop flips it.
     pub chat_cancel: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+    /// Per-session plan board state for `plan_todo`.
+    pub plan_state: PlanStore,
 }
 
 impl AppState {
@@ -34,6 +39,7 @@ impl AppState {
             file_watchers: Arc::new(Mutex::new(HashMap::new())),
             lsp_manager: Arc::new(LspManager::new()),
             chat_cancel: Arc::new(Mutex::new(None)),
+            plan_state: new_plan_store(),
         }
     }
 }

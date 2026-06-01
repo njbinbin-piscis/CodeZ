@@ -555,6 +555,9 @@ checksum = "5417da527aa9bf6a1e10a781231effd1edd3ee82f27d5f8529ac9b279babce96"
 name = "codez-desktop"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
  "chrono",
  "encoding_rs",
  "futures",
@@ -562,6 +565,8 @@ dependencies = [
  "pisci-core",
  "pisci-kernel",
  "portable-pty",
+ "reqwest 0.12.28",
+ "rusqlite",
  "serde",
  "serde_json",
  "tauri",
@@ -573,6 +578,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tungstenite",
+ "urlencoding",
  "zip",
 ]
 
@@ -3714,7 +3720,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pisci-core"
 version = "0.7.8"
-source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#4b142a06b69f4b7b55409cfd2f0f34cc9a862b6b"
+source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#628022575054580b4b9b429d6381bf54a06352f8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3726,7 +3732,7 @@ dependencies = [
 [[package]]
 name = "pisci-kernel"
 version = "0.7.8"
-source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#4b142a06b69f4b7b55409cfd2f0f34cc9a862b6b"
+source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#628022575054580b4b9b429d6381bf54a06352f8"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -6,10 +6,14 @@
 //! watcher, and the LSP ↔ WebSocket bridge.
 
 pub mod commands;
+pub mod context_assembly;
+pub mod journal;
 pub mod lsp;
 pub mod state;
+pub mod tools;
 
 use state::AppState;
+use tauri::Manager;
 
 /// Build and run the CodeZ desktop application.
 pub fn run() {
@@ -23,6 +27,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            // Explicitly apply the bundled icon — some Linux WMs skip it in dev otherwise.
+            if let Some(icon) = app.default_window_icon().cloned() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_icon(icon);
+                }
+            }
+            Ok(())
+        })
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             // file tree + I/O
@@ -49,6 +62,9 @@ pub fn run() {
             commands::ide::ide_terminal_write,
             commands::ide::ide_terminal_resize,
             commands::ide::ide_terminal_destroy,
+            commands::ide::ide_terminal_count,
+            commands::ide::ide_terminal_destroy_all,
+            commands::ide::ide_terminal_is_alive,
             // file-change watcher
             commands::ide::ide_start_watcher,
             commands::ide::ide_stop_watcher,
@@ -69,7 +85,18 @@ pub fn run() {
             commands::session::chat_list_sessions,
             commands::session::chat_get_messages,
             commands::session::chat_fork_session,
+            commands::session::chat_restore_checkpoint,
             commands::session::chat_delete_session,
+            // LLM / kernel settings
+            commands::settings::get_settings,
+            commands::settings::save_settings,
+            commands::settings::is_configured,
+            // ClawHub skill marketplace
+            commands::clawhub::clawhub_search,
+            commands::clawhub::clawhub_install,
+            // File journal — Review / Undo of a turn's edits
+            commands::journal::journal_list_changes,
+            commands::journal::journal_undo_turn,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the CodeZ desktop application");

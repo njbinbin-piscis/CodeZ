@@ -1,32 +1,35 @@
 //! AI chat command — drives a single agent turn on the shared `pisci-engine`
 //! kernel and streams [`AgentEvent`]s back to the frontend.
-//!
-//! This is the M1 seam between CodeZ's UI and the kernel. It reuses the
-//! host-agnostic [`pisci_kernel::headless::run_pisci_turn`] runner (the same
-//! entry point `openpisci-headless` uses), so the editor copilot and the CLI
-//! share identical single-agent semantics. The only host-specific piece is the
-//! [`EventSink`] below, which re-emits every kernel event as a Tauri event.
 
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 use pisci_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
-use pisci_kernel::agent::tool::{new_tool_registry_handle, ToolRegistryHandleExt};
-use pisci_kernel::headless::{self, register_default_cli_tools, HeadlessDeps};
 
+use crate::commands::chat_turn::run_codez_turn;
+use crate::commands::data_scope::{open_project_kernel_state, require_project_dir, SESSION_SOURCE};
 use crate::state::AppState;
+
+/// Re-export for settings / inline edit (always global config dir).
+pub(crate) use crate::commands::data_scope::resolve_global_config_dir as resolve_config_dir;
 
 /// Tauri event channel that carries every streamed kernel event to the UI.
 pub const CHAT_EVENT: &str = "codez:chat-event";
 
-/// Bridges the kernel's [`EventSink`] to Tauri events. Each kernel
-/// `emit_session` / `emit_broadcast` becomes a `codez:chat-event` payload the
-/// chat sidebar listens for.
+/// Attachment sent from the frontend with a chat message.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FrontendAttachment {
+    pub media_type: String,
+    pub path: Option<String>,
+    pub data: Option<String>,
+    pub filename: Option<String>,
+}
+
+/// Bridges the kernel's [`EventSink`] to Tauri events.
 struct TauriEventSink {
     app: AppHandle,
 }
@@ -47,33 +50,17 @@ impl EventSink for TauriEventSink {
     }
 }
 
-/// Result of a completed chat turn returned to the JS caller. Streaming text
-/// arrives via `codez:chat-event`; this is the tidy final summary.
+/// Result of a completed chat turn returned to the JS caller.
 #[derive(Debug, Serialize)]
 pub struct ChatResult {
     pub ok: bool,
     pub session_id: String,
     pub response_text: String,
+    /// Journal turn id for this turn — used by the UI Review bar / Undo.
+    pub turn_id: Option<String>,
 }
 
-/// Resolve the directory that holds `config.json` + `pisci.db`.
-///
-/// `CODEZ_CONFIG_DIR` wins (handy for tests / sharing an existing openpisci
-/// config); otherwise the platform app-data dir for `com.codez.desktop`.
-pub(crate) fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    if let Ok(dir) = std::env::var("CODEZ_CONFIG_DIR") {
-        let dir = dir.trim();
-        if !dir.is_empty() {
-            return Ok(PathBuf::from(dir));
-        }
-    }
-    app.path()
-        .app_data_dir()
-        .map_err(|e| format!("could not resolve app data dir: {e}"))
-}
-
-/// Run one agent turn. Streams `AgentEvent`s via `codez:chat-event` and
-/// resolves with the final assistant text once the loop reports `Done`.
+/// Run one agent turn. Streams `AgentEvent`s via `codez:chat-event`.
 #[tauri::command]
 pub async fn chat_send(
     app: AppHandle,
@@ -81,38 +68,53 @@ pub async fn chat_send(
     prompt: String,
     session_id: Option<String>,
     workspace: Option<String>,
+    attachment: Option<FrontendAttachment>,
+    chat_mode: Option<String>,
+    model_id: Option<String>,
+    clear_plan: Option<bool>,
+    display_prompt: Option<String>,
+    project_dir: Option<String>,
 ) -> Result<ChatResult, String> {
-    let config_dir = resolve_config_dir(&app)?;
-    let (db, settings) = headless::open_kernel_state(&config_dir)
-        .map_err(|e| format!("failed to initialise kernel state: {e}"))?;
-
-    let mut handle = new_tool_registry_handle();
-    register_default_cli_tools(&mut handle, db.clone(), settings.clone());
-    let registry = handle
-        .into_registry()
-        .map_err(|_| "internal: tool registry handle type mismatch".to_string())?;
+    let project = require_project_dir(
+        project_dir
+            .as_deref()
+            .or(workspace.as_deref()),
+    )?;
+    let kernel = open_project_kernel_state(&app, &project)?;
+    let journal = Arc::new(crate::journal::open_project_journal(&project)?);
 
     let sink = Arc::new(TauriEventSink { app: app.clone() });
-    let deps = HeadlessDeps::new(db, settings, registry, sink);
-
-    let request = HeadlessCliRequest {
-        prompt,
-        workspace,
-        mode: HeadlessCliMode::Pisci,
-        session_id,
-        session_title: Some("CodeZ chat".to_string()),
-        channel: Some("codez".to_string()),
-        ..Default::default()
-    };
-
-    // Register a cancel flag so `chat_cancel` can stop this turn mid-run.
     let cancel = Arc::new(AtomicBool::new(false));
     {
         let mut slot = state.chat_cancel.lock().await;
         *slot = Some(cancel.clone());
     }
 
-    let result = headless::run_pisci_turn_cancellable(request, deps, cancel).await;
+    let request = HeadlessCliRequest {
+        prompt,
+        workspace: Some(project.clone()),
+        mode: HeadlessCliMode::Pisci,
+        session_id,
+        session_title: Some("CodeZ chat".to_string()),
+        channel: Some(SESSION_SOURCE.to_string()),
+        ..Default::default()
+    };
+
+    let result = run_codez_turn(
+        request,
+        kernel,
+        sink,
+        state.plan_state.clone(),
+        cancel,
+        model_id,
+        chat_mode.unwrap_or_else(|| "agent".to_string()),
+        attachment,
+        clear_plan.unwrap_or(true),
+        display_prompt,
+        state.lsp_manager.clone(),
+        journal.clone(),
+    )
+    .await;
 
     {
         let mut slot = state.chat_cancel.lock().await;
@@ -124,6 +126,7 @@ pub async fn chat_send(
         ok: response.ok,
         session_id: response.session_id,
         response_text: response.response_text,
+        turn_id: journal.current_turn_id(),
     })
 }
 

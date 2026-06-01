@@ -325,7 +325,7 @@ export default function GitPanel({ projectDir, onDiffClick, onOpenFile, onRefres
         {koiBranches.length > 0 && (
           <>
             <div className="git-panel-title" style={{ marginTop: 10 }}>
-              Koi {t("ide.branches") || "Branches"} ({koiBranches.length})
+              Koi {t("ide.koiBranches")} ({koiBranches.length})
             </div>
             {koiBranches.map((b) => (
               <div

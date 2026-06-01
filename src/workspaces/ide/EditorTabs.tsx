@@ -15,9 +15,10 @@ interface EditorTabsProps {
   onSave?: (path: string) => void;
   onTabContextMenu?: (e: React.MouseEvent, path: string) => void;
   onCloseAll?: () => void;
-  onCloseUnsaved?: () => void;
+  onCloseSaved?: () => void;
   onCloseOther?: (path: string) => void;
   contextMenu: TabContextMenu | null;
+  onDismissContextMenu?: () => void;
 }
 
 export default function EditorTabs({
@@ -28,9 +29,10 @@ export default function EditorTabs({
   onSave,
   onTabContextMenu,
   onCloseAll,
-  onCloseUnsaved,
+  onCloseSaved,
   onCloseOther,
   contextMenu,
+  onDismissContextMenu,
 }: EditorTabsProps) {
   const { t } = useTranslation();
 
@@ -39,6 +41,13 @@ export default function EditorTabs({
   const ctxTarget = contextMenu
     ? tabs.find((t) => t.path === contextMenu.targetPath)
     : null;
+  const hasSavedTabs = tabs.some((t) => !t.isDirty);
+
+  const runMenuAction = (action: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    action();
+    onDismissContextMenu?.();
+  };
 
   return (
     <>
@@ -81,34 +90,34 @@ export default function EditorTabs({
         >
           <button
             type="button"
-            onClick={() => {
+            onClick={runMenuAction(() => {
               if (ctxTarget) onTabClose(ctxTarget.path);
-            }}
+            })}
           >
             {t("ide.closeCurrent") || "Close"}
           </button>
           {onCloseOther && (
             <button
               type="button"
-              onClick={() => {
+              onClick={runMenuAction(() => {
                 if (ctxTarget) onCloseOther(ctxTarget.path);
-              }}
+              })}
             >
               {t("ide.closeOther") || "Close Others"}
             </button>
           )}
           <button
             type="button"
-            onClick={() => onCloseAll?.()}
+            onClick={runMenuAction(() => onCloseAll?.())}
           >
             {t("ide.closeAll") || "Close All"}
           </button>
           <div className="ide-tab-context-separator" />
           <button
             type="button"
-            onClick={() => {
+            onClick={runMenuAction(() => {
               if (ctxTarget) onSave?.(ctxTarget.path);
-            }}
+            })}
             disabled={!ctxTarget?.isDirty}
           >
             {t("ide.saveFile") || "Save"}
@@ -116,9 +125,10 @@ export default function EditorTabs({
           <div className="ide-tab-context-separator" />
           <button
             type="button"
-            onClick={() => onCloseUnsaved?.()}
+            onClick={runMenuAction(() => onCloseSaved?.())}
+            disabled={!hasSavedTabs}
           >
-            {t("ide.closeUnsaved") || "Close Unsaved"}
+            {t("ide.closeSaved") || "Close Saved"}
           </button>
         </div>
       )}

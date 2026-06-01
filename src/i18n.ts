@@ -1,17 +1,31 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import en from "./i18n/en";
+import zh from "./i18n/zh";
 
-// CodeZ M0 ships without translation bundles yet. The ported IDE components
-// call `t("some.key") || "English fallback"`, so we configure i18next to
-// return an empty string for any missing key — that makes every `|| fallback`
-// render its inline English default. Real locale resources can be layered in
-// later without touching the components.
+export const LANGUAGE_STORAGE_KEY = "codez-language";
+
+function detectInitialLanguage(): "zh" | "en" {
+  const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (saved === "zh" || saved === "en") return saved;
+  const nav = navigator.language.toLowerCase();
+  return nav.startsWith("zh") ? "zh" : "en";
+}
+
 void i18n.use(initReactI18next).init({
-  lng: "en",
+  resources: {
+    en: { translation: en },
+    zh: { translation: zh },
+  },
+  lng: detectInitialLanguage(),
   fallbackLng: "en",
-  resources: {},
   interpolation: { escapeValue: false },
-  parseMissingKeyHandler: () => "",
 });
+
+/** Switch UI language and persist locally. */
+export function setLanguage(lang: "zh" | "en") {
+  void i18n.changeLanguage(lang);
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+}
 
 export default i18n;

@@ -113,6 +113,13 @@ export const ideApi = {
   terminalDestroy: (terminalId: string) =>
     invoke<void>("ide_terminal_destroy", { terminalId }),
 
+  terminalCount: () => invoke<number>("ide_terminal_count"),
+
+  terminalDestroyAll: () => invoke<void>("ide_terminal_destroy_all"),
+
+  terminalIsAlive: (terminalId: string) =>
+    invoke<boolean>("ide_terminal_is_alive", { terminalId }),
+
   // ─── File watcher ──────────────────────────────────────────────────
 
   startWatcher: (projectDir: string) =>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMonaco } from "@monaco-editor/react";
 import {
   importVsix,
@@ -22,6 +23,7 @@ function themeId(ext: VsixManifest, t: VsixTheme): string {
 }
 
 export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
+  const { t: tr } = useTranslation();
   const monaco = useMonaco();
   const [extensions, setExtensions] = useState<VsixManifest[]>([]);
   const [activeTheme, setActiveTheme] = useState<string>(themeStore.getSnapshot());
@@ -116,10 +118,10 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
         setActiveTheme(id);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, data }));
       } catch (e) {
-        setError(`Failed to apply theme: ${e}`);
+        setError(tr("extensions.themeFailed", { error: String(e) }));
       }
     },
-    [monaco],
+    [monaco, tr],
   );
 
   const resetTheme = useCallback(() => {
@@ -134,18 +136,18 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
     <div className="codez-ext-overlay" onClick={onClose}>
       <div className="codez-ext-panel" onClick={(e) => e.stopPropagation()}>
         <div className="codez-ext-header">
-          <span>Extensions (VS Code .vsix)</span>
-          <button onClick={onClose} title="Close">
+          <span>{tr("extensions.title")}</span>
+          <button onClick={onClose} title={tr("common.close")}>
             ✕
           </button>
         </div>
 
         <div className="codez-ext-toolbar">
           <button className="codez-ext-import" onClick={() => void doImport()} disabled={busy}>
-            {busy ? "Importing…" : "Import .vsix…"}
+            {busy ? tr("extensions.importing") : tr("extensions.import")}
           </button>
           <button className="codez-ext-reset" onClick={resetTheme} disabled={activeTheme === "vs-dark"}>
-            Reset theme
+            {tr("extensions.resetTheme")}
           </button>
         </div>
 
@@ -153,11 +155,7 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
 
         <div className="codez-ext-body">
           {extensions.length === 0 && (
-            <div className="codez-ext-empty">
-              Import a <code>.vsix</code> to consume its declarative contributions —
-              color themes and snippets. (Bring your own file; extension JS is never
-              executed.)
-            </div>
+            <div className="codez-ext-empty">{tr("extensions.empty")}</div>
           )}
           {extensions.map((ext) => (
             <div key={ext.name} className="codez-ext-card">
@@ -169,7 +167,7 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
               </div>
               {ext.themes.length > 0 && (
                 <div className="codez-ext-section">
-                  <div className="codez-ext-section-title">Themes</div>
+                  <div className="codez-ext-section-title">{tr("extensions.themes")}</div>
                   {ext.themes.map((t) => {
                     const id = themeId(ext, t);
                     return (
@@ -179,7 +177,7 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
                         onClick={() => applyTheme(ext, t)}
                       >
                         {t.label}
-                        {id === activeTheme && <span className="codez-ext-applied">✓ applied</span>}
+                        {id === activeTheme && <span className="codez-ext-applied">{tr("extensions.applied")}</span>}
                       </button>
                     );
                   })}
@@ -188,12 +186,12 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
               {ext.snippets.length > 0 && (
                 <div className="codez-ext-section">
                   <div className="codez-ext-section-title">
-                    Snippets registered for: {ext.snippets.map((s) => s.language).join(", ")}
+                    {tr("extensions.snippetsFor")}: {ext.snippets.map((s) => s.language).join(", ")}
                   </div>
                 </div>
               )}
               {ext.languages.length > 0 && (
-                <div className="codez-ext-langs">Languages: {ext.languages.join(", ")}</div>
+                <div className="codez-ext-langs">{tr("extensions.languages")}: {ext.languages.join(", ")}</div>
               )}
             </div>
           ))}

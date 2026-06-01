@@ -5,6 +5,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ideApi } from "../../services/tauri/ide";
 import type { FileNode } from "./types";
+import FileIcon from "./FileIcon";
 
 /** Right-click context menu position + the path that was right-clicked. */
 export interface FileTreeContextMenu {
@@ -13,6 +14,7 @@ export interface FileTreeContextMenu {
   /** Path of the node that was right-clicked. May differ from the
    *  current `activePath` (the primary selected node). */
   targetPath: string;
+  isDir: boolean;
 }
 
 interface FileTreeProps {
@@ -61,20 +63,6 @@ interface RenamingState {
   isDir: boolean;
 }
 
-function getFileIcon(name: string): string {
-  const ext = name.split(".").pop()?.toLowerCase() || "";
-  const iconMap: Record<string, string> = {
-    ts: "TS", tsx: "TX", js: "JS", jsx: "JX",
-    rs: "RS", py: "PY", go: "GO", java: "JV",
-    c: "C", h: "H", cpp: "C+", hpp: "H+",
-    json: "{}", yaml: "YM", yml: "YM", toml: "TM",
-    md: "MD", txt: "TX", html: "HT", css: "CS",
-    scss: "SC", less: "LS", svg: "SV", png: "PN",
-    sh: "SH", ps1: "PS", sql: "SQ", lock: "LK",
-  };
-  return iconMap[ext] || " ";
-}
-
 // ─── Inline name input (used for both create + rename) ──────────────────
 
 function InlineInput({
@@ -115,7 +103,9 @@ function InlineInput({
       className={`file-tree-item file-tree-inline-input ${isDir ? "dir" : "file"}`}
       style={{ paddingLeft: 8 + depth * 12 }}
     >
-      <span className="icon">{isDir ? "▶" : " "}</span>
+      <span className="icon">
+        <FileIcon isDir={isDir} />
+      </span>
       <input
         ref={ref}
         className="file-tree-name-input"
@@ -202,7 +192,7 @@ function TreeNode({
       if (!selectedPaths.has(node.path)) {
         onSelect(node.path, { multi: false });
       }
-      onContextMenu({ x: e.clientX, y: e.clientY, targetPath: node.path });
+      onContextMenu({ x: e.clientX, y: e.clientY, targetPath: node.path, isDir: node.is_dir });
     },
     [node.path, selectedPaths, onSelect, onContextMenu],
   );
@@ -233,7 +223,7 @@ function TreeNode({
         title={node.path}
       >
         <span className="icon">
-          {node.is_dir ? (expanded ? "▼" : "▶") : getFileIcon(node.name)}
+          <FileIcon name={node.name} isDir={node.is_dir} expanded={expanded} />
         </span>
         {isRenaming ? (
           <input

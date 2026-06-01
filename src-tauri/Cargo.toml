@@ -50,12 +50,22 @@ encoding_rs = "0.8"
 
 # .vsix (zip) ingestion for the VS Code contribution-point compat layer.
 zip = { version = "2", default-features = false, features = ["deflate"] }
+base64 = "0.22"
 
 # Serialization + logging.
 serde = { workspace = true }
 serde_json = { workspace = true }
+anyhow = "1"
+async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Match pisci-kernel — used for checkpoint restore via Database.conn.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# ClawHub marketplace HTTP client.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+urlencoding = "2"
 
 [lints]
 workspace = true

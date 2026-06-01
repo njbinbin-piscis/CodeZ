@@ -16,6 +16,7 @@ export interface FileContent {
   is_binary: boolean;
   size: number;
   language: string | null;
+  preview_data?: string | null;
 }
 
 export interface SearchResult {
@@ -56,6 +57,8 @@ export interface BranchInfo {
   last_commit_time: string | null;
 }
 
+export type TabViewMode = "editor" | "preview" | "image";
+
 export interface OpenTab {
   path: string;
   name: string;
@@ -65,4 +68,7 @@ export interface OpenTab {
   isReadOnly: boolean;
   isDiff?: boolean;
   originalContent?: string;
+  viewMode?: TabViewMode;
+  previewData?: string;
+  fileSize?: number;
 }

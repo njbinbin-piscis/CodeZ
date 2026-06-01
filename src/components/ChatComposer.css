@@ -1,0 +1,315 @@
+/* ── Cursor-style chat composer (shared by IDE + Agent) ─────────────── */
+
+.codez-composer-wrap {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border, #2a2a38);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.codez-mode-notice {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  background: rgba(124, 106, 247, 0.08);
+  border: 1px solid rgba(124, 106, 247, 0.2);
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+.codez-composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 14px;
+  background: var(--bg-elev-2, #1b1b26);
+  overflow: visible;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.codez-composer:focus-within {
+  border-color: rgba(124, 106, 247, 0.45);
+  box-shadow: 0 0 0 1px rgba(124, 106, 247, 0.12);
+}
+
+.codez-composer.is-plan {
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.codez-composer.is-plan:focus-within {
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12);
+}
+
+.codez-composer.is-busy {
+  opacity: 0.95;
+}
+
+.codez-attachment-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg, #0e0e14);
+}
+
+.codez-attachment-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.codez-attachment-file-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.codez-attachment-name {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.codez-attachment-remove {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.codez-composer-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 12px 14px 6px;
+  background: transparent;
+  border: 0;
+  color: var(--text, #e8e8f0);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.codez-composer-input::placeholder {
+  color: var(--text-dim, #6b6b80);
+}
+
+.codez-composer-input:disabled {
+  opacity: 0.65;
+}
+
+.codez-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+
+.codez-composer-footer-left,
+.codez-composer-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.codez-composer-footer-right {
+  flex-shrink: 0;
+}
+
+.codez-composer-menu {
+  position: relative;
+}
+
+.codez-composer-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-dim, #b0b0c0);
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.codez-composer-menu-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codez-composer-menu.pill .codez-composer-menu-trigger {
+  padding: 4px 8px 4px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text, #e8e8f0);
+}
+
+.codez-composer-menu.pill .codez-composer-menu-trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.codez-composer-menu.text .codez-composer-menu-trigger {
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.codez-composer-menu.text .codez-composer-menu-trigger:hover:not(:disabled) {
+  color: var(--text, #e8e8f0);
+}
+
+.codez-composer-menu-icon {
+  display: inline-flex;
+  opacity: 0.85;
+}
+
+.codez-mode-infinity {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.codez-composer-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.codez-composer-menu-popup {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 4px;
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 10px;
+  background: var(--bg-elev, #14141c);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.codez-composer-menu-popup button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text, #e8e8f0);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.codez-composer-menu-popup button:hover,
+.codez-composer-menu-popup button.active {
+  background: rgba(124, 106, 247, 0.15);
+}
+
+.codez-composer-menu-option-label {
+  font-weight: 600;
+}
+
+.codez-composer-menu-option-hint {
+  font-size: 10px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.35;
+}
+
+.codez-composer-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+}
+
+.codez-composer-icon-btn:hover:not(:disabled) {
+  color: var(--text, #e8e8f0);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.codez-composer-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codez-composer-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(124, 106, 247, 0.2);
+  border-top-color: var(--accent, #7c6af7);
+  border-radius: 50%;
+  animation: codez-composer-spin 0.7s linear infinite;
+}
+
+.codez-composer-stop-icon,
+.codez-composer-send-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.codez-composer-stop-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text, #e8e8f0);
+}
+
+.codez-composer-stop-icon:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.codez-composer-send-icon {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim, #6b6b80);
+}
+
+.codez-composer-send-icon.ready {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+}
+
+.codez-composer-send-icon.ready:hover {
+  filter: brightness(1.08);
+}
+
+.codez-composer-send-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@keyframes codez-composer-spin {
+  to { transform: rotate(360deg); }
+}

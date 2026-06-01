@@ -1,0 +1,22 @@
+.codez-user-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.codez-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 280px);
+  margin: 0 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(124, 106, 247, 0.14);
+  border: 1px solid rgba(124, 106, 247, 0.28);
+  color: var(--accent-hover, #9585ff);
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
