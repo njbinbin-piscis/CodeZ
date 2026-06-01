@@ -37,7 +37,8 @@ jobs:
             librsvg2-dev \
             libayatana-appindicator3-dev \
             patchelf \
-            build-essential
+            build-essential \
+            xdg-utils
 
       - uses: actions/setup-node@v4
         with:
@@ -68,8 +69,8 @@ jobs:
         with:
           name: codez-linux-x86_64-bundles
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
   # ── Linux (aarch64 / ARM64) ───────────────────────────────────────
@@ -94,7 +95,8 @@ jobs:
             librsvg2-dev \
             libayatana-appindicator3-dev \
             patchelf \
-            build-essential
+            build-essential \
+            xdg-utils
 
       - uses: actions/setup-node@v4
         with:
@@ -125,8 +127,8 @@ jobs:
         with:
           name: codez-linux-aarch64-bundles
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
   # ── Windows (x86_64) ─────────────────────────────────────────────
@@ -167,8 +169,8 @@ jobs:
         with:
           name: codez-windows-x86_64-bundles
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
           if-no-files-found: warn
 
   # ── Windows (aarch64 / ARM64) ────────────────────────────────────
@@ -210,8 +212,8 @@ jobs:
         with:
           name: codez-windows-aarch64-bundles
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
           if-no-files-found: warn
 
   # ── macOS (x86_64 / Intel) ───────────────────────────────────────
@@ -252,8 +254,8 @@ jobs:
         with:
           name: codez-macos-x86_64-bundles
           path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app
           if-no-files-found: warn
 
   # ── macOS (aarch64 / Apple Silicon) ──────────────────────────────
@@ -294,8 +296,8 @@ jobs:
         with:
           name: codez-macos-aarch64-bundles
           path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app
           if-no-files-found: warn
 
   # ── macOS Universal (x86_64 + aarch64 in one .dmg) ───────────────
@@ -341,6 +343,6 @@ jobs:
         with:
           name: codez-macos-universal-bundles
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            target/universal-apple-darwin/release/bundle/macos/*.app
           if-no-files-found: warn
