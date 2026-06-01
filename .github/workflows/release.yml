@@ -305,13 +305,14 @@ jobs:
             src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: warn
 
-  # ── macOS Universal Binary (x86_64 + aarch64 combined) ───────────
+  # ── macOS Universal (x86_64 + aarch64 in one .dmg) ───────────────
+  # Runs on Apple Silicon and bundles a single universal2 installer that
+  # natively supports both Intel and Apple Silicon (M-series) Macs.
   bundle-macos-universal:
-    name: Bundle macOS Universal (.dmg)
+    name: Bundle macOS Universal (.dmg + .app)
     runs-on: macos-14
     permissions:
       contents: write
-    needs: [bundle-macos-x86_64, bundle-macos-aarch64]
     steps:
       - uses: actions/checkout@v4
 
@@ -330,37 +331,23 @@ jobs:
         with:
           workspaces: ". -> target"
 
-      - name: Install lipo for universal binary creation
-        run: |
-          brew install create-dmg || true
-
-      - name: Build universal binary
-        run: |
-          # Build both architectures
-          cargo build --release --target x86_64-apple-darwin
-          cargo build --release --target aarch64-apple-darwin
-          
-          # Create universal binary using lipo
-          mkdir -p src-tauri/target/universal/release
-          lipo -create \
-            src-tauri/target/x86_64-apple-darwin/release/codez-desktop \
-            src-tauri/target/aarch64-apple-darwin/release/codez-desktop \
-            -output src-tauri/target/universal/release/codez-desktop
-
-      - name: Build frontend
-        run: npm run build
+      - name: Build + bundle universal2 with tauri-action
+        uses: tauri-apps/tauri-action@v0
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
+        with:
+          tagName: codez-v__VERSION__
+          releaseName: "CodeZ v__VERSION__ (Universal)"
+          releaseDraft: true
+          prerelease: false
+          args: "--target universal-apple-darwin"
 
-      - name: Package as .app and .dmg
-        run: |
-          # This step requires additional packaging logic
-          # For now, we upload the universal binary directly
-          echo "Universal binary created at src-tauri/target/universal/release/codez-desktop"
-
-      - name: Upload universal binary as artifact
+      - name: Upload bundles as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: codez-macos-universal-binary
-          path: src-tauri/target/universal/release/codez-desktop
+          name: codez-macos-universal-bundles
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
           if-no-files-found: warn
