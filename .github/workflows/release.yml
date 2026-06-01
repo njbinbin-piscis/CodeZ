@@ -55,6 +55,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
         with:
           tagName: codez-v__VERSION__
           releaseName: "CodeZ v__VERSION__"
@@ -114,6 +115,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
           CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
           CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
         with:
@@ -157,6 +159,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
         with:
           tagName: codez-v__VERSION__
           releaseName: "CodeZ v__VERSION__"
@@ -201,6 +204,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
         with:
           tagName: codez-v__VERSION__
           releaseName: "CodeZ v__VERSION__ (ARM64)"
@@ -242,6 +246,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
         with:
           tagName: codez-v__VERSION__
           releaseName: "CodeZ v__VERSION__"
@@ -283,6 +288,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
         with:
           tagName: codez-v__VERSION__
           releaseName: "CodeZ v__VERSION__ (Apple Silicon)"
@@ -343,6 +349,8 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package as .app and .dmg
         run: |
