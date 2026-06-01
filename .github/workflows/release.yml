@@ -10,6 +10,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # The frontend (mermaid / monaco / katex) needs more than Node's default
+  # ~2 GB heap to bundle, otherwise `vite build` OOMs (exit 134) during the
+  # tauri-action beforeBuildCommand.
+  NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
   bundle:

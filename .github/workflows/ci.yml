@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # `vite build` of the heavy frontend (mermaid / monaco / katex) OOMs under
+  # Node's default ~2 GB heap; give it more headroom.
+  NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
   frontend:
