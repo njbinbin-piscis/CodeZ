@@ -21,13 +21,13 @@ tokio = { version = "1", features = ["full"] }
 
 # Shared agent runtime — the standalone pisci-engine repo. CodeZ and openpisci
 # both consume the same kernel from here. For local engine hacking, add a
-# `[patch."https://github.com/njbinbin-pisci/pisci-engine.git"]` section that
+# `[patch."https://github.com/njbinbin-piscis/pisci-engine.git"]` section that
 # points these at a local checkout.
-pisci-core = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-core" }
-pisci-kernel = { git = "https://github.com/njbinbin-pisci/pisci-engine.git", package = "pisci-kernel" }
+pisci-core = { git = "https://github.com/njbinbin-piscis/pisci-engine.git", package = "pisci-core" }
+pisci-kernel = { git = "https://github.com/njbinbin-piscis/pisci-engine.git", package = "pisci-kernel" }
 
 # For local engine hacking, add a
-# `[patch."https://github.com/njbinbin-pisci/pisci-engine.git"]` section here
+# `[patch."https://github.com/njbinbin-piscis/pisci-engine.git"]` section here
 # pointing pisci-core / pisci-kernel at a local `../pisci-engine` checkout.
 
 [profile.dev]

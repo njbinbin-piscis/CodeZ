@@ -1,7 +1,7 @@
 # CodeZ
 
 A Cursor-like **AI IDE** with two first-class modes, built on the shared
-[`pisci-engine`](https://github.com/njbinbin-pisci/pisci-engine) agent kernel:
+[`pisci-engine`](https://github.com/njbinbin-piscis/pisci-engine) agent kernel:
 
 - **IDE mode** (≈ Cursor): editor-centric — Monaco + LSP, Tab completion,
   Cmd-K inline edit, an AI chat side panel with `@`-references and inline

@@ -3720,7 +3720,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pisci-core"
 version = "0.7.8"
-source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#ecf4163bc9780e3fda24251d6d548aa6c583cb14"
+source = "git+https://github.com/njbinbin-piscis/pisci-engine.git#ecf4163bc9780e3fda24251d6d548aa6c583cb14"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3732,7 +3732,7 @@ dependencies = [
 [[package]]
 name = "pisci-kernel"
 version = "0.7.8"
-source = "git+https://github.com/njbinbin-pisci/pisci-engine.git#ecf4163bc9780e3fda24251d6d548aa6c583cb14"
+source = "git+https://github.com/njbinbin-piscis/pisci-engine.git#ecf4163bc9780e3fda24251d6d548aa6c583cb14"
 dependencies = [
  "anyhow",
  "async-trait",
