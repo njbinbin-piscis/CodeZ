@@ -27,6 +27,7 @@ use pisci_kernel::store::settings::{LlmProviderConfig, Settings};
 use pisci_kernel::tools::NeutralToolsConfig;
 
 use super::chat::FrontendAttachment;
+use super::system_prompt::{agent_system_prompt, plan_mode_context, subagent_system_prompt};
 
 const PLAN_MODE_DISABLED: &[&str] = &[
     "file_write",
@@ -448,16 +449,6 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
     )
 }
 
-fn plan_mode_context() -> &'static str {
-    "## Plan Mode\n\
-     You are in Plan mode. Understand the task, explore the codebase with read-only tools, \
-     and maintain a visible execution plan using `plan_todo`.\n\
-     - Prefer `file_read`, `file_list`, `file_search`, and `file_diff` to explore.\n\
-     - Use `plan_todo` for multi-step work (usually 2-7 items).\n\
-     - Do NOT modify files, run shell commands, or execute code unless the user explicitly \
-       asks you to execute.\n"
-}
-
 fn build_tool_registry(
     db: Arc<Mutex<pisci_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
@@ -502,6 +493,7 @@ fn build_tool_registry(
             lsp_manager: lsp_manager.clone(),
         }));
         registry.register(Box::new(crate::tools::codebase_search::CodebaseSearchTool));
+        registry.register(Box::new(crate::tools::web_fetch::WebFetchTool));
         // SubAgent delegation (M7): only the main agent gets `delegate`; the
         // sub-agent's own (plan-mode) registry omits it to prevent recursion.
         if chat_mode != "plan" {
@@ -612,17 +604,7 @@ pub(crate) async fn run_subagent_research(
         read_timeout,
     );
 
-    let system_prompt = format!(
-        "You are a focused research sub-agent inside CodeZ. A parent agent has \
-         delegated a scoped investigation to you.\n\
-         - You are READ-ONLY: explore with `file_read`, `file_list`, \
-         `file_search`, `file_diff`, and `codebase_search`. Do not attempt to \
-         modify files or run commands.\n\
-         - Investigate the task, then reply with a concise, well-structured \
-         findings report (key files with paths, relevant snippets, and a clear \
-         answer). Stop as soon as you can answer.\n\n\
-         Workspace: `{workspace_root}`"
-    );
+    let system_prompt = subagent_system_prompt(&workspace_root);
 
     let policy = Arc::new(PolicyGate::with_profile_and_flags(
         &workspace_root,
@@ -720,42 +702,6 @@ fn inject_image_block(messages: &mut [LlmMessage], media_type: &str, data_b64: &
             last.content = MessageContent::Blocks(blocks);
         }
     }
-}
-
-fn headless_system_prompt(
-    workspace_root: &str,
-    allow_outside: bool,
-    extra_context: Option<&str>,
-) -> String {
-    let today = chrono::Utc::now()
-        .format("%Y-%m-%d (%A) %H:%M:%S UTC")
-        .to_string();
-    let workspace_line = if workspace_root.trim().is_empty() {
-        String::new()
-    } else {
-        let note = if allow_outside {
-            " (access outside this directory is also permitted when needed)"
-        } else {
-            " (file operations are restricted to this directory)"
-        };
-        format!("\nWorkspace: `{workspace_root}`{note}")
-    };
-    let extras = extra_context.map(str::trim).filter(|s| !s.is_empty());
-    let mut body = format!(
-        "You are Pisci, an AI coding assistant embedded in CodeZ.\n\
-         Today's date: {today}{workspace_line}\n\n\
-         ## Tool usage\n\
-         - Prefer `file_list` / `file_read` / `file_search` to explore the workspace.\n\
-         - Use `file_write` and `file_edit` for changes; `file_diff` to preview edits.\n\
-         - Use `shell` for commands and `code_run` for build / test flows.\n\
-         - Keep replies concise. Stop as soon as the requested task is done.\n"
-    );
-    if let Some(extra) = extras {
-        body.push_str("\n## Extra context from caller\n");
-        body.push_str(extra);
-        body.push('\n');
-    }
-    body
 }
 
 /// Build an "## Available skills" block from installed ClawHub SKILL.md files
@@ -1108,7 +1054,7 @@ pub async fn run_codez_turn(
     } else {
         Some(extra_sections.join("\n\n"))
     };
-    let system_prompt = headless_system_prompt(
+    let system_prompt = agent_system_prompt(
         &workspace_root,
         allow_outside_workspace,
         combined_extra.as_deref(),
