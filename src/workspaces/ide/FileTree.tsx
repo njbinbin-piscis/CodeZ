@@ -317,7 +317,7 @@ export default function FileTree({
    *  If nothing is selected, create at the project root. */
   const resolveParentPath = useCallback((): string | null => {
     if (!projectDir) return null;
-    if (!activePath) return projectDir;
+    if (!activePath) return "";
     const findNode = (nodes: FileNode[], path: string): FileNode | null => {
       for (const n of nodes) {
         if (n.path === path) return n;
@@ -329,11 +329,11 @@ export default function FileTree({
       return null;
     };
     const selected = findNode(nodes, activePath);
-    if (!selected) return projectDir;
+    if (!selected) return "";
     if (selected.is_dir) return selected.path;
     const sep = selected.path.includes("\\") ? "\\" : "/";
     const lastSep = selected.path.lastIndexOf(sep);
-    return lastSep > 0 ? selected.path.substring(0, lastSep) : projectDir;
+    return lastSep > 0 ? selected.path.substring(0, lastSep) : "";
   }, [activePath, nodes, projectDir]);
 
   const startCreate = useCallback(

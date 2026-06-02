@@ -1,11 +1,34 @@
 //! LLM / kernel settings — load & save `config.json` for the desktop app.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use pisci_kernel::store::settings::{LlmProviderConfig, Settings};
+use pisci_kernel::store::settings::{LlmProviderConfig, McpServerConfig, Settings};
 
 use crate::commands::chat::resolve_config_dir;
+
+/// MCP server config exposed to / from the settings UI (M6).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct McpServerDto {
+    pub name: String,
+    pub transport: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmProviderDto {
@@ -35,8 +58,10 @@ pub struct SaveLlmSettings {
     pub qwen_api_key: String,
     pub minimax_api_key: String,
     pub zhipu_api_key: String,
-    pub kimi_api_key: String,
+    pub     kimi_api_key: String,
     pub llm_providers: Vec<LlmProviderDto>,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerDto>,
 }
 
 /// Lean payload returned to the settings UI.
@@ -59,8 +84,21 @@ pub struct LlmSettingsDto {
     pub qwen_api_key: String,
     pub minimax_api_key: String,
     pub zhipu_api_key: String,
-    pub kimi_api_key: String,
+    pub     kimi_api_key: String,
     pub llm_providers: Vec<LlmProviderDto>,
+    pub mcp_servers: Vec<McpServerDto>,
+}
+
+fn mcp_to_dto(s: &McpServerConfig) -> McpServerDto {
+    McpServerDto {
+        name: s.name.clone(),
+        transport: s.transport.clone(),
+        command: s.command.clone(),
+        args: s.args.clone(),
+        url: s.url.clone(),
+        env: s.env.clone(),
+        enabled: s.enabled,
+    }
 }
 
 fn load_settings(app: &AppHandle) -> Result<(Settings, String), String> {
@@ -104,6 +142,7 @@ fn to_dto(settings: &Settings, config_dir: String) -> LlmSettingsDto {
         zhipu_api_key: settings.zhipu_api_key.clone(),
         kimi_api_key: settings.kimi_api_key.clone(),
         llm_providers: settings.llm_providers.iter().map(provider_to_dto).collect(),
+        mcp_servers: settings.mcp_servers.iter().map(mcp_to_dto).collect(),
     }
 }
 
@@ -183,6 +222,25 @@ pub async fn save_settings(app: AppHandle, updates: SaveLlmSettings) -> Result<L
         });
     }
     settings.llm_providers = providers;
+
+    settings.mcp_servers = updates
+        .mcp_servers
+        .into_iter()
+        .filter(|m| !m.name.trim().is_empty())
+        .map(|m| McpServerConfig {
+            name: m.name,
+            transport: if m.transport.is_empty() {
+                "stdio".to_string()
+            } else {
+                m.transport
+            },
+            command: m.command,
+            args: m.args,
+            url: m.url,
+            env: m.env,
+            enabled: m.enabled,
+        })
+        .collect();
 
     settings.save().map_err(|e| e.to_string())?;
     Ok(to_dto(&settings, config_dir))

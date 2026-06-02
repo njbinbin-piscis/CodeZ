@@ -6,6 +6,7 @@ import {
   saveSettings,
   type LlmProviderConfig,
   type LlmSettings,
+  type McpServerConfig,
   type SettingsResponse,
 } from "../../services/tauri/settings";
 import { setLanguage } from "../../i18n";
@@ -66,6 +67,17 @@ const DEFAULT_FORM: LlmSettings = {
   zhipu_api_key: "",
   kimi_api_key: "",
   llm_providers: [],
+  mcp_servers: [],
+};
+
+const EMPTY_MCP_SERVER: McpServerConfig = {
+  name: "",
+  transport: "stdio",
+  command: "",
+  args: [],
+  url: "",
+  env: {},
+  enabled: true,
 };
 
 const EMPTY_LLM_PROVIDER: LlmProviderConfig = {
@@ -77,6 +89,18 @@ const EMPTY_LLM_PROVIDER: LlmProviderConfig = {
   base_url: "",
   max_tokens: 0,
 };
+
+function parseEnv(text: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return env;
+}
 
 function toForm(data: SettingsResponse): LlmSettings {
   return {
@@ -97,6 +121,7 @@ function toForm(data: SettingsResponse): LlmSettings {
     zhipu_api_key: data.zhipu_api_key || "",
     kimi_api_key: data.kimi_api_key || "",
     llm_providers: data.llm_providers ?? [],
+    mcp_servers: data.mcp_servers ?? [],
   };
 }
 
@@ -153,6 +178,13 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       }
       return next;
     });
+  }, []);
+
+  const updateMcp = useCallback((idx: number, patch: Partial<McpServerConfig>) => {
+    setForm((prev) => ({
+      ...prev,
+      mcp_servers: prev.mcp_servers.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    }));
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -530,6 +562,103 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                     + {t("settings.llmProviderAdd")}
                   </button>
                 )}
+              </section>
+
+              <section className="codez-settings-section">
+                <h3>{t("settings.mcpServers")}</h3>
+                <p className="codez-settings-hint">{t("settings.mcpServersHint")}</p>
+
+                {form.mcp_servers.map((srv, idx) => (
+                  <div key={idx} className="codez-mcp-server">
+                    <div className="codez-mcp-server-head">
+                      <input
+                        className="codez-mcp-name"
+                        value={srv.name}
+                        onChange={(e) => updateMcp(idx, { name: e.target.value })}
+                        placeholder={t("settings.mcpName")}
+                      />
+                      <select
+                        value={srv.transport}
+                        onChange={(e) => updateMcp(idx, { transport: e.target.value })}
+                      >
+                        <option value="stdio">stdio</option>
+                        <option value="sse">sse</option>
+                      </select>
+                      <label className="codez-settings-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={srv.enabled}
+                          onChange={(e) => updateMcp(idx, { enabled: e.target.checked })}
+                        />
+                        {t("settings.mcpEnabled")}
+                      </label>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() =>
+                          update(
+                            "mcp_servers",
+                            form.mcp_servers.filter((_, i) => i !== idx),
+                          )
+                        }
+                      >
+                        {t("chat.delete")}
+                      </button>
+                    </div>
+                    {srv.transport === "sse" ? (
+                      <div className="codez-settings-field">
+                        <label>{t("settings.mcpUrl")}</label>
+                        <input
+                          value={srv.url}
+                          onChange={(e) => updateMcp(idx, { url: e.target.value })}
+                          placeholder="http://localhost:3000"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="codez-settings-field">
+                          <label>{t("settings.mcpCommand")}</label>
+                          <input
+                            value={srv.command}
+                            onChange={(e) => updateMcp(idx, { command: e.target.value })}
+                            placeholder="npx"
+                          />
+                        </div>
+                        <div className="codez-settings-field">
+                          <label>{t("settings.mcpArgs")}</label>
+                          <input
+                            value={srv.args.join(" ")}
+                            onChange={(e) =>
+                              updateMcp(idx, {
+                                args: e.target.value.split(/\s+/).filter(Boolean),
+                              })
+                            }
+                            placeholder="-y @modelcontextprotocol/server-filesystem /path"
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div className="codez-settings-field">
+                      <label>{t("settings.mcpEnv")}</label>
+                      <textarea
+                        rows={2}
+                        value={Object.entries(srv.env)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")}
+                        onChange={(e) => updateMcp(idx, { env: parseEnv(e.target.value) })}
+                        placeholder={"KEY=value\nOTHER=value"}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="codez-llm-add"
+                  onClick={() => update("mcp_servers", [...form.mcp_servers, { ...EMPTY_MCP_SERVER }])}
+                >
+                  + {t("settings.mcpServerAdd")}
+                </button>
               </section>
             </div>
 

@@ -15,6 +15,9 @@ import {
 } from "../../services/tauri/chat";
 import { getSettings, type LlmProviderConfig } from "../../services/tauri/settings";
 import { ideApi } from "../../services/tauri/ide";
+import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask";
+import { generateRepoWiki } from "../../services/tauri/repoWiki";
+import AgentTaskReview from "./AgentTaskReview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
 import { modelLabel, pickChatAttachment } from "../../components/chatComposerUtils";
 import TaskPanel, {
@@ -58,6 +61,7 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   const [changesOpen, setChangesOpen] = useState(false);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [clawHubOpen, setClawHubOpen] = useState(false);
+  const [wikiBusy, setWikiBusy] = useState(false);
   const [modelId, setModelId] = useState(() => localStorage.getItem("codez-model-id") ?? "");
   const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
   const [defaultModelLabel, setDefaultModelLabel] = useState("");
@@ -67,13 +71,41 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
   const [taskPanelOpen, setTaskPanelOpen] = useState(true);
   const [taskPanelTab, setTaskPanelTab] = useState<"todo" | "tools">("tools");
+  const [isolate, setIsolate] = useState(
+    () => localStorage.getItem("codez-agent-isolate") === "1",
+  );
+  const [worktree, setWorktree] = useState<AgentTaskInfo | null>(null);
+  const [reviewTask, setReviewTask] = useState<AgentTaskInfo | null>(null);
+
+  // Session ids of tasks currently running (foreground or background). Drives
+  // the sidebar running indicators and whether the active task shows as busy.
+  const [runningIds, setRunningIds] = useState<string[]>([]);
 
   const sessionRef = useRef<string | null>(null);
-  const busyRef = useRef(false);
-  busyRef.current = busy;
+  const worktreeRef = useRef<AgentTaskInfo | null>(null);
+  worktreeRef.current = worktree;
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const runRef = useRef<(text: string, att: ChatAttachment | null) => Promise<void>>(async () => {});
+
+  // ── Parallel task bookkeeping (M7) ──────────────────────────────────────
+  // `live` gates whether incoming kernel events update the foreground view;
+  // `foregroundSession` binds that view to a specific session id (null while a
+  // brand-new task hasn't been assigned one yet). Background runs keep going
+  // server-side under their own task key + cancel flag.
+  const liveRef = useRef(false);
+  const foregroundSessionRef = useRef<string | null>(null);
+  const foregroundTaskKeyRef = useRef<string | null>(null);
+  const runningSessionsRef = useRef<Set<string>>(new Set());
+  const taskKeyBySessionRef = useRef<Map<string, string>>(new Map());
+
+  const markRunning = useCallback((id: string | null, on: boolean) => {
+    if (!id) return;
+    const set = runningSessionsRef.current;
+    if (on) set.add(id);
+    else set.delete(id);
+    setRunningIds(Array.from(set));
+  }, []);
 
   useEffect(() => {
     getSettings()
@@ -88,6 +120,10 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   useEffect(() => {
     localStorage.setItem("codez-model-id", modelId);
   }, [modelId]);
+
+  useEffect(() => {
+    localStorage.setItem("codez-agent-isolate", isolate ? "1" : "0");
+  }, [isolate]);
 
   const clearAttachment = useCallback(() => {
     setAttachment(null);
@@ -106,6 +142,14 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
     setPreviewPath(null);
     setPlanItems([]);
     setToolSteps([]);
+    setWorktree(null);
+    setReviewTask(null);
+    liveRef.current = false;
+    foregroundSessionRef.current = null;
+    foregroundTaskKeyRef.current = null;
+    runningSessionsRef.current.clear();
+    taskKeyBySessionRef.current.clear();
+    setRunningIds([]);
   }, [projectDir, clearAttachment]);
 
   const refreshTasks = useCallback(() => {
@@ -132,10 +176,19 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
     refreshChanges();
   }, [refreshTasks, refreshChanges]);
 
-  // Stream kernel events into the in-flight step (guarded: the event channel is
-  // shared with the IDE chat panel, so only consume while we're running).
+  // Stream kernel events into the in-flight step. The event channel is shared
+  // with the IDE chat panel and with any background Agent tasks, so we only
+  // consume events that belong to the foreground run: once a session id is
+  // known we match on it; while a brand-new task is still session-less we
+  // accept events that aren't claimed by another running session.
   const applyEvent = useCallback((env: ChatEventEnvelope) => {
-    if (!busyRef.current) return;
+    if (!liveRef.current) return;
+    const fg = foregroundSessionRef.current;
+    if (fg) {
+      if (env.sessionId !== fg) return;
+    } else if (env.sessionId && runningSessionsRef.current.has(env.sessionId)) {
+      return;
+    }
     if (env.channel === "agent_final") {
       const fin = env.payload as { ok: boolean; error?: string };
       if (!fin.ok && fin.error) setError(fin.error);
@@ -260,34 +313,78 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
     setToolSteps([]);
     setPlanItems([]);
     setBusy(true);
+
+    // Each turn gets a unique task key so Stop and the concurrency queue can
+    // target it independently of any sibling task running in the background.
+    const taskKey = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const startSession = sessionRef.current;
+    liveRef.current = true;
+    foregroundSessionRef.current = startSession;
+    foregroundTaskKeyRef.current = taskKey;
+    if (startSession) {
+      markRunning(startSession, true);
+      taskKeyBySessionRef.current.set(startSession, taskKey);
+    }
+
+    const isForeground = () => foregroundTaskKeyRef.current === taskKey;
+
     try {
+      // Isolated run: create a dedicated worktree + branch on first turn, then
+      // keep the agent working inside it for the rest of the task.
+      let wt = worktreeRef.current;
+      if (isolate && !wt) {
+        try {
+          const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+          wt = await agentTaskApi.create(projectDir!, taskId);
+          setWorktree(wt);
+        } catch (e) {
+          setError(String(e));
+          setBusy(false);
+          liveRef.current = false;
+          return;
+        }
+      }
       const res = await chatSend({
         prompt: text,
-        sessionId: sessionRef.current,
+        sessionId: startSession,
         projectDir: projectDir!,
+        workspaceDir: wt?.worktree_path ?? null,
         attachment: att,
         chatMode: "agent",
         modelId: modelId || null,
+        taskKey,
       });
-      sessionRef.current = res.session_id;
-      setSelectedId(res.session_id);
-      setSteps((s) => {
-        const copy = s.slice();
-        const last = copy[copy.length - 1];
-        if (last && last.role === "assistant" && !last.text.trim()) {
-          copy[copy.length - 1] = { ...last, text: res.response_text };
-        }
-        return copy;
-      });
+      // Bind the (possibly newly created) session id to this run.
+      taskKeyBySessionRef.current.set(res.session_id, taskKey);
+      if (!startSession) markRunning(res.session_id, true);
+      if (isForeground()) {
+        sessionRef.current = res.session_id;
+        foregroundSessionRef.current = res.session_id;
+        setSelectedId(res.session_id);
+        setSteps((s) => {
+          const copy = s.slice();
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant" && !last.text.trim()) {
+            copy[copy.length - 1] = { ...last, text: res.response_text };
+          }
+          return copy;
+        });
+      }
     } catch (e) {
-      setError(String(e));
+      if (isForeground()) setError(String(e));
     } finally {
-      setBusy(false);
-      setSteps((s) =>
-        s.map((step) =>
-          step.role === "assistant" ? { ...step, tools: finalizeTools(step.tools) } : step,
-        ),
-      );
+      const sid = sessionRef.current ?? foregroundSessionRef.current;
+      markRunning(startSession, false);
+      if (sid) markRunning(sid, false);
+      if (isForeground()) {
+        setBusy(false);
+        liveRef.current = false;
+        setSteps((s) =>
+          s.map((step) =>
+            step.role === "assistant" ? { ...step, tools: finalizeTools(step.tools) } : step,
+          ),
+        );
+      }
       refreshTasks();
       refreshChanges();
     }
@@ -307,7 +404,13 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   }, [goal, attachment, busy, projectDir, clearAttachment, t]);
 
   const newTask = useCallback(() => {
-    if (busy || !projectDir) return;
+    if (!projectDir) return;
+    // Detach the current view from any in-flight run — it keeps going in the
+    // background and resurfaces in the task list when it finishes.
+    liveRef.current = false;
+    foregroundSessionRef.current = null;
+    foregroundTaskKeyRef.current = null;
+    setBusy(false);
     sessionRef.current = null;
     setSelectedId(null);
     setSteps([]);
@@ -316,15 +419,23 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
     setError(null);
     setGoal("");
     clearAttachment();
+    setWorktree(null);
     requestAnimationFrame(() => taRef.current?.focus());
-  }, [busy, projectDir, clearAttachment]);
+  }, [projectDir, clearAttachment]);
 
   const openTask = useCallback(
     async (id: string) => {
-      if (busy || !projectDir) return;
+      if (!projectDir) return;
       try {
         const history = await getMessages(id, projectDir);
+        // Switching away detaches live streaming from the previous foreground
+        // run (it continues in the background). We show this task's persisted
+        // history; if it is itself running, results refresh on completion.
+        liveRef.current = false;
+        foregroundTaskKeyRef.current = null;
+        foregroundSessionRef.current = id;
         sessionRef.current = id;
+        setBusy(runningSessionsRef.current.has(id));
         setSelectedId(id);
         setSteps(history.map((m) => ({ id: m.id, role: m.role, text: m.content, tools: [] })));
         setPlanItems([]);
@@ -336,22 +447,48 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
         setError(String(e));
       }
     },
-    [busy, projectDir, refreshChanges],
+    [projectDir, refreshChanges],
   );
+
+  // Cancel the task bound to the active view (foreground run, or a reopened
+  // background run we still hold the key for).
+  const stopActive = useCallback(() => {
+    const sid = sessionRef.current;
+    const key =
+      foregroundTaskKeyRef.current ??
+      (sid ? taskKeyBySessionRef.current.get(sid) ?? null : null);
+    void chatCancel(key);
+  }, []);
 
   const removeTask = useCallback(
     async (id: string) => {
       if (!projectDir) return;
       try {
         await deleteSession(id, projectDir);
+        markRunning(id, false);
+        taskKeyBySessionRef.current.delete(id);
         if (sessionRef.current === id) newTask();
         refreshTasks();
       } catch (e) {
         setError(String(e));
       }
     },
-    [projectDir, newTask, refreshTasks],
+    [projectDir, newTask, refreshTasks, markRunning],
   );
+
+  const buildWiki = useCallback(async () => {
+    if (!projectDir || wikiBusy) return;
+    setWikiBusy(true);
+    setError(null);
+    try {
+      const res = await generateRepoWiki(projectDir);
+      setPreviewPath(res.path);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setWikiBusy(false);
+    }
+  }, [projectDir, wikiBusy]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -402,7 +539,7 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
           <span>{t("agent.tasks")}</span>
           <button
             onClick={newTask}
-            disabled={busy || !projectDir}
+            disabled={!projectDir}
             title={!projectDir ? t("agent.noProject") : t("agent.newTask")}
           >
             ＋ {t("agent.new")}
@@ -413,10 +550,12 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
           {tasks.map((task) => (
             <div
               key={task.id}
-              className={`codez-agent-task ${task.id === selectedId ? "active" : ""}`}
+              className={`codez-agent-task ${task.id === selectedId ? "active" : ""} ${runningIds.includes(task.id) ? "running" : ""}`}
               onClick={() => void openTask(task.id)}
             >
-              <span className={`codez-agent-task-dot ${task.status}`} />
+              <span
+                className={`codez-agent-task-dot ${runningIds.includes(task.id) ? "running" : task.status}`}
+              />
               <span className="codez-agent-task-title">{task.title || t("agent.untitled")}</span>
               <span className="codez-agent-task-count">{task.message_count}</span>
               <button
@@ -435,6 +574,15 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
         <div className="codez-agent-sidebar-foot">
           <button type="button" className="codez-agent-clawhub-btn" onClick={() => setClawHubOpen(true)}>
             {t("clawhub.open")}
+          </button>
+          <button
+            type="button"
+            className="codez-agent-clawhub-btn"
+            onClick={() => void buildWiki()}
+            disabled={!projectDir || wikiBusy}
+            title={t("agent.repoWikiHint")}
+          >
+            {wikiBusy ? t("agent.repoWikiBusy") : t("agent.repoWiki")}
           </button>
         </div>
       </aside>
@@ -517,6 +665,32 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
           onToggleToolStep={toggleToolStep}
         />
 
+        <div className="codez-agent-isolate-bar">
+          <label
+            className="codez-agent-isolate-toggle"
+            title={t("agent.isolateHint")}
+          >
+            <input
+              type="checkbox"
+              checked={isolate}
+              disabled={busy}
+              onChange={(e) => setIsolate(e.target.checked)}
+            />
+            <span>{isolate ? t("agent.isolateOn") : t("agent.isolateOff")}</span>
+          </label>
+          {worktree && (
+            <button
+              type="button"
+              className="codez-agent-review-btn"
+              onClick={() => setReviewTask(worktree)}
+              disabled={busy}
+              title={worktree.branch}
+            >
+              {t("agent.review")}
+            </button>
+          )}
+        </div>
+
         <div className={`codez-agent-changes${changesOpen ? " expanded" : ""}`}>
           <div className="codez-agent-changes-head">
             <button
@@ -568,7 +742,7 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
           value={goal}
           onChange={setGoal}
           onSubmit={run}
-          onStop={() => void chatCancel()}
+          onStop={stopActive}
           busy={busy}
           placeholder={
             !projectDir
@@ -595,6 +769,17 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
         />
       </section>
       {clawHubOpen && <ClawHubPanel onClose={() => setClawHubOpen(false)} />}
+      {reviewTask && projectDir && (
+        <AgentTaskReview
+          projectDir={projectDir}
+          task={reviewTask}
+          onClose={() => setReviewTask(null)}
+          onResolved={() => {
+            refreshChanges();
+            refreshTasks();
+          }}
+        />
+      )}
     </div>
   );
 }

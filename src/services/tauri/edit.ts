@@ -16,3 +16,18 @@ export function inlineEdit(args: {
     afterContext: args.afterContext ?? null,
   });
 }
+
+/** Low-latency Tab / ghost-text completion (M5). Returns "" when unconfigured. */
+export function aiInlineCompletion(args: {
+  prefix: string;
+  suffix: string;
+  language?: string | null;
+  modelId?: string | null;
+}): Promise<string> {
+  return invoke<string>("ai_inline_completion", {
+    prefix: args.prefix,
+    suffix: args.suffix,
+    language: args.language ?? null,
+    modelId: args.modelId ?? null,
+  });
+}

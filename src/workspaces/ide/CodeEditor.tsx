@@ -9,9 +9,27 @@ import {
   registerLspProviders,
   type LspProvidersRegistration,
 } from "../../services/tauri/lsp";
-import { inlineEdit } from "../../services/tauri/edit";
+import { inlineEdit, aiInlineCompletion } from "../../services/tauri/edit";
 import { diffLines } from "./lineDiff";
+import { editorApplyBus } from "./editorApplyBus";
+import { registerPersistedSnippets } from "./extensionStore";
 import "./InlineEdit.css";
+
+/** localStorage flag gating AI Tab (ghost-text) completion. */
+function tabCompleteEnabled(): boolean {
+  return localStorage.getItem("codez-tab-complete") !== "0";
+}
+
+function completionModelId(): string | null {
+  const id = localStorage.getItem("codez-completion-model-id");
+  return id && id.trim() ? id : null;
+}
+
+/** Guard so the inline-completion provider is only registered once globally. */
+let inlineCompletionRegistered = false;
+
+/** Guard so persisted .vsix snippet providers are only registered once. */
+let persistedSnippetsRegistered = false;
 
 interface InlineEditState {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -215,6 +233,44 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
     }
   }, [tab.language, tab.path, applyInlinePreview]);
 
+  // Chat "Apply": replace the whole buffer with a proposed code block and show
+  // the same inline diff preview (green added / red removed) so the user can
+  // accept (Enter) or reject (Esc) it — reusing the Cmd-K machinery.
+  const applyProposedRef = useRef<(code: string) => void>(() => {});
+  applyProposedRef.current = (proposed: string) => {
+    const editor = editorRef.current;
+    const model = editor?.getModel?.();
+    if (!editor || !model || tab.isReadOnly) return;
+    if (inlineStateRef.current) clearInlinePreview();
+    const fullRange = model.getFullModelRange();
+    const original = model.getValue();
+    const state: InlineEditState = {
+      range: fullRange,
+      original,
+      before: "",
+      after: "",
+      instruction: "(chat apply)",
+      proposed,
+      busy: false,
+      error: null,
+      applied: null,
+    };
+    const applied = applyInlinePreview(state, proposed);
+    setInline({ ...state, applied });
+    editor.focus?.();
+  };
+
+  // Register this editor as the active Apply target while it is mounted.
+  useEffect(() => {
+    const handler = (code: string) => applyProposedRef.current(code);
+    editorApplyBus.setHandler(handler);
+    return () => {
+      // Only clear if we're still the registered handler (avoid races on
+      // fast tab switches where the next editor already registered).
+      editorApplyBus.setHandler(null);
+    };
+  }, [tab.path]);
+
   // Accept: keep the applied text, just drop the diff overlay.
   const acceptInline = useCallback(() => {
     clearInlinePreview();
@@ -342,6 +398,69 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
         requestAnimationFrame(() => applyReveal());
       }
 
+      // ── Persisted .vsix snippets (M6) ──────────────────────────────
+      // Re-register snippet completion providers from imported extensions so
+      // they work on startup without opening the Extensions panel.
+      if (!persistedSnippetsRegistered) {
+        persistedSnippetsRegistered = true;
+        try {
+          registerPersistedSnippets(monaco);
+        } catch {
+          // non-fatal
+        }
+      }
+
+      // ── AI Tab completion (ghost text) ─────────────────────────────
+      // Register a single global provider (keyed by a flag) so multiple tab
+      // mounts don't stack providers. Monaco cancels the previous request's
+      // token on each keystroke, which naturally debounces.
+      if (!inlineCompletionRegistered) {
+        inlineCompletionRegistered = true;
+        monaco.languages.registerInlineCompletionsProvider(
+          { pattern: "**" },
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            provideInlineCompletions: async (model: any, position: any, _ctx: any, token: any) => {
+              if (!tabCompleteEnabled()) return { items: [] };
+              const offset = model.getOffsetAt(position);
+              const full: string = model.getValue();
+              const prefix = full.slice(0, offset);
+              const suffix = full.slice(offset);
+              // Skip trivial / whitespace-only contexts to cut noise + cost.
+              if (prefix.trim().length < 3) return { items: [] };
+              // Debounce: wait, then bail if the user kept typing.
+              await new Promise((r) => setTimeout(r, 350));
+              if (token?.isCancellationRequested) return { items: [] };
+              try {
+                const text = await aiInlineCompletion({
+                  prefix,
+                  suffix,
+                  language: model.getLanguageId?.() ?? null,
+                  modelId: completionModelId(),
+                });
+                if (token?.isCancellationRequested || !text) return { items: [] };
+                return {
+                  items: [
+                    {
+                      insertText: text,
+                      range: {
+                        startLineNumber: position.lineNumber,
+                        startColumn: position.column,
+                        endLineNumber: position.lineNumber,
+                        endColumn: position.column,
+                      },
+                    },
+                  ],
+                };
+              } catch {
+                return { items: [] };
+              }
+            },
+            freeInlineCompletions: () => {},
+          },
+        );
+      }
+
       // ── LSP integration ────────────────────────────────────────────
       const lang = tab.language || languageForFile(tab.path);
       const fullPath = projectDir ? `${projectDir}/${tab.path}` : tab.path;
@@ -453,6 +572,7 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
           folding: true,
           automaticLayout: true,
           tabSize: 2,
+          inlineSuggest: { enabled: true },
         }}
       />
 

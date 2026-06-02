@@ -85,7 +85,7 @@ fn copy_messages_to_session(
     if let Some(target) = up_to_message_id {
         let mut found = false;
         for m in msgs {
-            db.append_message(&dest_id, &m.role, &m.content)
+            db.append_message(dest_id, &m.role, &m.content)
                 .map_err(|e| format!("copy message failed: {e}"))?;
             if m.id == target {
                 found = true;
@@ -97,7 +97,7 @@ fn copy_messages_to_session(
         }
     } else {
         for m in msgs {
-            db.append_message(&dest_id, &m.role, &m.content)
+            db.append_message(dest_id, &m.role, &m.content)
                 .map_err(|e| format!("copy message failed: {e}"))?;
         }
     }
@@ -209,14 +209,24 @@ pub async fn chat_fork_session(
     .await
 }
 
-/// Restore session to a checkpoint — deletes all messages after the given message.
+/// Restore session to a checkpoint — deletes all messages after the given
+/// message. When `restore_files` is true, also rolls back the file edits made
+/// by the most recent agent turn that touched the workspace (best-effort), so
+/// restoring a checkpoint reverts both the conversation *and* the changes the
+/// agent applied afterwards.
 #[tauri::command]
 pub async fn chat_restore_checkpoint(
     app: AppHandle,
     session_id: String,
     message_id: String,
     project_dir: Option<String>,
-) -> Result<(), String> {
+    restore_files: Option<bool>,
+) -> Result<Vec<String>, String> {
+    let project = ProjectDirParam {
+        project_dir: project_dir.clone(),
+    }
+    .required()?;
+
     with_db(
         &app,
         ProjectDirParam { project_dir },
@@ -242,7 +252,23 @@ pub async fn chat_restore_checkpoint(
             Ok(())
         },
     )
-    .await
+    .await?;
+
+    if !restore_files.unwrap_or(false) {
+        return Ok(Vec::new());
+    }
+
+    // Roll back the latest turn's file edits via the project journal.
+    let journal = crate::journal::open_project_journal(&project)?;
+    match journal
+        .latest_turn_with_changes(&session_id)
+        .map_err(|e| e.to_string())?
+    {
+        Some(turn_id) => journal
+            .undo_turn(&session_id, &turn_id)
+            .map_err(|e| e.to_string()),
+        None => Ok(Vec::new()),
+    }
 }
 
 /// Delete a session and its messages.

@@ -316,3 +316,35 @@
   color: var(--text, #e8e8f0);
   border-color: var(--accent, #7c6af7);
 }
+
+/* ── MCP servers ───────────────────────────────────────────────────────── */
+.codez-mcp-server {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.codez-mcp-server-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.codez-mcp-name {
+  flex: 1;
+  min-width: 120px;
+}
+
+.codez-mcp-server-head .danger {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #cf222e;
+  color: #f87171;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}

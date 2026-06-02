@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use pisci_kernel::agent::plan::new_plan_store;
 use pisci_kernel::agent::plan::PlanStore;
@@ -25,11 +25,31 @@ pub struct AppState {
     pub file_watchers: Arc<Mutex<HashMap<String, notify::RecommendedWatcher>>>,
     /// Language-server lifecycle manager (one bridge per project+language).
     pub lsp_manager: Arc<LspManager>,
-    /// Cancel flag for the in-flight chat turn (CodeZ runs one at a time).
-    /// `Some` while a turn is running; the chat panel's Stop flips it.
+    /// Cancel flag for the in-flight chat turn in the (sequential) IDE chat
+    /// panel. `Some` while a turn is running; the chat panel's Stop flips it.
     pub chat_cancel: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+    /// Per-task cancel flags for parallel Agent tasks (M7), keyed by a
+    /// frontend-supplied task key so each isolated task can be stopped
+    /// independently without affecting its siblings.
+    pub task_cancel: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Bounds how many Agent turns run concurrently (M7 task queue). Extra
+    /// submissions wait here until a permit frees up, so a flood of parallel
+    /// tasks degrades gracefully instead of starving the machine.
+    pub agent_slots: Arc<Semaphore>,
     /// Per-session plan board state for `plan_todo`.
     pub plan_state: PlanStore,
+}
+
+/// Default cap on concurrently running Agent turns. Overridable via the
+/// `CODEZ_AGENT_CONCURRENCY` environment variable.
+const DEFAULT_AGENT_CONCURRENCY: usize = 3;
+
+fn agent_concurrency() -> usize {
+    std::env::var("CODEZ_AGENT_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n >= 1)
+        .unwrap_or(DEFAULT_AGENT_CONCURRENCY)
 }
 
 impl AppState {
@@ -39,6 +59,8 @@ impl AppState {
             file_watchers: Arc::new(Mutex::new(HashMap::new())),
             lsp_manager: Arc::new(LspManager::new()),
             chat_cancel: Arc::new(Mutex::new(None)),
+            task_cancel: Arc::new(Mutex::new(HashMap::new())),
+            agent_slots: Arc::new(Semaphore::new(agent_concurrency())),
             plan_state: new_plan_store(),
         }
     }

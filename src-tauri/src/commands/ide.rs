@@ -1112,6 +1112,12 @@ impl TerminalRegistry {
     }
 }
 
+impl Default for TerminalRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Create a new PTY terminal session with the given working directory.
 /// Output is streamed via `ide-terminal-output` Tauri events.
 #[tauri::command]
@@ -1374,6 +1380,17 @@ pub async fn ide_start_watcher(
                                     "kind": kind,
                                 }),
                             );
+
+                            // Incrementally update the codebase index so
+                            // @codebase / codebase_search stay fresh (best-effort).
+                            let root_clone = PathBuf::from(&dir);
+                            let rel_for_index = rel_norm.clone();
+                            std::thread::spawn(move || {
+                                let _ = crate::commands::codebase::index_file(
+                                    &root_clone,
+                                    &rel_for_index,
+                                );
+                            });
                         }
                     }
                     _ => {}

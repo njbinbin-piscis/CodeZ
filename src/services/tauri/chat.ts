@@ -67,10 +67,14 @@ export function chatSend(args: {
   displayPrompt?: string | null;
   sessionId?: string | null;
   projectDir: string;
+  /** Isolated worktree the agent should work in (M4). Sessions stay in projectDir. */
+  workspaceDir?: string | null;
   attachment?: ChatAttachment | null;
   chatMode?: ChatMode;
   modelId?: string | null;
   clearPlan?: boolean;
+  /** Unique key for a parallel Agent task so it can be cancelled on its own (M7). */
+  taskKey?: string | null;
 }): Promise<ChatResult> {
   return invoke<ChatResult>("chat_send", {
     prompt: args.prompt,
@@ -78,10 +82,12 @@ export function chatSend(args: {
     sessionId: args.sessionId ?? null,
     workspace: args.projectDir,
     projectDir: args.projectDir,
+    workspaceDir: args.workspaceDir ?? null,
     attachment: args.attachment ?? null,
     chatMode: args.chatMode ?? "agent",
     modelId: args.modelId ?? null,
     clearPlan: args.clearPlan ?? true,
+    taskKey: args.taskKey ?? null,
   });
 }
 
@@ -128,17 +134,27 @@ export function forkSession(
   });
 }
 
-export function restoreCheckpoint(sessionId: string, messageId: string, projectDir: string): Promise<void> {
-  return invoke<void>("chat_restore_checkpoint", { sessionId, messageId, projectDir });
+export function restoreCheckpoint(
+  sessionId: string,
+  messageId: string,
+  projectDir: string,
+  restoreFiles?: boolean,
+): Promise<string[]> {
+  return invoke<string[]>("chat_restore_checkpoint", {
+    sessionId,
+    messageId,
+    projectDir,
+    restoreFiles: restoreFiles ?? false,
+  });
 }
 
 export function deleteSession(sessionId: string, projectDir: string): Promise<void> {
   return invoke<void>("chat_delete_session", { sessionId, projectDir });
 }
 
-/** Stop the in-flight agent turn, if any. */
-export function chatCancel(): Promise<void> {
-  return invoke<void>("chat_cancel");
+/** Stop an in-flight agent turn. With `taskKey`, stops just that parallel task. */
+export function chatCancel(taskKey?: string | null): Promise<void> {
+  return invoke<void>("chat_cancel", { taskKey: taskKey ?? null });
 }
 
 // ── File journal (Review / Undo) ─────────────────────────────────────────

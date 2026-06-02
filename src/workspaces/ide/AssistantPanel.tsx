@@ -70,6 +70,8 @@ interface PlanResumeState {
 function flattenFiles(nodes: FileNode[], acc: string[] = []): string[] {
   for (const n of nodes) {
     if (n.is_dir) {
+      // Include the directory itself so `@folder` is selectable, then recurse.
+      acc.push(n.path.endsWith("/") ? n.path : `${n.path}/`);
       if (n.children) flattenFiles(n.children, acc);
     } else {
       acc.push(n.path);
@@ -77,6 +79,9 @@ function flattenFiles(nodes: FileNode[], acc: string[] = []): string[] {
   }
   return acc;
 }
+
+/** Special whole-repo mention surfaced at the top of the @ menu. */
+const CODEBASE_MENTION = "codebase";
 
 interface MentionState {
   query: string;
@@ -446,8 +451,16 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
     async (messageId: string) => {
       if (!sessionRef.current || !projectDir || busy) return;
       if (!window.confirm(t("chat.checkpointRestoreConfirm"))) return;
+      // Offer to also roll back the file edits the agent applied afterwards.
+      // The file watcher reloads affected tabs + refreshes git status.
+      const restoreFiles = window.confirm(t("chat.checkpointRestoreFiles"));
       try {
-        await restoreCheckpoint(sessionRef.current, messageId, projectDir!);
+        await restoreCheckpoint(
+          sessionRef.current,
+          messageId,
+          projectDir!,
+          restoreFiles,
+        );
         await syncMessagesFromDb(sessionRef.current);
         setPlanItems([]);
         setToolSteps([]);
@@ -534,7 +547,14 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
   const matches = useMemo(() => {
     if (!mention) return [];
     const q = mention.query.toLowerCase();
-    return files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8);
+    const out: string[] = [];
+    // Surface the whole-repo `@codebase` recall mention first.
+    if (CODEBASE_MENTION.startsWith(q)) out.push(CODEBASE_MENTION);
+    for (const f of files) {
+      if (out.length >= 9) break;
+      if (f.toLowerCase().includes(q)) out.push(f);
+    }
+    return out;
   }, [mention, files]);
 
   const pickMention = useCallback(
@@ -659,7 +679,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
               <div className="codez-msg-role">{m.role === "user" ? t("chat.you") : t("chat.agentRole")}</div>
               {m.text ? (
                 m.role === "assistant" ? (
-                  <Markdown content={m.text} />
+                  <Markdown content={m.text} enableApply />
                 ) : (
                   <UserMessage text={m.text} />
                 )
@@ -780,7 +800,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
                     pickMention(f);
                   }}
                 >
-                  {f}
+                  {f === CODEBASE_MENTION ? `codebase · ${t("chat.mentionCodebase")}` : f}
                 </div>
               ))}
             </div>

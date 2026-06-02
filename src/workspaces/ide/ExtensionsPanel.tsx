@@ -9,6 +9,7 @@ import {
 } from "../../services/tauri/vsix";
 import { vscodeThemeToMonaco, parseSnippets } from "./vscodeTheme";
 import { themeStore } from "./themeStore";
+import { loadExtensions, saveExtensions } from "./extensionStore";
 import "./ExtensionsPanel.css";
 
 interface ExtensionsPanelProps {
@@ -25,7 +26,7 @@ function themeId(ext: VsixManifest, t: VsixTheme): string {
 export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
   const { t: tr } = useTranslation();
   const monaco = useMonaco();
-  const [extensions, setExtensions] = useState<VsixManifest[]>([]);
+  const [extensions, setExtensions] = useState<VsixManifest[]>(() => loadExtensions());
   const [activeTheme, setActiveTheme] = useState<string>(themeStore.getSnapshot());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -96,7 +97,11 @@ export default function ExtensionsPanel({ onClose }: ExtensionsPanelProps) {
       if (!path) return;
       setBusy(true);
       const manifest = await importVsix(path);
-      setExtensions((prev) => [...prev.filter((e) => e.name !== manifest.name), manifest]);
+      setExtensions((prev) => {
+        const next = [...prev.filter((e) => e.name !== manifest.name), manifest];
+        saveExtensions(next);
+        return next;
+      });
       registerSnippets(manifest);
     } catch (e) {
       setError(String(e));

@@ -120,6 +120,36 @@ fn apply_llm_provider(settings: &mut Settings, provider: &LlmProviderConfig) {
     }
 }
 
+const FAST_MODEL_HINTS: &[&str] = &[
+    "mini", "fast", "flash", "haiku", "turbo", "small", "lite", "nano", "8b", "7b", "air",
+];
+const SMART_MODEL_HINTS: &[&str] = &[
+    "opus", "pro", "max", "thinking", "reasoner", "o1", "o3", "405b", "70b", "large", "ultra",
+];
+
+/// Pick a configured model id by task tier when the caller didn't specify one
+/// (M8 auto-routing). Plan mode (exploration) prefers a cheap/fast model; Agent
+/// mode prefers a stronger one. Opt-in via `CODEZ_AUTO_MODEL_ROUTING=1` so the
+/// default behaviour (active provider) is never silently overridden.
+fn auto_route_model(settings: &Settings, chat_mode: &str) -> Option<String> {
+    if std::env::var("CODEZ_AUTO_MODEL_ROUTING").ok().as_deref() != Some("1") {
+        return None;
+    }
+    let hints = if chat_mode == "plan" {
+        FAST_MODEL_HINTS
+    } else {
+        SMART_MODEL_HINTS
+    };
+    settings
+        .llm_providers
+        .iter()
+        .find(|p| {
+            let m = p.model.to_lowercase();
+            hints.iter().any(|h| m.contains(h))
+        })
+        .map(|p| p.id.clone())
+}
+
 fn resolve_llm_runtime(settings: &Settings, model_id: Option<&str>) -> Result<LlmRuntime> {
     if let Some(id) = model_id.filter(|s| !s.trim().is_empty()) {
         let provider = settings
@@ -347,22 +377,64 @@ fn read_ref_block(workspace_root: &str, ref_path: &str) -> Option<String> {
     Some(format!("```{ref_path}\n{truncated}\n```"))
 }
 
+/// Run a codebase search and format the top hits as an inline context block.
+/// Used by the `@codebase` mention so the IDE chat can pull whole-repo recall
+/// into a single turn (the agent can still call the `codebase_search` tool).
+fn codebase_context_block(raw: &str, workspace_root: &str) -> Option<String> {
+    let root = workspace_root.trim();
+    if root.is_empty() {
+        return None;
+    }
+    // Strip every `@token` so "codebase"/file names don't pollute the query.
+    let query: String = raw
+        .split_whitespace()
+        .filter(|w| !w.starts_with('@'))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let hits = crate::commands::codebase::search_index(
+        std::path::Path::new(root),
+        &query,
+        8,
+    )
+    .ok()?;
+    if hits.is_empty() {
+        return None;
+    }
+    let mut block = String::from("Relevant code from @codebase search:\n");
+    for h in hits {
+        block.push_str(&format!(
+            "\n```{}:{}-{}\n{}\n```\n",
+            h.path, h.start_line, h.end_line, h.snippet
+        ));
+    }
+    Some(block)
+}
+
 fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
     let refs = collect_at_refs(raw);
     if refs.is_empty() {
         return raw.to_string();
     }
+    let wants_codebase = refs.iter().any(|r| r == "codebase");
     let mut blocks = Vec::new();
     let mut total = 0usize;
-    for ref_path in refs {
+    for ref_path in &refs {
+        if ref_path == "codebase" {
+            continue; // handled separately below
+        }
         if total >= MAX_TOTAL_REF_CHARS {
             blocks.push(format!(
                 "[Skipped remaining @file references — total inline limit ({MAX_TOTAL_REF_CHARS} chars) reached.]"
             ));
             break;
         }
-        if let Some(block) = read_ref_block(workspace_root, &ref_path) {
+        if let Some(block) = read_ref_block(workspace_root, ref_path) {
             total += block.len();
+            blocks.push(block);
+        }
+    }
+    if wants_codebase {
+        if let Some(block) = codebase_context_block(raw, workspace_root) {
             blocks.push(block);
         }
     }
@@ -393,6 +465,7 @@ fn build_tool_registry(
     plan_store: PlanStore,
     chat_mode: &str,
     lsp_manager: Arc<LspManager>,
+    user_tools_dir: Option<PathBuf>,
 ) -> ToolRegistry {
     let mut builtin_tool_enabled = None;
     if chat_mode == "plan" {
@@ -408,13 +481,17 @@ fn build_tool_registry(
         db: Some(db),
         settings: Some(settings),
         builtin_tool_enabled,
-        user_tools_dir: None,
+        // ClawHub / user-authored executable tools live in `{config}/user-tools/`.
+        user_tools_dir,
         event_sink: Some(event_sink),
         plan_store: Some(plan_store),
         pool_event_sink: None,
         subagent_runtime: None,
         coordinator_config: Default::default(),
     };
+    let db_for_delegate = cfg.db.clone();
+    let settings_for_delegate = cfg.settings.clone();
+    let plan_for_delegate = cfg.plan_store.clone();
     pisci_kernel::tools::register_neutral_tools(&mut handle, &cfg);
 
     if let Some(registry) = handle.as_registry_mut() {
@@ -422,14 +499,207 @@ fn build_tool_registry(
             lsp_manager: lsp_manager.clone(),
         }));
         registry.register(Box::new(crate::tools::read_lints::ReadLintsTool {
-            lsp_manager,
+            lsp_manager: lsp_manager.clone(),
         }));
+        registry.register(Box::new(crate::tools::codebase_search::CodebaseSearchTool));
+        // SubAgent delegation (M7): only the main agent gets `delegate`; the
+        // sub-agent's own (plan-mode) registry omits it to prevent recursion.
+        if chat_mode != "plan" {
+            if let (Some(db), Some(settings), Some(plan)) =
+                (db_for_delegate, settings_for_delegate, plan_for_delegate)
+            {
+                registry.register(Box::new(crate::tools::delegate::DelegateTool {
+                    db,
+                    settings,
+                    plan_store: plan,
+                    lsp_manager,
+                }));
+            }
+        }
     }
 
     handle
         .into_registry()
         .map_err(|_| "internal: tool registry handle type mismatch".to_string())
         .expect("tool registry")
+}
+
+/// A bounded, read-only tool registry for delegated sub-agents (M7). It mirrors
+/// the main registry's read tools (explore + codebase_search + LSP) but omits
+/// every write/exec tool and the `delegate` tool itself, so sub-agents cannot
+/// mutate the workspace or recursively spawn more sub-agents.
+fn build_subagent_registry(
+    db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    settings: Arc<Mutex<Settings>>,
+    event_sink: Arc<dyn EventSink>,
+    plan_store: PlanStore,
+    lsp_manager: Arc<LspManager>,
+) -> ToolRegistry {
+    build_tool_registry(
+        db,
+        settings,
+        event_sink,
+        plan_store,
+        // "plan" mode disables writes / shell / code_run — exactly the
+        // read-only surface we want a research sub-agent to have.
+        "plan",
+        lsp_manager,
+        None,
+    )
+}
+
+/// Run a focused read-only research sub-agent in-process and return its final
+/// summary text (M7 SubAgent delegation). Reuses the kernel agent loop with a
+/// bounded iteration budget and timeout so the parent turn stays responsive.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subagent_research(
+    db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    settings: Arc<Mutex<Settings>>,
+    plan_store: PlanStore,
+    lsp_manager: Arc<LspManager>,
+    workspace_root: String,
+    task: String,
+    cancel: Arc<AtomicBool>,
+) -> Result<String> {
+    let runtime = {
+        let s = settings.lock().await;
+        resolve_llm_runtime(&s, None)?
+    };
+
+    let registry = build_subagent_registry(
+        db.clone(),
+        settings.clone(),
+        // A no-op sink: sub-agent events are summarised back to the parent as
+        // the tool result rather than streamed to the UI as a separate turn.
+        Arc::new(NullEventSink),
+        plan_store,
+        lsp_manager,
+    );
+
+    let (
+        context_window,
+        read_timeout,
+        policy_mode,
+        rate,
+        allow_outside,
+        threshold,
+        fallback,
+        compaction,
+        tool_settings,
+    ) = {
+        let s = settings.lock().await;
+        (
+            s.context_window,
+            s.llm_read_timeout_secs.max(30),
+            s.policy_mode.clone(),
+            s.tool_rate_limit_per_minute,
+            s.allow_outside_workspace,
+            s.auto_compact_input_tokens_threshold,
+            s.fallback_models.clone(),
+            CompactionSettings::from_settings(&s),
+            Arc::new(pisci_kernel::agent::tool::ToolSettings::from_settings(&s)),
+        )
+    };
+
+    let client = llm::build_client_with_timeout(
+        &runtime.provider,
+        &runtime.api_key,
+        if runtime.base_url.is_empty() {
+            None
+        } else {
+            Some(&runtime.base_url)
+        },
+        read_timeout,
+    );
+
+    let system_prompt = format!(
+        "You are a focused research sub-agent inside CodeZ. A parent agent has \
+         delegated a scoped investigation to you.\n\
+         - You are READ-ONLY: explore with `file_read`, `file_list`, \
+         `file_search`, `file_diff`, and `codebase_search`. Do not attempt to \
+         modify files or run commands.\n\
+         - Investigate the task, then reply with a concise, well-structured \
+         findings report (key files with paths, relevant snippets, and a clear \
+         answer). Stop as soon as you can answer.\n\n\
+         Workspace: `{workspace_root}`"
+    );
+
+    let policy = Arc::new(PolicyGate::with_profile_and_flags(
+        &workspace_root,
+        &policy_mode,
+        rate,
+        allow_outside,
+    ));
+
+    let harness = HarnessConfig::for_scheduler(
+        runtime.model.clone(),
+        fallback,
+        Arc::new(registry),
+        policy,
+        system_prompt,
+        runtime.max_tokens,
+        context_window,
+        Some(false),
+        threshold,
+        compaction,
+        db.clone(),
+    );
+    let agent = harness.into_agent_loop(client, None, None);
+
+    let session_id = format!(
+        "subagent-{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    );
+    let ctx = ToolContext {
+        session_id: session_id.clone(),
+        workspace_root: PathBuf::from(&workspace_root),
+        bypass_permissions: true,
+        settings: tool_settings,
+        max_iterations: Some(10),
+        memory_owner_id: "pisci".to_string(),
+        pool_session_id: None,
+        tool_use_id: None,
+        cancel: cancel.clone(),
+    };
+
+    let messages = vec![LlmMessage {
+        role: "user".into(),
+        content: MessageContent::text(&task),
+    }];
+
+    let (tx, mut rx) = mpsc::channel::<AgentEvent>(256);
+    let collector = tokio::spawn(async move {
+        let mut text = String::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                AgentEvent::TextDelta { delta } => text.push_str(&delta),
+                AgentEvent::Done { .. } => break,
+                _ => {}
+            }
+        }
+        text
+    });
+
+    let run_fut = agent.run(messages, tx, cancel.clone(), ctx);
+    let run_res = tokio::time::timeout(Duration::from_secs(240), run_fut).await;
+    let text = collector.await.unwrap_or_default();
+
+    match run_res {
+        Ok(Ok(_)) => Ok(text),
+        Ok(Err(e)) => Err(anyhow!("sub-agent failed: {e}")),
+        Err(_) => Ok(format!(
+            "{text}\n\n[sub-agent timed out after 240s — partial findings above]"
+        )),
+    }
+}
+
+/// Event sink that discards everything — used by delegated sub-agents whose
+/// progress is reported back as a single tool result, not a live UI stream.
+struct NullEventSink;
+
+impl EventSink for NullEventSink {
+    fn emit_session(&self, _session_id: &str, _event: &str, _payload: serde_json::Value) {}
+    fn emit_broadcast(&self, _event: &str, _payload: serde_json::Value) {}
 }
 
 fn inject_image_block(messages: &mut [LlmMessage], media_type: &str, data_b64: &str) {
@@ -488,6 +758,116 @@ fn headless_system_prompt(
     body
 }
 
+/// Build an "## Available skills" block from installed ClawHub SKILL.md files
+/// under `{config}/skills/*/SKILL.md`. Progressive disclosure: list each
+/// skill's name + summary and tell the agent to `file_read` the full SKILL.md
+/// (path included) when a task matches.
+fn skills_context(config_dir: &std::path::Path) -> Option<String> {
+    let skills_root = config_dir.join("skills");
+    let entries = std::fs::read_dir(&skills_root).ok()?;
+    let mut lines = Vec::new();
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let skill_md = dir.join("SKILL.md");
+        let Ok(content) = std::fs::read_to_string(&skill_md) else {
+            continue;
+        };
+        let (name, desc) = parse_skill_meta(&content, &entry.file_name().to_string_lossy());
+        lines.push(format!(
+            "- **{name}** — {desc}\n  (read `{}` for full instructions before using)",
+            skill_md.display()
+        ));
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "## Available skills\nYou have these installed skills. When a task matches one, \
+         read its SKILL.md first, then follow it:\n{}",
+        lines.join("\n")
+    ))
+}
+
+/// Extract `name` + `description` from a SKILL.md YAML frontmatter (falls back
+/// to the first `# heading` / a generic summary).
+fn parse_skill_meta(content: &str, fallback: &str) -> (String, String) {
+    let mut name = fallback.to_string();
+    let mut desc = String::new();
+    if let Some(rest) = content.strip_prefix("---") {
+        if let Some(end) = rest.find("\n---") {
+            for line in rest[..end].lines() {
+                if let Some(v) = line.strip_prefix("name:") {
+                    let n = v.trim().trim_matches('"').trim_matches('\'');
+                    if !n.is_empty() {
+                        name = n.to_string();
+                    }
+                } else if let Some(v) = line.strip_prefix("description:") {
+                    let d = v.trim().trim_matches('"').trim_matches('\'');
+                    if !d.is_empty() {
+                        desc = d.to_string();
+                    }
+                }
+            }
+        }
+    }
+    if desc.is_empty() {
+        desc = content
+            .lines()
+            .find(|l| !l.trim().is_empty() && !l.starts_with("---") && !l.starts_with('#'))
+            .unwrap_or("")
+            .trim()
+            .chars()
+            .take(160)
+            .collect();
+    }
+    (name, desc)
+}
+
+/// Read project rules from `{workspace}/.codez/rules/` (preferred) or
+/// `{workspace}/.cursor/rules/` (compat). Concatenates `*.md` / `*.mdc` into a
+/// "## Project rules" block injected as a system constraint.
+fn project_rules_context(workspace_root: &str) -> Option<String> {
+    let root = std::path::Path::new(workspace_root.trim());
+    if workspace_root.trim().is_empty() {
+        return None;
+    }
+    let candidates = [root.join(".codez").join("rules"), root.join(".cursor").join("rules")];
+    let mut blocks = Vec::new();
+    for dir in candidates.iter() {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        let mut files: Vec<_> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                matches!(
+                    p.extension().and_then(|e| e.to_str()),
+                    Some("md") | Some("mdc")
+                )
+            })
+            .collect();
+        files.sort();
+        for f in files {
+            if let Ok(content) = std::fs::read_to_string(&f) {
+                if !content.trim().is_empty() {
+                    blocks.push(content.trim().to_string());
+                }
+            }
+        }
+        if !blocks.is_empty() {
+            break; // prefer the first dir that has rules
+        }
+    }
+    if blocks.is_empty() {
+        return None;
+    }
+    Some(format!("## Project rules\n{}", blocks.join("\n\n")))
+}
+
 pub async fn run_codez_turn(
     mut request: HeadlessCliRequest,
     kernel: KernelState,
@@ -501,6 +881,7 @@ pub async fn run_codez_turn(
     display_prompt: Option<String>,
     lsp_manager: Arc<LspManager>,
     journal: Arc<crate::journal::FileJournal>,
+    config_dir: PathBuf,
 ) -> Result<HeadlessCliResponse> {
     if !matches!(request.mode, HeadlessCliMode::Pisci) {
         return Err(anyhow!("CodeZ chat only supports mode=pisci"));
@@ -508,6 +889,16 @@ pub async fn run_codez_turn(
 
     let (db, settings) = kernel;
     let chat_mode = if chat_mode == "plan" { "plan" } else { "agent" };
+
+    // Auto-route to a fast/smart model by task tier when the caller left the
+    // model unspecified (M8, opt-in via CODEZ_AUTO_MODEL_ROUTING).
+    let model_id = match model_id.filter(|v| !v.trim().is_empty()) {
+        Some(id) => Some(id),
+        None => {
+            let s = settings.lock().await;
+            auto_route_model(&s, chat_mode)
+        }
+    };
 
     let settings_snapshot = {
         let mut s = settings.lock().await;
@@ -546,14 +937,21 @@ pub async fn run_codez_turn(
         request.extra_system_context = Some(extra);
     }
 
-    let registry = build_tool_registry(
+    let mut registry = build_tool_registry(
         db.clone(),
         settings.clone(),
         event_sink.clone(),
         plan_store.clone(),
         chat_mode,
         lsp_manager,
+        Some(config_dir.join("user-tools")),
     );
+    // Register MCP server tools (M6) from settings.mcp_servers — async because
+    // it connects to stdio/SSE servers. Plan mode keeps them (read-context).
+    let mcp_servers = { settings.lock().await.mcp_servers.clone() };
+    if !mcp_servers.is_empty() {
+        pisci_kernel::tools::register_mcp_tools(&mut registry, &mcp_servers).await;
+    }
     let default_timeout = Duration::from_secs(600);
 
     // Resolve session id early so we can clear plan state before the turn.
@@ -691,10 +1089,29 @@ pub async fn run_codez_turn(
         read_timeout,
     );
 
+    // Compose extra system context: caller-supplied context + installed
+    // ClawHub skills + project rules (M6).
+    let mut extra_sections: Vec<String> = Vec::new();
+    if let Some(existing) = request.extra_system_context.as_deref() {
+        if !existing.trim().is_empty() {
+            extra_sections.push(existing.to_string());
+        }
+    }
+    if let Some(skills) = skills_context(&config_dir) {
+        extra_sections.push(skills);
+    }
+    if let Some(rules) = project_rules_context(&workspace_root) {
+        extra_sections.push(rules);
+    }
+    let combined_extra = if extra_sections.is_empty() {
+        None
+    } else {
+        Some(extra_sections.join("\n\n"))
+    };
     let system_prompt = headless_system_prompt(
         &workspace_root,
         allow_outside_workspace,
-        request.extra_system_context.as_deref(),
+        combined_extra.as_deref(),
     );
 
     let policy = Arc::new(PolicyGate::with_profile_and_flags(

@@ -98,3 +98,113 @@ pub async fn inline_edit(
 
     Ok(strip_code_fences(&resp.content))
 }
+
+const COMPLETION_SYSTEM_PROMPT: &str = "You are a code-completion engine (fill-in-the-middle). \
+Given the code before the cursor (<prefix>) and after the cursor (<suffix>), output ONLY the \
+text that should be inserted at the cursor to continue the code naturally. \
+Do NOT repeat the prefix or the suffix. Do NOT add explanations or markdown fences. \
+Output an empty string if no useful completion applies.";
+
+/// Low-latency single-shot inline (Tab) completion (M5).
+///
+/// Routed to a dedicated `model_id` (the "completion model") when provided so a
+/// fast/cheap model handles ghost-text while Chat keeps using the big model.
+#[tauri::command]
+pub async fn ai_inline_completion(
+    app: AppHandle,
+    prefix: String,
+    suffix: String,
+    language: Option<String>,
+    model_id: Option<String>,
+) -> Result<String, String> {
+    if prefix.trim().is_empty() {
+        return Ok(String::new());
+    }
+    let config_dir = resolve_config_dir(&app)?;
+    let (_db, settings) = headless::open_kernel_state(&config_dir)
+        .map_err(|e| format!("failed to initialise kernel state: {e}"))?;
+
+    let (provider, model, api_key, base_url, read_timeout) = {
+        let s = settings.lock().await;
+        // Resolve the completion model when an id is given; else fall back to
+        // the active provider/model.
+        if let Some(p) = model_id
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+            .and_then(|id| s.find_llm_provider(id))
+        {
+            let key = {
+                let k = p.effective_api_key();
+                if k.trim().is_empty() {
+                    s.active_api_key().to_string()
+                } else {
+                    k.to_string()
+                }
+            };
+            (
+                p.provider.clone(),
+                p.model.clone(),
+                key,
+                p.base_url.clone(),
+                s.llm_read_timeout_secs.max(15),
+            )
+        } else {
+            (
+                s.provider.clone(),
+                s.model.clone(),
+                s.active_api_key().to_string(),
+                s.custom_base_url.clone(),
+                s.llm_read_timeout_secs.max(15),
+            )
+        }
+    };
+    if api_key.is_empty() {
+        return Ok(String::new()); // silently no-op when unconfigured
+    }
+
+    let client = llm::build_client_with_timeout(
+        &provider,
+        &api_key,
+        if base_url.is_empty() { None } else { Some(&base_url) },
+        read_timeout,
+    );
+
+    let lang = language.unwrap_or_default();
+    // Cap context to keep latency low.
+    let pfx = tail(&prefix, 2000);
+    let sfx = head(&suffix, 600);
+    let user = format!(
+        "Language: {lang}\n\n<prefix>\n{pfx}\n</prefix>\n<suffix>\n{sfx}\n</suffix>\n\n\
+         Insert the completion at the cursor (between prefix and suffix)."
+    );
+
+    let req = LlmRequest {
+        messages: vec![LlmMessage {
+            role: "user".to_string(),
+            content: MessageContent::text(&user),
+        }],
+        system: Some(COMPLETION_SYSTEM_PROMPT.to_string()),
+        tools: Vec::new(),
+        model,
+        max_tokens: 256,
+        stream: false,
+        vision_override: Some(false),
+    };
+
+    let resp = client
+        .complete(req)
+        .await
+        .map_err(|e| format!("inline completion failed: {e}"))?;
+    Ok(strip_code_fences(&resp.content))
+}
+
+fn tail(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    s.chars().skip(s.chars().count() - max).collect()
+}
+
+fn head(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}

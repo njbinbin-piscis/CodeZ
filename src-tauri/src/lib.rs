@@ -77,8 +77,22 @@ pub fn run() {
             // AI chat (agent turn on the pisci-engine kernel)
             commands::chat::chat_send,
             commands::chat::chat_cancel,
-            // Cmd-K inline edit
+            // Cmd-K inline edit + Tab completion (ghost text)
             commands::edit::inline_edit,
+            commands::edit::ai_inline_completion,
+            // Codebase index + semantic-ish search (M5)
+            commands::codebase::codebase_index_build,
+            commands::codebase::codebase_search,
+            // Isolated Agent tasks: worktree + diff review + merge/PR (M4)
+            commands::agent_task::agent_task_create,
+            commands::agent_task::agent_task_list,
+            commands::agent_task::agent_task_changed_files,
+            commands::agent_task::agent_task_file_diff,
+            commands::agent_task::agent_task_merge,
+            commands::agent_task::agent_task_discard,
+            commands::agent_task::agent_task_open_pr,
+            // Repo Wiki — module/architecture overview from the index (M8)
+            commands::repo_wiki::repo_wiki_generate,
             // VS Code .vsix contribution-point ingestion
             commands::vsix::import_vsix,
             // chat session management

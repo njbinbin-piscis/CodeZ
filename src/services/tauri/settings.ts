@@ -11,6 +11,16 @@ export interface LlmProviderConfig {
   max_tokens: number;
 }
 
+export interface McpServerConfig {
+  name: string;
+  transport: string;
+  command: string;
+  args: string[];
+  url: string;
+  env: Record<string, string>;
+  enabled: boolean;
+}
+
 export interface LlmSettings {
   provider: string;
   model: string;
@@ -29,6 +39,7 @@ export interface LlmSettings {
   zhipu_api_key: string;
   kimi_api_key: string;
   llm_providers: LlmProviderConfig[];
+  mcp_servers: McpServerConfig[];
 }
 
 export interface SettingsResponse extends LlmSettings {
