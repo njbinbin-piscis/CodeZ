@@ -1,8 +1,9 @@
 name: Release
 
 # Build desktop bundles for Windows, Linux, and macOS (x86_64 + aarch64)
-# and attach them to a draft GitHub release. Triggered by pushing a version
-# tag (e.g. v0.1.0) or manually.
+# and attach them to a GitHub release. Triggered by pushing a version tag
+# (e.g. v0.1.0) or manually. Releases are published (not draft) so install
+# packages are visible on the public Releases page.
 on:
   push:
     tags:
@@ -58,9 +59,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ""
 
@@ -116,9 +117,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__ (ARM64 Linux)"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ""
 
@@ -158,9 +159,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ""
 
@@ -201,9 +202,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__ (ARM64 Windows)"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ""
 
@@ -217,46 +218,8 @@ jobs:
           if-no-files-found: warn
 
   # ── macOS (x86_64 / Intel) ───────────────────────────────────────
-  bundle-macos-x86_64:
-    name: Bundle macOS x86_64 (.dmg + .app)
-    runs-on: macos-13
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-
-      - name: Build + bundle with tauri-action
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_OPTIONS: --max-old-space-size=4096
-        with:
-          tagName: codez-v__VERSION__
-          releaseName: "CodeZ v__VERSION__"
-          releaseDraft: true
-          prerelease: false
-          args: ""
-
-      - name: Upload bundles as workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: codez-macos-x86_64-bundles
-          path: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app
-          if-no-files-found: warn
+  # Disabled: macos-13 runners are often unavailable (workflow stuck queued).
+  # Use bundle-macos-universal instead (Intel + Apple Silicon in one .dmg).
 
   # ── macOS (aarch64 / Apple Silicon) ──────────────────────────────
   bundle-macos-aarch64:
@@ -285,9 +248,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__ (Apple Silicon)"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ""
 
@@ -332,9 +295,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
         with:
-          tagName: codez-v__VERSION__
+          tagName: v__VERSION__
           releaseName: "CodeZ v__VERSION__ (Universal)"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: "--target universal-apple-darwin"
 
