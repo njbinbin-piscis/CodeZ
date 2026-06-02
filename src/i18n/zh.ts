@@ -262,7 +262,7 @@ const zh = {
     modeAgent: "Agent",
     modePlan: "Plan",
     modeAgentHint: "Agent 模式：可读写文件并执行命令",
-    modePlanHint: "Plan 模式：只读探索 + 计划板，不修改文件",
+    modePlanHint: "Plan 模式：只读探索 + 计划待办列表，不修改文件",
     modelDefault: "默认（全局配置）",
     attachFile: "添加附件",
     removeAttachment: "移除附件",

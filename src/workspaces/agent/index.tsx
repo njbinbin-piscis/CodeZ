@@ -50,7 +50,7 @@ interface AgentWorkspaceProps {
  * Agent mode (≈ Codex) — task-centric autonomous coding.
  *
  * Each task is a kernel session: submit a goal, the agent plans → edits → runs
- * tools in the open project, streaming its steps. The board lists past tasks
+ * tools in the open project, streaming its steps. The task list shows past runs
  * and a Changes panel surfaces the resulting `git status` for review.
  */
 export default function AgentWorkspace({

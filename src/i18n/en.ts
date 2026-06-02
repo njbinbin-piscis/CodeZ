@@ -263,7 +263,7 @@ const en = {
     modeAgent: "Agent",
     modePlan: "Plan",
     modeAgentHint: "Agent mode: read/write files and run commands",
-    modePlanHint: "Plan mode: read-only exploration + plan board, no file edits",
+    modePlanHint: "Plan mode: read-only exploration + plan todo list, no file edits",
     modelDefault: "Default (global settings)",
     attachFile: "Attach file",
     removeAttachment: "Remove attachment",

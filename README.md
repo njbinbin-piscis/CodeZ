@@ -57,11 +57,11 @@ consumes its declarative contributions:
 Theme syntax colors are approximate (TextMate scopes don't map 1:1 onto
 Monaco's tokenizer) but the workbench colors carry the dominant look.
 
-**M3 — Agent mode (done).** The Agent workspace is a Codex-style task board:
-each task is a kernel session, submit a goal and the agent plans → edits → runs
-tools in the open project with streamed steps (text + tool calls), a Stop
-button, a task list (open / delete past runs), and a Changes panel showing the
-resulting `git status` for review. The kernel event channel is shared with the
+**M3 — Agent mode (done).** The Agent workspace is a Codex-style **task list**
+(not a multi-agent kanban board): each task is a kernel session. Submit a goal
+and the agent plans → edits → runs tools in the open project with streamed steps
+(text + tool calls), a Stop button, a sidebar to open or delete past tasks, and
+a Changes panel showing the resulting `git status` for review. The kernel event channel is shared with the
 IDE chat, so each surface only consumes events while it is the one running.
 
 **M4 — Agent task isolation (done).** Each Agent-mode task runs inside its own
@@ -124,7 +124,7 @@ CodeZ/
     ├── services/tauri/         # ide / lsp / chat IPC + folder dialog
     └── workspaces/
         ├── ide/                # IDE workspace + AssistantPanel + ExtensionsPanel (.vsix)
-        └── agent/              # Agent-mode task board (goal → autonomous run)
+        └── agent/              # Agent-mode task list (goal → autonomous run + review)
 ```
 
 ## Build
