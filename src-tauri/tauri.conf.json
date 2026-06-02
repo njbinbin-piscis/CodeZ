@@ -38,7 +38,7 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "CodeZ — Cursor-like AI IDE",
-    "longDescription": "CodeZ is a Cursor-like AI IDE with an editor-centric IDE mode and a task-centric Agent mode, built on the shared pisci-engine kernel.",
+    "longDescription": "CodeZ is a Cursor-like AI IDE with an editor-centric IDE mode and a task-centric Agent mode, built on the shared piscis-engine kernel.",
     "linux": {
       "deb": {
         "depends": [

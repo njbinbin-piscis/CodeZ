@@ -1,7 +1,7 @@
 //! CodeZ desktop host — Tauri application entry point.
 //!
 //! Bridges the React frontend (IDE / Agent modes) to native capabilities and,
-//! in later milestones, to the shared `pisci-engine` agent kernel. M0 wires
+//! in later milestones, to the shared `piscis-engine` agent kernel. M0 wires
 //! the IDE workspace: file I/O, git, search, a PTY terminal, a filesystem
 //! watcher, and the LSP ↔ WebSocket bridge.
 
@@ -74,7 +74,7 @@ pub fn run() {
             commands::ide::ide_lsp_stop,
             // platform
             commands::platform::open_path,
-            // AI chat (agent turn on the pisci-engine kernel)
+            // AI chat (agent turn on the piscis-engine kernel)
             commands::chat::chat_send,
             commands::chat::chat_cancel,
             // Cmd-K inline edit + Tab completion (ghost text)

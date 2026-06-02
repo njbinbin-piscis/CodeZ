@@ -1,5 +1,5 @@
 /**
- * AI chat IPC — drives a single agent turn on the pisci-engine kernel and
+ * AI chat IPC — drives a single agent turn on the piscis-engine kernel and
  * streams kernel events back over a Tauri event channel.
  */
 import { invoke } from "@tauri-apps/api/core";

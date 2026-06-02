@@ -1,7 +1,7 @@
 //! CodeZ host shell — bootstrap skeleton.
 //!
 //! CodeZ is a Cursor-like AI IDE with two first-class modes (IDE / Agent)
-//! built on the shared `pisci-engine` agent kernel. This binary is the seed
+//! built on the shared `piscis-engine` agent kernel. This binary is the seed
 //! of the host: for now it just links the kernel and prints a banner, which
 //! proves the engine dependency resolves and compiles end to end. The Tauri
 //! UI shell, the IDE/Agent harness presets and the new `edit` / `index` /
@@ -9,7 +9,7 @@
 //! `docs/codez-design.md`.
 
 fn main() {
-    println!("CodeZ host — Cursor-like AI IDE on the pisci-engine kernel");
+    println!("CodeZ host — Cursor-like AI IDE on the piscis-engine kernel");
     println!("kernel version: {}", pisci_kernel::KERNEL_VERSION);
 
     // Touch the contracts crate so the host↔kernel boundary is real and

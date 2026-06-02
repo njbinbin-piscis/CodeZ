@@ -2,7 +2,7 @@
 name = "codez-host"
 version = "0.0.1"
 edition = "2021"
-description = "CodeZ host shell — Cursor-like AI IDE (IDE + Agent modes) built on the pisci-engine kernel."
+description = "CodeZ host shell — Cursor-like AI IDE (IDE + Agent modes) built on the piscis-engine kernel."
 
 [[bin]]
 name = "codez-host"

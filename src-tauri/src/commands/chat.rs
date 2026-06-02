@@ -1,4 +1,4 @@
-//! AI chat command — drives a single agent turn on the shared `pisci-engine`
+//! AI chat command — drives a single agent turn on the shared `piscis-engine`
 //! kernel and streams [`AgentEvent`]s back to the frontend.
 
 use std::sync::atomic::{AtomicBool, Ordering};

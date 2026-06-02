@@ -1,7 +1,7 @@
 # CodeZ
 
 A Cursor-like **AI IDE** with two first-class modes, built on the shared
-[`pisci-engine`](https://github.com/njbinbin-piscis/pisci-engine) agent kernel:
+[`piscis-engine`](https://github.com/njbinbin-piscis/piscis-engine) agent kernel:
 
 - **IDE mode** (≈ Cursor): editor-centric — Monaco + LSP, Tab completion,
   Cmd-K inline edit, an AI chat side panel with `@`-references and inline
@@ -78,7 +78,7 @@ configured API key, `chat_send` returns a clear error.
 
 ```
 CodeZ/
-├── Cargo.toml                  # Rust workspace; depends on pisci-engine via git
+├── Cargo.toml                  # Rust workspace; depends on piscis-engine via git
 ├── crates/
 │   └── codez-host/             # kernel-link smoke binary
 ├── src-tauri/                  # Tauri desktop host
@@ -129,9 +129,9 @@ CI builds the Linux `.deb` + `.AppImage` bundles via
 manual dispatch, attaching them to a draft GitHub release and as workflow
 artifacts.
 
-`cargo` fetches `pisci-engine` from GitHub and compiles the kernel. To develop
+`cargo` fetches `piscis-engine` from GitHub and compiles the kernel. To develop
 the kernel and CodeZ together locally, add a `[patch]` pointing the git source
-at a local `../pisci-engine` checkout. The desktop host needs the usual Tauri
+at a local `../piscis-engine` checkout. The desktop host needs the usual Tauri
 Linux system libs (webkit2gtk-4.1, gtk-3, libsoup-3).
 
 ## Design
