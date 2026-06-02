@@ -29,7 +29,6 @@ import type { GitFileStatus } from "../ide/types";
 import Markdown from "../ide/Markdown";
 import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
-import ClawHubPanel from "./ClawHubPanel";
 import {
   collectArtifacts,
   type AgentStep,
@@ -40,6 +39,9 @@ import "./Agent.css";
 interface AgentWorkspaceProps {
   projectDir: string | null;
   onOpenFolder: () => void;
+  /** Increment from title bar to trigger repo wiki generation. */
+  wikiBuildNonce?: number;
+  onWikiBusyChange?: (busy: boolean) => void;
 }
 
 /**
@@ -49,7 +51,12 @@ interface AgentWorkspaceProps {
  * tools in the open project, streaming its steps. The board lists past tasks
  * and a Changes panel surfaces the resulting `git status` for review.
  */
-export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorkspaceProps) {
+export default function AgentWorkspace({
+  projectDir,
+  onOpenFolder,
+  wikiBuildNonce = 0,
+  onWikiBusyChange,
+}: AgentWorkspaceProps) {
   const { t } = useTranslation();
   const [tasks, setTasks] = useState<SessionMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -60,7 +67,6 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   const [changes, setChanges] = useState<GitFileStatus[]>([]);
   const [changesOpen, setChangesOpen] = useState(false);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
-  const [clawHubOpen, setClawHubOpen] = useState(false);
   const [wikiBusy, setWikiBusy] = useState(false);
   const [modelId, setModelId] = useState(() => localStorage.getItem("codez-model-id") ?? "");
   const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
@@ -479,6 +485,7 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
   const buildWiki = useCallback(async () => {
     if (!projectDir || wikiBusy) return;
     setWikiBusy(true);
+    onWikiBusyChange?.(true);
     setError(null);
     try {
       const res = await generateRepoWiki(projectDir);
@@ -487,8 +494,16 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
       setError(String(e));
     } finally {
       setWikiBusy(false);
+      onWikiBusyChange?.(false);
     }
-  }, [projectDir, wikiBusy]);
+  }, [projectDir, wikiBusy, onWikiBusyChange]);
+
+  const wikiTriggerRef = useRef(0);
+  useEffect(() => {
+    if (wikiBuildNonce <= 0 || wikiBuildNonce === wikiTriggerRef.current) return;
+    wikiTriggerRef.current = wikiBuildNonce;
+    void buildWiki();
+  }, [wikiBuildNonce, buildWiki]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -570,20 +585,6 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
               </button>
             </div>
           ))}
-        </div>
-        <div className="codez-agent-sidebar-foot">
-          <button type="button" className="codez-agent-clawhub-btn" onClick={() => setClawHubOpen(true)}>
-            {t("clawhub.open")}
-          </button>
-          <button
-            type="button"
-            className="codez-agent-clawhub-btn"
-            onClick={() => void buildWiki()}
-            disabled={!projectDir || wikiBusy}
-            title={t("agent.repoWikiHint")}
-          >
-            {wikiBusy ? t("agent.repoWikiBusy") : t("agent.repoWiki")}
-          </button>
         </div>
       </aside>
 
@@ -768,7 +769,6 @@ export default function AgentWorkspace({ projectDir, onOpenFolder }: AgentWorksp
           sendTitle={t("agent.run")}
         />
       </section>
-      {clawHubOpen && <ClawHubPanel onClose={() => setClawHubOpen(false)} />}
       {reviewTask && projectDir && (
         <AgentTaskReview
           projectDir={projectDir}

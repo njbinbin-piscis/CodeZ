@@ -9,6 +9,14 @@ import AgentWorkspace from "./workspaces/agent";
 import AssistantPanel from "./workspaces/ide/AssistantPanel";
 import ExtensionsPanel from "./workspaces/ide/ExtensionsPanel";
 import SettingsPanel from "./workspaces/ide/SettingsPanel";
+import ClawHubPanel from "./workspaces/agent/ClawHubPanel";
+import {
+  ChatIcon,
+  ClawHubIcon,
+  ExtensionsIcon,
+  SettingsIcon,
+  WikiIcon,
+} from "./components/TitleBarIcons";
 import "./App.css";
 
 type Mode = "ide" | "agent";
@@ -21,6 +29,9 @@ export default function App() {
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
   const [extOpen, setExtOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clawHubOpen, setClawHubOpen] = useState(false);
+  const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
+  const [wikiBusy, setWikiBusy] = useState(false);
 
   useEffect(() => {
     getSettings()
@@ -71,30 +82,62 @@ export default function App() {
             {t("app.modeAgent")}
           </button>
         </div>
-        <div className="codez-project">
+        <div className="codez-titlebar-actions">
           {mode === "ide" && (
             <button
-              className={`codez-chat-toggle ${chatOpen ? "active" : ""}`}
+              type="button"
+              className={`codez-titlebar-icon ${chatOpen ? "active" : ""}`}
               onClick={() => setChatOpen((v) => !v)}
               title={t("app.chatTitle")}
+              aria-label={t("app.chatTitle")}
             >
-              {t("app.chat")}
+              <ChatIcon />
             </button>
           )}
+          {mode === "agent" && (
+            <>
+              <button
+                type="button"
+                className="codez-titlebar-icon"
+                onClick={() => setClawHubOpen(true)}
+                title={t("clawhub.open")}
+                aria-label={t("clawhub.open")}
+              >
+                <ClawHubIcon />
+              </button>
+              <button
+                type="button"
+                className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
+                onClick={() => setWikiBuildNonce((n) => n + 1)}
+                disabled={!projectDir || wikiBusy}
+                title={t("agent.repoWikiHint")}
+                aria-label={t("agent.repoWiki")}
+              >
+                <WikiIcon />
+              </button>
+            </>
+          )}
+          <span className="codez-titlebar-sep" aria-hidden />
           <button
-            className="codez-chat-toggle"
+            type="button"
+            className="codez-titlebar-icon"
             onClick={() => setSettingsOpen(true)}
             title={t("app.settingsTitle")}
+            aria-label={t("app.settingsTitle")}
           >
-            {t("app.settings")}
+            <SettingsIcon />
           </button>
           <button
-            className="codez-chat-toggle"
+            type="button"
+            className="codez-titlebar-icon"
             onClick={() => setExtOpen(true)}
             title={t("app.extensionsTitle")}
+            aria-label={t("app.extensionsTitle")}
           >
-            {t("app.extensions")}
+            <ExtensionsIcon />
           </button>
+        </div>
+        <div className="codez-project">
           {projectDir && (
             <>
               <button className="codez-open-folder codez-open-folder-secondary" onClick={pickFolder}>
@@ -130,12 +173,18 @@ export default function App() {
           </div>
         </div>
         <div className="codez-pane" hidden={mode !== "agent"}>
-          <AgentWorkspace projectDir={projectDir} onOpenFolder={pickFolder} />
+          <AgentWorkspace
+            projectDir={projectDir}
+            onOpenFolder={pickFolder}
+            wikiBuildNonce={wikiBuildNonce}
+            onWikiBusyChange={setWikiBusy}
+          />
         </div>
       </main>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
+      {clawHubOpen && <ClawHubPanel onClose={() => setClawHubOpen(false)} />}
     </div>
   );
 }

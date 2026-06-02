@@ -44,12 +44,67 @@
   color: #fff;
 }
 
-.codez-project {
+.codez-titlebar-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.codez-titlebar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.codez-titlebar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.codez-titlebar-icon:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.codez-titlebar-icon.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.codez-titlebar-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.codez-titlebar-icon.loading {
+  animation: codez-icon-pulse 1s ease-in-out infinite;
+}
+
+@keyframes codez-icon-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.codez-project {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  margin-left: 8px;
 }
 
 .codez-open-folder {
@@ -70,6 +125,7 @@
 }
 
 .codez-chat-toggle {
+  /* legacy — prefer .codez-titlebar-icon */
   border: 1px solid var(--border);
   background: var(--bg-elev-2);
   color: var(--text-dim);
