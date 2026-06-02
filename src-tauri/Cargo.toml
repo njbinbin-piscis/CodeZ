@@ -22,8 +22,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Shared agent kernel (used today for process spawning; agent loop wiring lands in M1).
-pisci-core = { workspace = true }
-pisci-kernel = { workspace = true }
+piscis-core = { workspace = true }
+piscis-kernel = { workspace = true }
 
 # Tauri runtime + the plugins the IDE workspace needs.
 tauri = { version = "2", features = [] }
@@ -60,7 +60,7 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Match pisci-kernel — used for checkpoint restore via Database.conn.
+# Match piscis-kernel — used for checkpoint restore via Database.conn.
 rusqlite = { version = "0.31", features = ["bundled"] }
 
 # ClawHub marketplace HTTP client.

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use pisci_kernel::store::settings::{LlmProviderConfig, McpServerConfig, Settings};
+use piscis_kernel::store::settings::{LlmProviderConfig, McpServerConfig, Settings};
 
 use crate::commands::chat::resolve_config_dir;
 
@@ -58,7 +58,7 @@ pub struct SaveLlmSettings {
     pub qwen_api_key: String,
     pub minimax_api_key: String,
     pub zhipu_api_key: String,
-    pub     kimi_api_key: String,
+    pub kimi_api_key: String,
     pub llm_providers: Vec<LlmProviderDto>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerDto>,
@@ -84,7 +84,7 @@ pub struct LlmSettingsDto {
     pub qwen_api_key: String,
     pub minimax_api_key: String,
     pub zhipu_api_key: String,
-    pub     kimi_api_key: String,
+    pub kimi_api_key: String,
     pub llm_providers: Vec<LlmProviderDto>,
     pub mcp_servers: Vec<McpServerDto>,
 }
@@ -159,7 +159,10 @@ pub async fn is_configured(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn save_settings(app: AppHandle, updates: SaveLlmSettings) -> Result<LlmSettingsDto, String> {
+pub async fn save_settings(
+    app: AppHandle,
+    updates: SaveLlmSettings,
+) -> Result<LlmSettingsDto, String> {
     let (mut settings, config_dir) = load_settings(&app)?;
 
     if !updates.anthropic_api_key.is_empty() {

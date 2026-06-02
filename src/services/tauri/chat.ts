@@ -21,7 +21,7 @@ export interface PlanTodoItem {
   status: string;
 }
 
-/** Tagged union mirroring `pisci_kernel::agent::messages::AgentEvent`. */
+/** Tagged union mirroring `piscis_kernel::agent::messages::AgentEvent`. */
 export type AgentEvent =
   | { type: "text_segment_start"; iteration: number }
   | { type: "text_delta"; delta: string }

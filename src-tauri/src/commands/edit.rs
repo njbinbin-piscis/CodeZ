@@ -7,8 +7,8 @@
 
 use tauri::AppHandle;
 
-use pisci_kernel::headless;
-use pisci_kernel::llm::{self, LlmMessage, LlmRequest, MessageContent};
+use piscis_kernel::headless;
+use piscis_kernel::llm::{self, LlmMessage, LlmRequest, MessageContent};
 
 use crate::commands::chat::resolve_config_dir;
 
@@ -63,7 +63,11 @@ pub async fn inline_edit(
     let client = llm::build_client_with_timeout(
         &provider,
         &api_key,
-        if base_url.is_empty() { None } else { Some(&base_url) },
+        if base_url.is_empty() {
+            None
+        } else {
+            Some(&base_url)
+        },
         read_timeout,
     );
 
@@ -165,7 +169,11 @@ pub async fn ai_inline_completion(
     let client = llm::build_client_with_timeout(
         &provider,
         &api_key,
-        if base_url.is_empty() { None } else { Some(&base_url) },
+        if base_url.is_empty() {
+            None
+        } else {
+            Some(&base_url)
+        },
         read_timeout,
     );
 

@@ -100,7 +100,7 @@ pub fn skills_list_installed(app: AppHandle) -> Result<Vec<InstalledSkill>, Stri
             path: skill_md.display().to_string(),
         });
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     Ok(out)
 }
 
@@ -145,11 +145,7 @@ fn rules_dir(project_dir: &str) -> Result<PathBuf, String> {
 /// Reject names that escape the rules directory.
 fn safe_rule_name(name: &str) -> Result<String, String> {
     let name = name.trim();
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains("..")
-    {
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return Err(format!("invalid rule name: '{name}'"));
     }
     Ok(name.to_string())
@@ -193,7 +189,7 @@ pub fn rules_list(project_dir: String) -> Result<Vec<RuleFile>, String> {
             path: path.display().to_string(),
         });
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     Ok(out)
 }
 
@@ -371,10 +367,7 @@ pub async fn hooks_run(project_dir: String, command: String) -> Result<HookRunRe
 }
 
 /// Spawn a shell command rooted at `cwd`, capturing stdout/stderr with a timeout.
-pub async fn run_hook_command(
-    cwd: &str,
-    command: &str,
-) -> Result<HookRunResult, std::io::Error> {
+pub async fn run_hook_command(cwd: &str, command: &str) -> Result<HookRunResult, std::io::Error> {
     use tokio::process::Command;
 
     #[cfg(windows)]
@@ -395,21 +388,19 @@ pub async fn run_hook_command(
     cmd.stderr(std::process::Stdio::piped());
 
     let child = cmd.spawn()?;
-    let out = match tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        child.wait_with_output(),
-    )
-    .await
-    {
-        Ok(res) => res?,
-        Err(_) => {
-            return Ok(HookRunResult {
-                exit_code: -1,
-                stdout: String::new(),
-                stderr: "hook timed out after 10s".to_string(),
-            });
-        }
-    };
+    let out =
+        match tokio::time::timeout(std::time::Duration::from_secs(10), child.wait_with_output())
+            .await
+        {
+            Ok(res) => res?,
+            Err(_) => {
+                return Ok(HookRunResult {
+                    exit_code: -1,
+                    stdout: String::new(),
+                    stderr: "hook timed out after 10s".to_string(),
+                });
+            }
+        };
 
     Ok(HookRunResult {
         exit_code: out.status.code().unwrap_or(-1),
@@ -428,7 +419,11 @@ pub async fn run_event_hooks(workspace_root: &str, event: &str) -> Option<String
     }
     let config = hooks_get(trimmed.to_string()).ok()?;
     let mut blocks: Vec<String> = Vec::new();
-    for hook in config.hooks.iter().filter(|h| h.enabled && h.event == event) {
+    for hook in config
+        .hooks
+        .iter()
+        .filter(|h| h.enabled && h.event == event)
+    {
         if hook.command.trim().is_empty() {
             continue;
         }

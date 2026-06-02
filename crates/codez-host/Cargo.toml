@@ -9,8 +9,8 @@ name = "codez-host"
 path = "src/main.rs"
 
 [dependencies]
-pisci-core = { workspace = true }
-pisci-kernel = { workspace = true }
+piscis-core = { workspace = true }
+piscis-kernel = { workspace = true }
 
 [lints]
 workspace = true

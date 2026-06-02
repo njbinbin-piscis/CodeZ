@@ -10,9 +10,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pisci_kernel::agent::plan::PlanStore;
-use pisci_kernel::agent::tool::{Tool, ToolContext, ToolResult};
-use pisci_kernel::store::settings::Settings;
+use piscis_kernel::agent::plan::PlanStore;
+use piscis_kernel::agent::tool::{Tool, ToolContext, ToolResult};
+use piscis_kernel::store::settings::Settings;
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
@@ -20,7 +20,7 @@ use crate::commands::chat_turn::run_subagent_research;
 use crate::lsp::manager::LspManager;
 
 pub struct DelegateTool {
-    pub db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    pub db: Arc<Mutex<piscis_kernel::store::db::Database>>,
     pub settings: Arc<Mutex<Settings>>,
     pub plan_store: PlanStore,
     pub lsp_manager: Arc<LspManager>,
@@ -92,9 +92,9 @@ impl Tool for DelegateTool {
         .await;
 
         match findings {
-            Ok(text) if text.trim().is_empty() => {
-                Ok(ToolResult::ok("[sub-agent returned no findings]".to_string()))
-            }
+            Ok(text) if text.trim().is_empty() => Ok(ToolResult::ok(
+                "[sub-agent returned no findings]".to_string(),
+            )),
             Ok(text) => Ok(ToolResult::ok(format!("Sub-agent findings:\n\n{text}"))),
             Err(e) => Ok(ToolResult::err(format!("delegate failed: {e}"))),
         }

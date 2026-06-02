@@ -117,7 +117,7 @@ const zh = {
     configuredOk: "LLM 已配置，Chat 可用",
     configuredMissing: "尚未配置 API Key，请先填写下方密钥",
     configDir: "配置文件目录",
-    configDirHint: "可通过环境变量 CODEZ_CONFIG_DIR 指向 openpisci 等已有配置目录。",
+    configDirHint: "可通过环境变量 CODEZ_CONFIG_DIR 指向 openpiscis 等已有配置目录。",
     aiProvider: "模型提供商",
     provider: "Provider",
     model: "Model",

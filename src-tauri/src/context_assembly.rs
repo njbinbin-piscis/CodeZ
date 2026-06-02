@@ -2,7 +2,7 @@
 //!
 //! Previously CodeZ handed the kernel the latest ~500 DB rows as plain text and
 //! relied solely on the kernel's in-loop compaction. This module mirrors
-//! openpisci's host pre-assembly so the *first* request of a (resumed) session
+//! openpiscis's host pre-assembly so the *first* request of a (resumed) session
 //! is already controlled:
 //!
 //! 1. Reconstruct each DB row into a real [`LlmMessage`] — honouring
@@ -16,13 +16,13 @@
 //! window constants). Compaction *policy* therefore lives here in the host —
 //! the direction we want long-term, where hosts assemble their own strategy.
 
-use pisci_kernel::agent::compaction::{
+use piscis_kernel::agent::compaction::{
     CTX_COMPACT_AFTER, CTX_FULL_TURNS, CTX_TRIM_HEAD, CTX_TRIM_TAIL,
 };
-use pisci_kernel::agent::message_utils::rolling_summary_message;
-use pisci_kernel::agent::state_frame::{state_frame_message, StateFrame};
-use pisci_kernel::llm::{estimate_message_tokens, ContentBlock, LlmMessage, MessageContent};
-use pisci_kernel::store::db::ChatMessage;
+use piscis_kernel::agent::message_utils::rolling_summary_message;
+use piscis_kernel::agent::state_frame::{state_frame_message, StateFrame};
+use piscis_kernel::llm::{estimate_message_tokens, ContentBlock, LlmMessage, MessageContent};
+use piscis_kernel::store::db::ChatMessage;
 
 /// A conversation turn: one real user message and its following agent messages.
 struct Turn {
@@ -121,9 +121,7 @@ pub fn build_context_messages(
     rolling_summary: Option<&str>,
     state_frame: Option<&StateFrame>,
 ) -> Vec<LlmMessage> {
-    let summary = rolling_summary
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let summary = rolling_summary.map(str::trim).filter(|s| !s.is_empty());
 
     let turns = split_turns(history);
     let total = turns.len();
@@ -174,7 +172,11 @@ pub fn build_context_messages(
     }
     if let Some(frame) = state_frame {
         // Right after the summary (if any), else at the very top.
-        let at = if summary.is_some() { 1.min(out.len()) } else { 0 };
+        let at = if summary.is_some() {
+            1.min(out.len())
+        } else {
+            0
+        };
         out.insert(at, state_frame_message(frame));
     }
     for group in groups {

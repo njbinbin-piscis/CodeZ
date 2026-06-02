@@ -1,4 +1,4 @@
-//! ClawHub marketplace — search and install SKILL.md packages (from openpisci).
+//! ClawHub marketplace — search and install SKILL.md packages (from openpiscis).
 
 use std::io::Read;
 use std::path::Path;
@@ -116,7 +116,8 @@ fn extract_skill_md_from_zip(zip_bytes: &[u8]) -> Result<String, String> {
         let name = file.name().to_lowercase();
         if name == "skill.md" || name.ends_with("/skill.md") {
             let mut content = String::new();
-            file.read_to_string(&mut content).map_err(|e| e.to_string())?;
+            file.read_to_string(&mut content)
+                .map_err(|e| e.to_string())?;
             return Ok(content);
         }
     }
@@ -157,7 +158,10 @@ fn extract_zip_to_dir(zip_bytes: &[u8], dest: &Path) -> Result<String, String> {
 
 /// Search ClawHub for skills.
 #[tauri::command]
-pub async fn clawhub_search(query: String, limit: Option<u32>) -> Result<ClawHubSearchResult, String> {
+pub async fn clawhub_search(
+    query: String,
+    limit: Option<u32>,
+) -> Result<ClawHubSearchResult, String> {
     let limit = limit.unwrap_or(20).min(50);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -282,7 +286,10 @@ pub async fn clawhub_install(
         };
         let zip_resp = clawhub_get_with_retry(&client, &zip_url, 3).await?;
         if !zip_resp.status().is_success() {
-            return Err(format!("ClawHub install failed for '{slug}': HTTP {}", zip_resp.status()));
+            return Err(format!(
+                "ClawHub install failed for '{slug}': HTTP {}",
+                zip_resp.status()
+            ));
         }
         let bytes = zip_resp.bytes().await.map_err(|e| e.to_string())?;
         if extract_zip_to_dir(&bytes, &skill_dir).is_ok() {

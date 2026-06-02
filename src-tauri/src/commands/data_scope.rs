@@ -1,4 +1,4 @@
-//! Project-local chat storage — sessions live in `{project}/.codez/pisci.db`.
+//! Project-local chat storage — sessions live in `{project}/.codez/piscis.db`.
 //! LLM settings (`config.json`) always load from the global config dir.
 
 use std::path::{Path, PathBuf};
@@ -9,14 +9,14 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
-use pisci_kernel::headless::KernelState;
-use pisci_kernel::store::db::Database;
-use pisci_kernel::store::settings::Settings;
+use piscis_kernel::headless::KernelState;
+use piscis_kernel::store::db::Database;
+use piscis_kernel::store::settings::Settings;
 
 /// Project-local directory for CodeZ session data.
 pub const PROJECT_DATA_DIR: &str = ".codez";
 
-/// Session source tag written into `pisci.db` (shared by IDE + Agent).
+/// Session source tag written into `piscis.db` (shared by IDE + Agent).
 pub const SESSION_SOURCE: &str = "codez";
 
 /// Global directory holding `config.json`.
@@ -59,7 +59,7 @@ fn open_kernel_state_split(config_dir: &Path, db_dir: &Path) -> anyhow::Result<K
         .with_context(|| format!("failed to create config dir {}", config_dir.display()))?;
     std::fs::create_dir_all(db_dir)
         .with_context(|| format!("failed to create db dir {}", db_dir.display()))?;
-    let db_path = db_dir.join("pisci.db");
+    let db_path = db_dir.join("piscis.db");
     let db = Database::open(&db_path)
         .with_context(|| format!("failed to open DB at {}", db_path.display()))?;
     let config_path = config_dir.join("config.json");
@@ -69,7 +69,10 @@ fn open_kernel_state_split(config_dir: &Path, db_dir: &Path) -> anyhow::Result<K
 }
 
 /// Global LLM settings + project-local session database.
-pub fn open_project_kernel_state(app: &AppHandle, project_dir: &str) -> Result<KernelState, String> {
+pub fn open_project_kernel_state(
+    app: &AppHandle,
+    project_dir: &str,
+) -> Result<KernelState, String> {
     let config_dir = resolve_global_config_dir(app)?;
     let db_dir = resolve_project_data_dir(project_dir)?;
     open_kernel_state_split(&config_dir, &db_dir)

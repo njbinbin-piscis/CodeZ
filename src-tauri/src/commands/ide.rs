@@ -3,7 +3,7 @@
 //!
 //! All commands are registered as Tauri commands by `app::bootstrap`.
 
-use pisci_kernel::proc::tokio_command;
+use piscis_kernel::proc::tokio_command;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -570,7 +570,11 @@ async fn try_ripgrep(
             // Support comma/space separated exclude globs.
             for g in ex.split([',', ' ']).filter(|s| !s.trim().is_empty()) {
                 let g = g.trim();
-                let neg = if g.starts_with('!') { g.to_string() } else { format!("!{g}") };
+                let neg = if g.starts_with('!') {
+                    g.to_string()
+                } else {
+                    format!("!{g}")
+                };
                 cmd.arg("--glob").arg(neg);
             }
         }
@@ -1429,7 +1433,7 @@ pub async fn ide_stop_watcher(
 
 /// Build a `git` command that never opens a console window on Windows.
 ///
-/// Thin wrapper over [`pisci_kernel::proc::tokio_command`] kept as a named
+/// Thin wrapper over [`piscis_kernel::proc::tokio_command`] kept as a named
 /// helper so all git invocations remain grep-able.
 fn new_git_cmd() -> Command {
     tokio_command("git")

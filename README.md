@@ -10,7 +10,7 @@ A Cursor-like **AI IDE** with two first-class modes, built on the shared
   autonomously in an isolated git worktree (plan → edit → test → iterate),
   then you review the diff / open a PR.
 
-Both modes reuse one kernel (`pisci-core` + `pisci-kernel`) so the editor
+Both modes reuse one kernel (`piscis-core` + `piscis-kernel`) so the editor
 副驾 and the autonomous agent behave identically.
 
 ## Status
@@ -18,13 +18,13 @@ Both modes reuse one kernel (`pisci-core` + `pisci-kernel`) so the editor
 **M0 — dual-mode shell + IDE workspace + Tauri host (done).** The frontend is
 a Vite + React + TypeScript app with a top-level **IDE / Agent** mode switch.
 The IDE workspace (Monaco editor, file tree, tabs, integrated terminal, Git
-panel, search, LSP bridge) is ported from openpisci's `Pond/IDE` and decoupled
+panel, search, LSP bridge) is ported from openpiscis's `Pond/IDE` and decoupled
 from the chat Pool — it now takes a standalone `projectDir`. The `src-tauri`
 host implements the IDE commands (file I/O, git, search, PTY terminal, file
 watcher, LSP ↔ WebSocket bridge) plus `open_path`.
 
 **M1 — AI chat sidebar (done).** IDE mode has a chat panel that drives a single
-agent turn on the kernel via `pisci_kernel::headless::run_pisci_turn`. The
+agent turn on the kernel via `piscis_kernel::headless::run_piscis_turn`. The
 backend `chat_send` command streams `AgentEvent`s (text + tool calls) to the UI
 over a Tauri event channel; the agent edits files in place with its own tools
 and the IDE's file watcher reloads them. Reference files in a prompt with
@@ -35,7 +35,7 @@ GitHub-flavored markdown with syntax-highlighted, copyable code blocks. The chat
 panel has a session sidebar (`☰` list / switch / delete, `＋` new, `⑂` fork —
 fork copies the current session's messages into a fresh one), queues messages
 typed while the agent is busy, and shows a **Stop** button that cancels the
-in-flight turn via the engine's `run_pisci_turn_cancellable` hook. The editor
+in-flight turn via the engine's `run_piscis_turn_cancellable` hook. The editor
 supports **Cmd-K inline edit**: select code, press ⌘K/Ctrl-K, type an
 instruction, and a single-shot LLM transform (`inline_edit`, no agent loop) is
 applied in place as a true inline diff — new lines highlighted green with the
@@ -97,8 +97,8 @@ picks a fast model for plan mode and a stronger one for agent mode.
 ### Configuration
 
 The chat agent reads `config.json` (LLM provider + API key + model) and writes
-`pisci.db` in the app-data dir for `com.codez.desktop`, or in `$CODEZ_CONFIG_DIR`
-if set (you can point this at an existing openpisci config dir). Without a
+`piscis.db` in the app-data dir for `com.codez.desktop`, or in `$CODEZ_CONFIG_DIR`
+if set (you can point this at an existing openpiscis config dir). Without a
 configured API key, `chat_send` returns a clear error.
 
 ## Layout

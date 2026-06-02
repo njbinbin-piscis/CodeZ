@@ -117,7 +117,7 @@ const en = {
     configuredOk: "LLM configured — Chat is ready",
     configuredMissing: "No API key yet — fill in a key below",
     configDir: "Config directory",
-    configDirHint: "Set env var CODEZ_CONFIG_DIR to reuse an existing openpisci config directory.",
+    configDirHint: "Set env var CODEZ_CONFIG_DIR to reuse an existing openpiscis config directory.",
     aiProvider: "Model provider",
     provider: "Provider",
     model: "Model",

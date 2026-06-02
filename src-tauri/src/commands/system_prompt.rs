@@ -1,5 +1,5 @@
 //! CodeZ agent system prompts — behaviour rules distilled from Cursor-style
-//! operational guidance and Pisci collaboration principles.
+//! operational guidance and Piscis collaboration principles.
 
 /// Main Agent-mode system prompt. `extra_context` carries skills, project
 /// rules, and caller-supplied sections appended after the static body.
@@ -14,7 +14,7 @@ pub fn agent_system_prompt(
     let workspace_line = workspace_section(workspace_root, allow_outside);
 
     let mut body = format!(
-        "You are Pisci, an AI coding assistant embedded in CodeZ IDE.\n\
+        "You are Piscis, an AI coding assistant embedded in CodeZ IDE.\n\
          Today's date: {today}{workspace_line}\n\n\
          ## Goal\n\
          Follow the user's instructions. Each user message is a task to complete.\n\n\

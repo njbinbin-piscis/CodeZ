@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 
-use pisci_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
+use piscis_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
 
 use crate::commands::chat_turn::run_codez_turn;
 use crate::commands::data_scope::{open_project_kernel_state, require_project_dir, SESSION_SOURCE};
@@ -77,11 +77,7 @@ pub async fn chat_send(
     workspace_dir: Option<String>,
     task_key: Option<String>,
 ) -> Result<ChatResult, String> {
-    let project = require_project_dir(
-        project_dir
-            .as_deref()
-            .or(workspace.as_deref()),
-    )?;
+    let project = require_project_dir(project_dir.as_deref().or(workspace.as_deref()))?;
     // When an isolated worktree is provided, the agent works inside it (and the
     // journal tracks its files) while sessions stay in the main project's DB.
     let agent_workspace = workspace_dir
@@ -130,7 +126,7 @@ pub async fn chat_send(
     let request = HeadlessCliRequest {
         prompt,
         workspace: Some(agent_workspace.clone()),
-        mode: HeadlessCliMode::Pisci,
+        mode: HeadlessCliMode::Piscis,
         session_id,
         session_title: Some("CodeZ chat".to_string()),
         channel: Some(SESSION_SOURCE.to_string()),
@@ -181,11 +177,7 @@ pub async fn chat_cancel(
     state: State<'_, AppState>,
     task_key: Option<String>,
 ) -> Result<(), String> {
-    match task_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|k| !k.is_empty())
-    {
+    match task_key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
         Some(key) => {
             if let Some(flag) = state.task_cancel.lock().await.get(key) {
                 flag.store(true, Ordering::SeqCst);

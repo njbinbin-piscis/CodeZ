@@ -6,7 +6,7 @@
 //! is built lazily on first use and updated incrementally by the file watcher.
 
 use async_trait::async_trait;
-use pisci_kernel::agent::tool::{Tool, ToolContext, ToolResult};
+use piscis_kernel::agent::tool::{Tool, ToolContext, ToolResult};
 use serde_json::{json, Value};
 
 use crate::commands::codebase::search_index;
@@ -56,22 +56,20 @@ impl Tool for CodebaseSearchTool {
         if query.trim().is_empty() {
             return Ok(ToolResult::err("'query' parameter is required"));
         }
-        let limit = input
-            .get("limit")
-            .and_then(|l| l.as_u64())
-            .unwrap_or(12) as usize;
+        let limit = input.get("limit").and_then(|l| l.as_u64()).unwrap_or(12) as usize;
 
         let root = ctx.workspace_root.clone();
-        let hits = match tokio::task::spawn_blocking(move || search_index(&root, &query, limit))
-            .await
-        {
-            Ok(Ok(h)) => h,
-            Ok(Err(e)) => return Ok(ToolResult::err(format!("codebase_search failed: {e}"))),
-            Err(e) => return Ok(ToolResult::err(format!("codebase_search task failed: {e}"))),
-        };
+        let hits =
+            match tokio::task::spawn_blocking(move || search_index(&root, &query, limit)).await {
+                Ok(Ok(h)) => h,
+                Ok(Err(e)) => return Ok(ToolResult::err(format!("codebase_search failed: {e}"))),
+                Err(e) => return Ok(ToolResult::err(format!("codebase_search task failed: {e}"))),
+            };
 
         if hits.is_empty() {
-            return Ok(ToolResult::ok("No matching code found in the index.".to_string()));
+            return Ok(ToolResult::ok(
+                "No matching code found in the index.".to_string(),
+            ));
         }
 
         let mut out = format!("codebase_search: {} result(s)\n", hits.len());

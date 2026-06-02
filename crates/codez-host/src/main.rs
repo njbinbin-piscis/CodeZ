@@ -10,7 +10,7 @@
 
 fn main() {
     println!("CodeZ host — Cursor-like AI IDE on the piscis-engine kernel");
-    println!("kernel version: {}", pisci_kernel::KERNEL_VERSION);
+    println!("kernel version: {}", piscis_kernel::KERNEL_VERSION);
 
     // Touch the contracts crate so the host↔kernel boundary is real and
     // linked from day one. Hosts implement these traits to inject UI,
@@ -19,10 +19,10 @@ fn main() {
     println!("host contract: {_trait_check}");
 }
 
-/// Names the `pisci-core` host trait this skeleton will implement first.
+/// Names the `piscis-core` host trait this skeleton will implement first.
 fn describe_host_contract() -> &'static str {
-    // `pisci_core` is re-exported by the kernel as `pisci_kernel::core`, but
+    // `piscis_core` is re-exported by the kernel as `piscis_kernel::core`, but
     // we depend on it directly to make the intent explicit.
-    let _ = std::marker::PhantomData::<pisci_core::host::ToolRegistryHandle>;
-    "pisci_core::host::HostRuntime (EventSink + Notifier + HostTools + SecretsStore)"
+    let _ = std::marker::PhantomData::<piscis_core::host::ToolRegistryHandle>;
+    "piscis_core::host::HostRuntime (EventSink + Notifier + HostTools + SecretsStore)"
 }

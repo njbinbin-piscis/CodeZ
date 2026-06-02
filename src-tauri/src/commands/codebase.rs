@@ -6,7 +6,7 @@
 //! `@codebase` mention and the `codebase_search` agent tool real
 //! whole-repo recall without requiring an embedding-model API key. The schema
 //! is intentionally simple so an embedding column can be layered on later
-//! (reusing `pisci_kernel::memory::vector`).
+//! (reusing `piscis_kernel::memory::vector`).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -127,7 +127,9 @@ pub fn build_index(root: &Path) -> Result<usize, String> {
     let mut count = 0usize;
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     for file in &files {
-        let Ok(raw) = std::fs::read(file) else { continue };
+        let Ok(raw) = std::fs::read(file) else {
+            continue;
+        };
         if raw[..raw.len().min(8192)].contains(&0) {
             continue; // binary
         }
@@ -275,7 +277,11 @@ pub fn search_index(root: &Path, query: &str, limit: usize) -> Result<Vec<CodeSe
         });
     }
 
-    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     hits.truncate(limit.clamp(1, 50));
     Ok(hits)
 }

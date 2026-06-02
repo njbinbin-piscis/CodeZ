@@ -11,8 +11,8 @@ use std::sync::Arc;
 use serde_json::Value;
 use tokio::sync::{oneshot, Mutex, Semaphore};
 
-use pisci_kernel::agent::plan::new_plan_store;
-use pisci_kernel::agent::plan::PlanStore;
+use piscis_kernel::agent::plan::new_plan_store;
+use piscis_kernel::agent::plan::PlanStore;
 
 use crate::commands::ide::TerminalRegistry;
 use crate::lsp::manager::LspManager;

@@ -4,7 +4,7 @@ use rusqlite::params;
 use serde::Serialize;
 use tauri::AppHandle;
 
-use pisci_kernel::store::db::{ChatMessage, Database};
+use piscis_kernel::store::db::{ChatMessage, Database};
 
 use crate::commands::data_scope::{open_project_kernel_state, ProjectDirParam, SESSION_SOURCE};
 
@@ -93,7 +93,9 @@ fn copy_messages_to_session(
             }
         }
         if !found {
-            return Err(format!("checkpoint message '{target}' not found in session"));
+            return Err(format!(
+                "checkpoint message '{target}' not found in session"
+            ));
         }
     } else {
         for m in msgs {
@@ -110,25 +112,21 @@ pub async fn chat_list_sessions(
     app: AppHandle,
     project_dir: Option<String>,
 ) -> Result<Vec<SessionMeta>, String> {
-    with_db(
-        &app,
-        ProjectDirParam { project_dir },
-        |db| {
-            let sessions = db
-                .list_sessions(200, 0)
-                .map_err(|e| format!("list_sessions failed: {e}"))?;
-            Ok(sessions
-                .into_iter()
-                .map(|s| SessionMeta {
-                    id: s.id,
-                    title: s.title,
-                    status: s.status,
-                    message_count: s.message_count,
-                    updated_at: s.updated_at.to_rfc3339(),
-                })
-                .collect())
-        },
-    )
+    with_db(&app, ProjectDirParam { project_dir }, |db| {
+        let sessions = db
+            .list_sessions(200, 0)
+            .map_err(|e| format!("list_sessions failed: {e}"))?;
+        Ok(sessions
+            .into_iter()
+            .map(|s| SessionMeta {
+                id: s.id,
+                title: s.title,
+                status: s.status,
+                message_count: s.message_count,
+                updated_at: s.updated_at.to_rfc3339(),
+            })
+            .collect())
+    })
     .await
 }
 
@@ -139,20 +137,16 @@ pub async fn chat_get_messages(
     session_id: String,
     project_dir: Option<String>,
 ) -> Result<Vec<MessageDto>, String> {
-    with_db(
-        &app,
-        ProjectDirParam { project_dir },
-        |db| {
-            Ok(messages_chronological(db, &session_id)?
-                .into_iter()
-                .map(|m| MessageDto {
-                    id: m.id,
-                    role: m.role,
-                    content: m.content,
-                })
-                .collect())
-        },
-    )
+    with_db(&app, ProjectDirParam { project_dir }, |db| {
+        Ok(messages_chronological(db, &session_id)?
+            .into_iter()
+            .map(|m| MessageDto {
+                id: m.id,
+                role: m.role,
+                content: m.content,
+            })
+            .collect())
+    })
     .await
 }
 
@@ -165,47 +159,38 @@ pub async fn chat_fork_session(
     up_to_message_id: Option<String>,
     project_dir: Option<String>,
 ) -> Result<SessionMeta, String> {
-    with_db(
-        &app,
-        ProjectDirParam { project_dir },
-        |db| {
-            let source = db
-                .get_session(&session_id)
-                .map_err(|e| format!("get_session failed: {e}"))?
-                .ok_or_else(|| format!("session '{session_id}' not found"))?;
+    with_db(&app, ProjectDirParam { project_dir }, |db| {
+        let source = db
+            .get_session(&session_id)
+            .map_err(|e| format!("get_session failed: {e}"))?
+            .ok_or_else(|| format!("session '{session_id}' not found"))?;
 
-            let fork_title = title.unwrap_or_else(|| {
-                let base = source.title.unwrap_or_else(|| "Chat".to_string());
-                if up_to_message_id.is_some() {
-                    format!("{base} (fork @ checkpoint)")
-                } else {
-                    format!("{base} (fork)")
-                }
-            });
-            let created = db
-                .create_session_with_source(Some(&fork_title), SESSION_SOURCE)
-                .map_err(|e| format!("create_session failed: {e}"))?;
+        let fork_title = title.unwrap_or_else(|| {
+            let base = source.title.unwrap_or_else(|| "Chat".to_string());
+            if up_to_message_id.is_some() {
+                format!("{base} (fork @ checkpoint)")
+            } else {
+                format!("{base} (fork)")
+            }
+        });
+        let created = db
+            .create_session_with_source(Some(&fork_title), SESSION_SOURCE)
+            .map_err(|e| format!("create_session failed: {e}"))?;
 
-            copy_messages_to_session(
-                db,
-                &session_id,
-                &created.id,
-                up_to_message_id.as_deref(),
-            )?;
+        copy_messages_to_session(db, &session_id, &created.id, up_to_message_id.as_deref())?;
 
-            let refreshed = db
-                .get_session(&created.id)
-                .map_err(|e| format!("get_session failed: {e}"))?
-                .unwrap_or(created);
-            Ok(SessionMeta {
-                id: refreshed.id,
-                title: refreshed.title,
-                status: refreshed.status,
-                message_count: refreshed.message_count,
-                updated_at: refreshed.updated_at.to_rfc3339(),
-            })
-        },
-    )
+        let refreshed = db
+            .get_session(&created.id)
+            .map_err(|e| format!("get_session failed: {e}"))?
+            .unwrap_or(created);
+        Ok(SessionMeta {
+            id: refreshed.id,
+            title: refreshed.title,
+            status: refreshed.status,
+            message_count: refreshed.message_count,
+            updated_at: refreshed.updated_at.to_rfc3339(),
+        })
+    })
     .await
 }
 
@@ -227,31 +212,27 @@ pub async fn chat_restore_checkpoint(
     }
     .required()?;
 
-    with_db(
-        &app,
-        ProjectDirParam { project_dir },
-        |db| {
-            let rowid: i64 = db
-                .conn
-                .query_row(
-                    "SELECT rowid FROM messages WHERE id = ?1 AND session_id = ?2",
-                    params![message_id, session_id],
-                    |r| r.get(0),
-                )
-                .map_err(|e| format!("checkpoint message not found: {e}"))?;
+    with_db(&app, ProjectDirParam { project_dir }, |db| {
+        let rowid: i64 = db
+            .conn
+            .query_row(
+                "SELECT rowid FROM messages WHERE id = ?1 AND session_id = ?2",
+                params![message_id, session_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| format!("checkpoint message not found: {e}"))?;
 
-            db.conn
-                .execute(
-                    "DELETE FROM messages WHERE session_id = ?1 AND rowid > ?2",
-                    params![session_id, rowid],
-                )
-                .map_err(|e| format!("delete messages failed: {e}"))?;
+        db.conn
+            .execute(
+                "DELETE FROM messages WHERE session_id = ?1 AND rowid > ?2",
+                params![session_id, rowid],
+            )
+            .map_err(|e| format!("delete messages failed: {e}"))?;
 
-            db.recompute_session_message_count(&session_id)
-                .map_err(|e| format!("recompute message count failed: {e}"))?;
-            Ok(())
-        },
-    )
+        db.recompute_session_message_count(&session_id)
+            .map_err(|e| format!("recompute message count failed: {e}"))?;
+        Ok(())
+    })
     .await?;
 
     if !restore_files.unwrap_or(false) {
@@ -278,13 +259,9 @@ pub async fn chat_delete_session(
     session_id: String,
     project_dir: Option<String>,
 ) -> Result<(), String> {
-    with_db(
-        &app,
-        ProjectDirParam { project_dir },
-        |db| {
-            db.delete_session(&session_id)
-                .map_err(|e| format!("delete_session failed: {e}"))
-        },
-    )
+    with_db(&app, ProjectDirParam { project_dir }, |db| {
+        db.delete_session(&session_id)
+            .map_err(|e| format!("delete_session failed: {e}"))
+    })
     .await
 }

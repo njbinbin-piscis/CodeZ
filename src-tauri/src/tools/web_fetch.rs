@@ -4,7 +4,7 @@
 //! read documentation, release notes, or API reference pages.
 
 use async_trait::async_trait;
-use pisci_kernel::agent::tool::{Tool, ToolContext, ToolResult};
+use piscis_kernel::agent::tool::{Tool, ToolContext, ToolResult};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -64,7 +64,9 @@ impl Tool for WebFetchTool {
             return Ok(ToolResult::err("'url' parameter is required"));
         }
         if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Ok(ToolResult::err("Only http:// and https:// URLs are supported"));
+            return Ok(ToolResult::err(
+                "Only http:// and https:// URLs are supported",
+            ));
         }
 
         let max_chars = input

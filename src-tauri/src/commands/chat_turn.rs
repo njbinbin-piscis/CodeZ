@@ -11,20 +11,20 @@ use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use tokio::sync::{mpsc, Mutex};
 
-use pisci_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest, HeadlessCliResponse};
-use pisci_kernel::agent::harness::config::{CompactionSettings, HarnessConfig};
-use pisci_kernel::agent::messages::AgentEvent;
-use pisci_kernel::agent::plan::PlanStore;
-use pisci_kernel::agent::tool::{
+use piscis_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest, HeadlessCliResponse};
+use piscis_kernel::agent::harness::config::{CompactionSettings, HarnessConfig};
+use piscis_kernel::agent::messages::AgentEvent;
+use piscis_kernel::agent::plan::PlanStore;
+use piscis_kernel::agent::tool::{
     new_tool_registry_handle, ToolContext, ToolRegistry, ToolRegistryHandleExt,
 };
 
 use crate::lsp::manager::LspManager;
-use pisci_kernel::headless::KernelState;
-use pisci_kernel::llm::{self, ContentBlock, LlmMessage, MessageContent};
-use pisci_kernel::policy::gate::PolicyGate;
-use pisci_kernel::store::settings::{LlmProviderConfig, Settings};
-use pisci_kernel::tools::NeutralToolsConfig;
+use piscis_kernel::headless::KernelState;
+use piscis_kernel::llm::{self, ContentBlock, LlmMessage, MessageContent};
+use piscis_kernel::policy::gate::PolicyGate;
+use piscis_kernel::store::settings::{LlmProviderConfig, Settings};
+use piscis_kernel::tools::NeutralToolsConfig;
 
 use super::chat::FrontendAttachment;
 use super::system_prompt::{agent_system_prompt, plan_mode_context, subagent_system_prompt};
@@ -392,12 +392,8 @@ fn codebase_context_block(raw: &str, workspace_root: &str) -> Option<String> {
         .filter(|w| !w.starts_with('@'))
         .collect::<Vec<_>>()
         .join(" ");
-    let hits = crate::commands::codebase::search_index(
-        std::path::Path::new(root),
-        &query,
-        8,
-    )
-    .ok()?;
+    let hits =
+        crate::commands::codebase::search_index(std::path::Path::new(root), &query, 8).ok()?;
     if hits.is_empty() {
         return None;
     }
@@ -451,7 +447,7 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
 
 fn build_tool_registry(
     app: tauri::AppHandle,
-    db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    db: Arc<Mutex<piscis_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     event_sink: Arc<dyn EventSink>,
     plan_store: PlanStore,
@@ -484,7 +480,7 @@ fn build_tool_registry(
     let db_for_delegate = cfg.db.clone();
     let settings_for_delegate = cfg.settings.clone();
     let plan_for_delegate = cfg.plan_store.clone();
-    pisci_kernel::tools::register_neutral_tools(&mut handle, &cfg);
+    piscis_kernel::tools::register_neutral_tools(&mut handle, &cfg);
 
     if let Some(registry) = handle.as_registry_mut() {
         registry.register(Box::new(crate::tools::lsp::LspTool {
@@ -533,7 +529,7 @@ fn build_tool_registry(
 /// mutate the workspace or recursively spawn more sub-agents.
 fn build_subagent_registry(
     app: tauri::AppHandle,
-    db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    db: Arc<Mutex<piscis_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     event_sink: Arc<dyn EventSink>,
     plan_store: PlanStore,
@@ -559,7 +555,7 @@ fn build_subagent_registry(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_subagent_research(
     app: tauri::AppHandle,
-    db: Arc<Mutex<pisci_kernel::store::db::Database>>,
+    db: Arc<Mutex<piscis_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     plan_store: PlanStore,
     lsp_manager: Arc<LspManager>,
@@ -604,7 +600,7 @@ pub(crate) async fn run_subagent_research(
             s.auto_compact_input_tokens_threshold,
             s.fallback_models.clone(),
             CompactionSettings::from_settings(&s),
-            Arc::new(pisci_kernel::agent::tool::ToolSettings::from_settings(&s)),
+            Arc::new(piscis_kernel::agent::tool::ToolSettings::from_settings(&s)),
         )
     };
 
@@ -653,7 +649,7 @@ pub(crate) async fn run_subagent_research(
         bypass_permissions: true,
         settings: tool_settings,
         max_iterations: Some(10),
-        memory_owner_id: "pisci".to_string(),
+        memory_owner_id: "piscis".to_string(),
         pool_session_id: None,
         tool_use_id: None,
         cancel: cancel.clone(),
@@ -710,10 +706,7 @@ fn inject_image_block(messages: &mut [LlmMessage], media_type: &str, data_b64: &
     if let Some(last) = messages.last_mut() {
         if last.role == "user" {
             let text = last.content.as_text();
-            let blocks = vec![
-                ContentBlock::Text { text },
-                image_block,
-            ];
+            let blocks = vec![ContentBlock::Text { text }, image_block];
             last.content = MessageContent::Blocks(blocks);
         }
     }
@@ -795,7 +788,10 @@ fn project_rules_context(workspace_root: &str) -> Option<String> {
     if workspace_root.trim().is_empty() {
         return None;
     }
-    let candidates = [root.join(".codez").join("rules"), root.join(".cursor").join("rules")];
+    let candidates = [
+        root.join(".codez").join("rules"),
+        root.join(".cursor").join("rules"),
+    ];
     let mut blocks = Vec::new();
     for dir in candidates.iter() {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -864,8 +860,8 @@ pub async fn run_codez_turn(
     journal: Arc<crate::journal::FileJournal>,
     config_dir: PathBuf,
 ) -> Result<HeadlessCliResponse> {
-    if !matches!(request.mode, HeadlessCliMode::Pisci) {
-        return Err(anyhow!("CodeZ chat only supports mode=pisci"));
+    if !matches!(request.mode, HeadlessCliMode::Piscis) {
+        return Err(anyhow!("CodeZ chat only supports mode=piscis"));
     }
 
     let (db, settings) = kernel;
@@ -932,7 +928,7 @@ pub async fn run_codez_turn(
     // it connects to stdio/SSE servers. Plan mode keeps them (read-context).
     let mcp_servers = { settings.lock().await.mcp_servers.clone() };
     if !mcp_servers.is_empty() {
-        pisci_kernel::tools::register_mcp_tools(&mut registry, &mcp_servers).await;
+        piscis_kernel::tools::register_mcp_tools(&mut registry, &mcp_servers).await;
     }
     let default_timeout = Duration::from_secs(600);
 
@@ -1010,7 +1006,7 @@ pub async fn run_codez_turn(
             s.auto_compact_input_tokens_threshold,
             s.fallback_models.clone(),
             CompactionSettings::from_settings(&s),
-            Arc::new(pisci_kernel::agent::tool::ToolSettings::from_settings(&s)),
+            Arc::new(piscis_kernel::agent::tool::ToolSettings::from_settings(&s)),
             s.max_iterations,
         )
     };
@@ -1019,10 +1015,12 @@ pub async fn run_codez_turn(
     // prepend the persisted rolling summary + state frame, and budget-trim —
     // instead of dumping raw rows and leaning entirely on in-loop compaction.
     let history_budget =
-        pisci_kernel::llm::compute_context_budget(context_window, runtime.max_tokens);
+        piscis_kernel::llm::compute_context_budget(context_window, runtime.max_tokens);
     let mut llm_messages: Vec<LlmMessage> = {
         let db = db.lock().await;
-        let history = db.get_messages_latest(&session_id, 2000).unwrap_or_default();
+        let history = db
+            .get_messages_latest(&session_id, 2000)
+            .unwrap_or_default();
         let rolling_summary = db
             .get_session_context_state(&session_id)
             .ok()
@@ -1033,7 +1031,7 @@ pub async fn run_codez_turn(
             .get_session_state_frame_json(&session_id)
             .ok()
             .flatten()
-            .and_then(|raw| pisci_kernel::agent::state_frame::StateFrame::from_json_opt(&raw));
+            .and_then(|raw| piscis_kernel::agent::state_frame::StateFrame::from_json_opt(&raw));
         crate::context_assembly::build_context_messages(
             &history,
             history_budget,
@@ -1141,7 +1139,7 @@ pub async fn run_codez_turn(
         bypass_permissions: true,
         settings: tool_settings,
         max_iterations: Some(max_iterations),
-        memory_owner_id: "pisci".to_string(),
+        memory_owner_id: "piscis".to_string(),
         pool_session_id: None,
         tool_use_id: None,
         cancel: cancel.clone(),
@@ -1199,11 +1197,7 @@ pub async fn run_codez_turn(
             serde_json::json!({"ok": false, "error": err}),
         );
     } else {
-        event_sink.emit_session(
-            &session_id,
-            "agent_final",
-            serde_json::json!({"ok": true}),
-        );
+        event_sink.emit_session(&session_id, "agent_final", serde_json::json!({"ok": true}));
     }
 
     if let Some(snap) = settings_snapshot {
@@ -1228,7 +1222,7 @@ pub async fn run_codez_turn(
 
     Ok(HeadlessCliResponse {
         ok,
-        mode: HeadlessCliMode::Pisci.as_str().to_string(),
+        mode: HeadlessCliMode::Piscis.as_str().to_string(),
         session_id,
         pool_id: None,
         response_text,

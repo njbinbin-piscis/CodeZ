@@ -21,7 +21,7 @@ pub async fn open_path(path: String) -> Result<(), String> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let program = "xdg-open";
 
-    pisci_kernel::proc::tokio_command(program)
+    piscis_kernel::proc::tokio_command(program)
         .arg(&path)
         .spawn()
         .map_err(|e| format!("Failed to open '{path}': {e}"))?;
