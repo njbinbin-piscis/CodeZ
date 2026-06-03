@@ -829,6 +829,25 @@ fn project_rules_context(workspace_root: &str) -> Option<String> {
     Some(format!("## Project rules\n{}", blocks.join("\n\n")))
 }
 
+/// When `.codez/REPO_WIKI.md` exists, tell the agent where to read architecture context.
+fn repo_wiki_context(workspace_root: &str) -> Option<String> {
+    let root = std::path::Path::new(workspace_root.trim());
+    if workspace_root.trim().is_empty() {
+        return None;
+    }
+    let wiki = root.join(".codez").join("REPO_WIKI.md");
+    if !wiki.is_file() {
+        return None;
+    }
+    Some(
+        "## Repository wiki\n\
+         A generated module/architecture overview is available at `.codez/REPO_WIKI.md`. \
+         Read it with `file_read` when you need repo structure, module layout, or onboarding context \
+         (especially after the user generates or refreshes the Repo Wiki)."
+            .to_string(),
+    )
+}
+
 pub async fn run_codez_turn(
     app: tauri::AppHandle,
     mut request: HeadlessCliRequest,
@@ -1065,6 +1084,9 @@ pub async fn run_codez_turn(
     }
     if let Some(rules) = project_rules_context(&workspace_root) {
         extra_sections.push(rules);
+    }
+    if let Some(wiki) = repo_wiki_context(&workspace_root) {
+        extra_sections.push(wiki);
     }
     // Run user-defined `beforeAgentTurn` hooks and inject their output as
     // additional system context (project hooks.json, M6+).

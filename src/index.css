@@ -1,4 +1,5 @@
-:root {
+:root,
+[data-theme="dark"] {
   /* App shell (titlebar, chat, agent) */
   --bg: #0e0e14;
   --bg-elev: #14141c;
@@ -9,7 +10,7 @@
   --accent: #7c6af7;
   --accent-dim: rgba(124, 106, 247, 0.15);
 
-  /* IDE workspace theme (ported from openpisci violet — IDE.css depends on these) */
+  /* IDE workspace theme */
   --bg-primary: #0f0f13;
   --bg-secondary: #1a1a22;
   --bg-tertiary: #242430;
@@ -29,6 +30,32 @@
   --font-mono: "Cascadia Code", "Fira Code", Consolas, monospace;
 
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #f4f4f8;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #ececf4;
+  --border: #d4d4e0;
+  --text: #1a1a24;
+  --text-dim: #5c5c72;
+  --accent: #6b58e8;
+  --accent-dim: rgba(107, 88, 232, 0.12);
+
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #ececf2;
+  --bg-hover: #e2e2ec;
+  --text-primary: #1a1a24;
+  --text-secondary: #4a4a62;
+  --text-muted: #787890;
+  --accent-hover: #5846d8;
+  --accent-glow: 0 0 16px rgba(107, 88, 232, 0.18);
+  --sidebar-bg: #f0f0f6;
+  --sidebar-border: #d8d8e4;
+  --scrollbar-thumb: #b8b8cc;
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }

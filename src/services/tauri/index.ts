@@ -15,8 +15,12 @@ export function openPath(path: string): Promise<void> {
 }
 
 /** Prompt the user to choose a project directory. Returns null if cancelled. */
-export async function openFolderDialog(): Promise<string | null> {
-  const selected = await open({ directory: true, multiple: false });
+export async function openFolderDialog(defaultPath?: string | null): Promise<string | null> {
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    defaultPath: defaultPath ?? undefined,
+  });
   if (typeof selected === "string") return selected;
   return null;
 }

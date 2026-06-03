@@ -30,11 +30,36 @@ export function ChatIcon(props: IconProps) {
   );
 }
 
-/** Settings / preferences. */
+/** Open / change project folder. */
+export function FolderIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path
+        d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"
+        strokeLinejoin="round"
+      />
+    </SvgIcon>
+  );
+}
+
+/** Settings / preferences (gear). */
 export function SettingsIcon(props: IconProps) {
   return (
     <SvgIcon {...props}>
+      <path
+        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+        strokeLinejoin="round"
+      />
       <circle cx="12" cy="12" r="3" />
+    </SvgIcon>
+  );
+}
+
+/** Switch to light appearance. */
+export function SunIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="4" />
       <path
         d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
         strokeLinecap="round"
@@ -43,24 +68,23 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
-/** VS Code extensions (.vsix). */
-export function ExtensionsIcon(props: IconProps) {
+/** Switch to dark appearance. */
+export function MoonIcon(props: IconProps) {
   return (
     <SvgIcon {...props}>
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <path d="M14 17.5h7M17.5 14v7" strokeLinecap="round" />
+      <path
+        d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"
+        strokeLinejoin="round"
+      />
     </SvgIcon>
   );
 }
 
-/** ClawHub skills marketplace. */
-export function ClawHubIcon(props: IconProps) {
+/** Close / dismiss (e.g. close open project folder). */
+export function CloseIcon(props: IconProps) {
   return (
     <SvgIcon {...props}>
-      <path d="M12 3l2.2 4.5 5 .7-3.6 3.5.9 5.1L12 14.8 7.5 16.8l.9-5.1L4.8 8.2l5-.7L12 3z" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="9" opacity="0.35" />
+      <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
     </SvgIcon>
   );
 }

@@ -29,6 +29,8 @@ interface IDEProps {
   onSendToChat?: (paths: string[]) => void;
   /** Open a workspace-relative file when the path or nonce changes. */
   openPathRequest?: { path: string; nonce: number } | null;
+  /** Called after `openPathRequest` has been consumed (clears parent state). */
+  onOpenPathRequestHandled?: () => void;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -50,7 +52,7 @@ function collectSelectedFilePaths(nodes: FileNode[], selected: Set<string>): str
   return out;
 }
 
-export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRequest }: IDEProps) {
+export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRequest, onOpenPathRequestHandled }: IDEProps) {
   const { t } = useTranslation();
 
   // File tree
@@ -101,6 +103,22 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
   activeTabPathRef.current = activeTabPath;
   const projectDirRef = useRef<string | null>(projectDir);
   projectDirRef.current = projectDir;
+  const handledOpenPathNonce = useRef(0);
+  const openFileRef = useRef<(path: string, readOnly?: boolean) => Promise<void>>(async () => {});
+
+  // Reset editor state when the project folder changes or is closed.
+  useEffect(() => {
+    handledOpenPathNonce.current = 0;
+    setTabs([]);
+    setActiveTabPath(null);
+    setFileLoadError(null);
+    setReveal(null);
+    setFileTree([]);
+    setGitModified(new Set());
+    setGitAdded(new Set());
+    setFileTreeSelection(new Set());
+    setShowTerminal(false);
+  }, [projectDir]);
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) || null;
 
@@ -311,10 +329,16 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
     [projectDir, tabs, t],
   );
 
+  openFileRef.current = openFile;
+
   useEffect(() => {
     if (!openPathRequest?.path || !projectDir) return;
-    void openFile(openPathRequest.path);
-  }, [openPathRequest?.nonce, openPathRequest?.path, projectDir, openFile]);
+    if (openPathRequest.nonce <= handledOpenPathNonce.current) return;
+    handledOpenPathNonce.current = openPathRequest.nonce;
+    void openFileRef.current(openPathRequest.path).finally(() => {
+      onOpenPathRequestHandled?.();
+    });
+  }, [openPathRequest?.nonce, openPathRequest?.path, projectDir, onOpenPathRequestHandled]);
 
   const setTabViewMode = useCallback((path: string, mode: TabViewMode) => {
     setTabs((prev) =>
@@ -626,14 +650,6 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
     <div className="pond-ide" ref={ideRef}>
       {/* Activity bar (icon strip) */}
       <div className="ide-activity-bar">
-        <button
-          className={`ide-activity-open-folder ${!projectDir ? "prominent" : ""}`}
-          onClick={onOpenFolder}
-          title={projectDir ? (t("ide.changeFolder") || "Change Folder") : (t("ide.openFolder") || "Open Folder")}
-        >
-          <span className="activity-label-open">{projectDir ? t("app.activityChange") : t("app.activityOpen")}</span>
-        </button>
-        <div className="ide-activity-sep" />
         <button
           className={sidebarTab === "explorer" && !sidebarCollapsed ? "active" : ""}
           onClick={() => switchSidebarTab("explorer")}

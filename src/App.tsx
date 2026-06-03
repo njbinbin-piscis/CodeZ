@@ -5,17 +5,23 @@ import { generateRepoWiki } from "./services/tauri/repoWiki";
 import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/ide/Terminal";
 import { getSettings } from "./services/tauri/settings";
 import { setLanguage } from "./i18n";
+import {
+  getAppearanceTheme,
+  toggleAppearanceTheme,
+  type AppearanceTheme,
+} from "./theme";
 import IdeWorkspace from "./workspaces/ide";
 import AgentWorkspace from "./workspaces/agent";
 import AssistantPanel from "./workspaces/ide/AssistantPanel";
-import ExtensionsPanel from "./workspaces/ide/ExtensionsPanel";
 import SettingsPanel from "./workspaces/ide/SettingsPanel";
-import ClawHubPanel from "./workspaces/agent/ClawHubPanel";
+import ZLogo from "./components/ZLogo";
 import {
   ChatIcon,
-  ClawHubIcon,
-  ExtensionsIcon,
+  CloseIcon,
+  FolderIcon,
+  MoonIcon,
   SettingsIcon,
+  SunIcon,
   WikiIcon,
 } from "./components/TitleBarIcons";
 import "./App.css";
@@ -28,14 +34,13 @@ export default function App() {
   const [projectDir, setProjectDir] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
-  const [extOpen, setExtOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [clawHubOpen, setClawHubOpen] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
   const [wikiBusy, setWikiBusy] = useState(false);
   const [ideWikiOpenPath, setIdeWikiOpenPath] = useState<{ path: string; nonce: number } | null>(
     null,
   );
+  const [appearance, setAppearance] = useState<AppearanceTheme>(() => getAppearanceTheme());
 
   useEffect(() => {
     getSettings()
@@ -50,14 +55,24 @@ export default function App() {
   }, []);
 
   const pickFolder = useCallback(async () => {
-    const dir = await openFolderDialog();
+    const dir = await openFolderDialog(projectDir);
     if (!dir) return;
     if (projectDir && dir !== projectDir) {
       const ok = await confirmTerminalCloseOnProjectChange(t);
       if (!ok) return;
       await destroyAllTerminals();
     }
+    setIdeWikiOpenPath(null);
     setProjectDir(dir);
+  }, [projectDir, t]);
+
+  const closeProject = useCallback(async () => {
+    if (!projectDir) return;
+    const ok = await confirmTerminalCloseOnProjectChange(t);
+    if (!ok) return;
+    await destroyAllTerminals();
+    setIdeWikiOpenPath(null);
+    setProjectDir(null);
   }, [projectDir, t]);
 
   const handleSendToChat = useCallback((paths: string[]) => {
@@ -83,10 +98,90 @@ export default function App() {
     }
   }, [projectDir, wikiBusy, mode]);
 
+  const handleThemeToggle = useCallback(() => {
+    const next = toggleAppearanceTheme();
+    setAppearance(next);
+  }, []);
+
   return (
     <div className="codez-app">
       <header className="codez-titlebar">
-        <div className="codez-brand">CodeZ</div>
+        <div className="codez-brand" aria-label="CodeZ">
+          <span className="codez-brand-text">Code</span>
+          <ZLogo size={22} className="codez-brand-z" />
+        </div>
+
+        <button
+          type="button"
+          className="codez-titlebar-icon codez-titlebar-folder"
+          onClick={() => void pickFolder()}
+          title={projectDir ? t("app.changeFolder") : t("app.openFolder")}
+          aria-label={projectDir ? t("app.changeFolder") : t("app.openFolder")}
+        >
+          <FolderIcon />
+        </button>
+
+        <span className="codez-project-path" title={projectDir ?? undefined}>
+          {projectDir ?? t("app.noProjectOpen")}
+        </span>
+        {projectDir && (
+          <button
+            type="button"
+            className="codez-titlebar-icon codez-titlebar-close-project"
+            onClick={() => void closeProject()}
+            title={t("app.closeFolder")}
+            aria-label={t("app.closeFolder")}
+          >
+            <CloseIcon size={16} />
+          </button>
+        )}
+
+        <div className="codez-titlebar-actions">
+          {mode === "ide" && (
+            <button
+              type="button"
+              className={`codez-titlebar-icon ${chatOpen ? "active" : ""}`}
+              onClick={() => setChatOpen((v) => !v)}
+              title={t("app.chatTitle")}
+              aria-label={t("app.chatTitle")}
+            >
+              <ChatIcon />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
+            onClick={() => void handleWikiClick()}
+            disabled={!projectDir || wikiBusy}
+            title={t("agent.repoWikiHint")}
+            aria-label={t("agent.repoWiki")}
+          >
+            <WikiIcon />
+          </button>
+          <button
+            type="button"
+            className="codez-titlebar-icon"
+            onClick={handleThemeToggle}
+            title={
+              appearance === "dark" ? t("app.themeSwitchLight") : t("app.themeSwitchDark")
+            }
+            aria-label={
+              appearance === "dark" ? t("app.themeSwitchLight") : t("app.themeSwitchDark")
+            }
+          >
+            {appearance === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <button
+            type="button"
+            className="codez-titlebar-icon"
+            onClick={() => setSettingsOpen(true)}
+            title={t("app.settingsTitle")}
+            aria-label={t("app.settingsTitle")}
+          >
+            <SettingsIcon />
+          </button>
+        </div>
+
         <div className="codez-mode-switch">
           <button
             className={mode === "ide" ? "active" : ""}
@@ -103,69 +198,6 @@ export default function App() {
             {t("app.modeAgent")}
           </button>
         </div>
-        <div className="codez-titlebar-actions">
-          {mode === "ide" && (
-            <button
-              type="button"
-              className={`codez-titlebar-icon ${chatOpen ? "active" : ""}`}
-              onClick={() => setChatOpen((v) => !v)}
-              title={t("app.chatTitle")}
-              aria-label={t("app.chatTitle")}
-            >
-              <ChatIcon />
-            </button>
-          )}
-          <button
-            type="button"
-            className="codez-titlebar-icon"
-            onClick={() => setClawHubOpen(true)}
-            title={t("clawhub.open")}
-            aria-label={t("clawhub.open")}
-          >
-            <ClawHubIcon />
-          </button>
-          <button
-            type="button"
-            className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
-            onClick={() => void handleWikiClick()}
-            disabled={!projectDir || wikiBusy}
-            title={t("agent.repoWikiHint")}
-            aria-label={t("agent.repoWiki")}
-          >
-            <WikiIcon />
-          </button>
-          <span className="codez-titlebar-sep" aria-hidden />
-          <button
-            type="button"
-            className="codez-titlebar-icon"
-            onClick={() => setSettingsOpen(true)}
-            title={t("app.settingsTitle")}
-            aria-label={t("app.settingsTitle")}
-          >
-            <SettingsIcon />
-          </button>
-          <button
-            type="button"
-            className="codez-titlebar-icon"
-            onClick={() => setExtOpen(true)}
-            title={t("app.extensionsTitle")}
-            aria-label={t("app.extensionsTitle")}
-          >
-            <ExtensionsIcon />
-          </button>
-        </div>
-        <div className="codez-project">
-          {projectDir && (
-            <>
-              <button className="codez-open-folder codez-open-folder-secondary" onClick={pickFolder}>
-                {t("app.changeFolder")}
-              </button>
-              <span className="codez-project-path" title={projectDir}>
-                {projectDir}
-              </span>
-            </>
-          )}
-        </div>
       </header>
 
       <main className="codez-main">
@@ -177,6 +209,7 @@ export default function App() {
                 onOpenFolder={pickFolder}
                 onSendToChat={handleSendToChat}
                 openPathRequest={ideWikiOpenPath}
+                onOpenPathRequestHandled={() => setIdeWikiOpenPath(null)}
               />
             </div>
             {chatOpen && (
@@ -203,8 +236,6 @@ export default function App() {
       {settingsOpen && (
         <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
       )}
-      {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
-      {clawHubOpen && <ClawHubPanel onClose={() => setClawHubOpen(false)} />}
     </div>
   );
 }
