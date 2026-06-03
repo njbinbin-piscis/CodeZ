@@ -1,5 +1,6 @@
 //! IDE-coupled agent tools (LSP diagnostics, codebase search, etc.).
 
+pub mod browser;
 pub mod chat_ui;
 pub mod chat_ui_listen;
 pub mod chat_ui_patch;

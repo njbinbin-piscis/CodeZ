@@ -4,6 +4,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { confirmDialog } from "../../services/tauri/confirm";
 import { ideApi, onTerminalOutput } from "../../services/tauri/ide";
 
 export interface TerminalTab {
@@ -44,8 +45,10 @@ function TerminalSession({ terminalId, projectDir, active, panelVisible }: Termi
     }
   }, [terminalId]);
 
+  // Only spawn a PTY once the terminal panel is shown — avoids background
+  // sessions that block project close/switch (confirm dialog) on folder open.
   useEffect(() => {
-    if (!projectDir || initializedRef.current || !containerRef.current) return;
+    if (!projectDir || !panelVisible || initializedRef.current || !containerRef.current) return;
     initializedRef.current = true;
 
     const term = new XTerm({
@@ -110,7 +113,7 @@ function TerminalSession({ terminalId, projectDir, active, panelVisible }: Termi
       fitRef.current = null;
       initializedRef.current = false;
     };
-  }, [terminalId, projectDir, fitTerminal]);
+  }, [terminalId, projectDir, panelVisible, fitTerminal]);
 
   useEffect(() => {
     if (!active || !panelVisible) return;
@@ -189,11 +192,11 @@ export default function TerminalPanel({
       try {
         const alive = await ideApi.terminalIsAlive(id);
         if (alive) {
-          const ok = window.confirm(t("ide.terminalCloseTabConfirm"));
+          const ok = await confirmDialog(t("ide.terminalCloseTabConfirm"));
           if (!ok) return;
         }
       } catch {
-        const ok = window.confirm(t("ide.terminalCloseTabConfirm"));
+        const ok = await confirmDialog(t("ide.terminalCloseTabConfirm"));
         if (!ok) return;
       }
       setTabs((prev) => {
@@ -279,7 +282,7 @@ export async function confirmTerminalCloseOnProjectChange(
   try {
     const count = await ideApi.terminalCount();
     if (count <= 0) return true;
-    return window.confirm(t("ide.terminalCloseProjectConfirm", { count }));
+    return confirmDialog(t("ide.terminalCloseProjectConfirm", { count }));
   } catch {
     return true;
   }

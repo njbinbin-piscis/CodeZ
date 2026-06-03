@@ -505,6 +505,21 @@ fn build_tool_registry(
                     app: app.clone(),
                 }));
             }
+            // Browser automation (CDP) — drives the same headless page the IDE
+            // Browser panel shows. Off in plan mode (it mutates page state).
+            {
+                use tauri::Manager as _;
+                let manager = app.state::<crate::state::AppState>().browser.clone();
+                let shots_dir = app
+                    .path()
+                    .app_data_dir()
+                    .ok()
+                    .map(|d| d.join("browser-shots"));
+                registry.register(Box::new(crate::tools::browser::BrowserTool {
+                    manager,
+                    shots_dir,
+                }));
+            }
             registry.register(Box::new(crate::tools::chat_ui::ChatUiTool {
                 app: app.clone(),
             }));

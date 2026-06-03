@@ -74,3 +74,35 @@ export async function pickChatAttachment(): Promise<{
     preview,
   };
 }
+
+/**
+ * Build a chat attachment from an absolute file path (used for drag-and-drop).
+ * Reads image bytes for a preview thumbnail; other file types are passed by
+ * path so the backend can read them at send time.
+ */
+export async function attachmentFromPath(path: string): Promise<{
+  attachment: ChatAttachment;
+  preview: string | null;
+}> {
+  const filename = path.split(/[/\\]/).pop() ?? path;
+  const media_type = guessMime(path);
+  let data: string | null = null;
+  let preview: string | null = null;
+
+  if (media_type.startsWith("image/")) {
+    try {
+      const file = await ideApi.readFile(path);
+      if (file.preview_data) {
+        preview = file.preview_data;
+        data = dataUrlToBase64(file.preview_data);
+      }
+    } catch {
+      preview = null;
+    }
+  }
+
+  return {
+    attachment: { media_type, path, data, filename },
+    preview,
+  };
+}

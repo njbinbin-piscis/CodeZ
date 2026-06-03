@@ -14,6 +14,7 @@ use tokio::sync::{oneshot, Mutex, Semaphore};
 use piscis_kernel::agent::plan::new_plan_store;
 use piscis_kernel::agent::plan::PlanStore;
 
+use crate::browser::BrowserManager;
 use crate::commands::ide::TerminalRegistry;
 use crate::lsp::manager::LspManager;
 
@@ -42,6 +43,9 @@ pub struct AppState {
     pub plan_state: PlanStore,
     /// Pending `chat_ui` / `chat_ui_listen` response channels keyed by request id.
     pub interactive_responses: Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>,
+    /// Embedded Chromium session shared by the Browser panel and the agent
+    /// `browser` tool (lazily launched on first use).
+    pub browser: BrowserManager,
 }
 
 /// Default cap on concurrently running Agent turns. Overridable via the
@@ -67,6 +71,7 @@ impl AppState {
             agent_slots: Arc::new(Semaphore::new(agent_concurrency())),
             plan_state: new_plan_store(),
             interactive_responses: Arc::new(Mutex::new(HashMap::new())),
+            browser: BrowserManager::new(),
         }
     }
 }

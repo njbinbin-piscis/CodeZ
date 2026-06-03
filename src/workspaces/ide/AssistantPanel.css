@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
   background: var(--bg-elev, #14141c);
   border-left: 1px solid var(--border, #2a2a38);
   min-width: 0;
@@ -144,12 +145,43 @@
   cursor: default;
 }
 
-.codez-assistant-close {
-  background: transparent;
-  border: 0;
+/* Context-window usage ring in the chat header. */
+.codez-context-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 4px;
+  cursor: default;
+}
+
+.codez-context-ring-label {
+  font-size: 10px;
+  font-weight: 600;
   color: var(--text-dim, #9a9ab0);
-  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Drag-and-drop overlay shown when a file is dragged over the chat panel. */
+.codez-assistant-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent, #7c6af7) 14%, transparent);
+  border: 2px dashed var(--accent, #7c6af7);
+  border-radius: 8px;
+}
+
+.codez-assistant-dropzone span {
   font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #e8e8f0);
+  background: var(--bg-elev, #14141c);
+  padding: 6px 14px;
+  border-radius: 6px;
 }
 
 .codez-session-list {

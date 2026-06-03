@@ -6,6 +6,7 @@
 //! the IDE workspace: file I/O, git, search, a PTY terminal, a filesystem
 //! watcher, and the LSP ↔ WebSocket bridge.
 
+pub mod browser;
 pub mod commands;
 pub mod context_assembly;
 pub mod journal;
@@ -92,6 +93,14 @@ pub fn run() {
             commands::agent_task::agent_task_merge,
             commands::agent_task::agent_task_discard,
             commands::agent_task::agent_task_open_pr,
+            // Embedded browser panel (CDP via chromiumoxide)
+            commands::browser::browser_navigate,
+            commands::browser::browser_screenshot,
+            commands::browser::browser_click_at,
+            commands::browser::browser_pick_at,
+            commands::browser::browser_current_url,
+            commands::browser::browser_is_open,
+            commands::browser::browser_close,
             // Repo Wiki — module/architecture overview from the index (M8)
             commands::repo_wiki::repo_wiki_generate,
             // VS Code .vsix contribution-point ingestion

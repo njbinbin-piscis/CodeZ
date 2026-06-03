@@ -1,6 +1,6 @@
 [package]
 name = "codez-desktop"
-version = "0.0.8"
+version = "0.0.9"
 description = "CodeZ — Cursor-like AI IDE desktop host"
 authors = ["CodeZ"]
 license = "Apache-2.0"
@@ -43,6 +43,11 @@ notify = "7"
 
 # PTY for the embedded terminal.
 portable-pty = "0.8"
+
+# Embedded Chromium driver (CDP) for the Browser panel + agent `browser` tool.
+# No `fetcher`/TLS features: we drive the system-installed Chrome over a local
+# ws:// CDP socket, so the auto-download fetcher (and its zip backend) is unneeded.
+chromiumoxide = { version = "0.9", default-features = false }
 
 # File metadata formatting + encoding detection for file reads.
 chrono = { version = "0.4", features = ["serde"] }

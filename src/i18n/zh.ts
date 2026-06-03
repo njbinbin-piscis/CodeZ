@@ -19,6 +19,7 @@ const zh = {
     modeAgentTitle: "Agent 模式（以任务为中心）",
     chat: "Chat",
     chatTitle: "切换 AI 聊天侧栏",
+    browserTitle: "切换内置浏览器",
     settings: "设置",
     settingsTitle: "LLM 与 Agent 配置",
     extensions: "扩展",
@@ -271,6 +272,10 @@ const zh = {
     attachFile: "添加附件",
     removeAttachment: "移除附件",
     attachment: "附件",
+    dropToAttach: "拖入文件作为附件",
+    contextRingTitle: "上下文窗口占用",
+    contextRingEstimate: "预估输入：{{estimated}} / 触发 {{trigger}}（预算 {{budget}}）",
+    contextRingCumulative: "累计 — 输入：{{input}}，输出：{{output}}",
     planWorking: "计划 {{count}} 项",
     planSummary: "计划 {{count}} 项",
     taskPanel: "任务面板",
@@ -341,6 +346,17 @@ const zh = {
     prOk: "PR 已创建：{{url}}",
     prFail: "{{msg}}",
     noGit: "Agent 任务隔离需要 git 仓库。请先 git init。",
+  },
+
+  browser: {
+    addressPlaceholder: "输入网址后回车…",
+    reload: "刷新",
+    pickElement: "选择元素并发送到会话",
+    pickHint: "点击页面中的元素，将其发送到会话。",
+    screenshotToChat: "把截图发送到会话（供视觉模型使用）",
+    close: "关闭浏览器",
+    loading: "加载中…",
+    empty: "在上方输入网址开始浏览。",
   },
 
   clawhub: {

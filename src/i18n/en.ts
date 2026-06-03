@@ -19,6 +19,7 @@ const en = {
     modeAgentTitle: "Agent mode (task-centric)",
     chat: "Chat",
     chatTitle: "Toggle AI chat",
+    browserTitle: "Toggle embedded browser",
     settings: "Settings",
     settingsTitle: "LLM & agent configuration",
     extensions: "Extensions",
@@ -272,6 +273,10 @@ const en = {
     attachFile: "Attach file",
     removeAttachment: "Remove attachment",
     attachment: "Attachment",
+    dropToAttach: "Drop file to attach",
+    contextRingTitle: "Context window usage",
+    contextRingEstimate: "Estimated input: {{estimated}} / trigger {{trigger}} (budget {{budget}})",
+    contextRingCumulative: "Cumulative — in: {{input}}, out: {{output}}",
     planWorking: "Plan · {{count}} items",
     planSummary: "Plan · {{count}} items",
     taskPanel: "Task panel",
@@ -342,6 +347,17 @@ const en = {
     prOk: "PR created: {{url}}",
     prFail: "{{msg}}",
     noGit: "Agent task isolation requires a git repository. Run git init first.",
+  },
+
+  browser: {
+    addressPlaceholder: "Enter a URL and press Enter…",
+    reload: "Reload",
+    pickElement: "Pick an element and send it to chat",
+    pickHint: "Click an element in the page to send it to chat.",
+    screenshotToChat: "Send a screenshot to chat (for vision models)",
+    close: "Close browser",
+    loading: "Loading…",
+    empty: "Enter a URL above to start browsing.",
   },
 
   clawhub: {

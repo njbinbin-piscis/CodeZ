@@ -13,9 +13,13 @@ import {
 import IdeWorkspace from "./workspaces/ide";
 import AgentWorkspace from "./workspaces/agent";
 import AssistantPanel from "./workspaces/ide/AssistantPanel";
+import BrowserPanel from "./workspaces/ide/BrowserPanel";
 import SettingsPanel from "./workspaces/ide/SettingsPanel";
 import ZLogo from "./components/ZLogo";
+import type { PickedElement } from "./services/tauri/browser";
+import type { ChatAttachment } from "./services/tauri/chat";
 import {
+  BrowserIcon,
   ChatIcon,
   CloseIcon,
   FolderIcon,
@@ -28,12 +32,28 @@ import "./App.css";
 
 type Mode = "ide" | "agent";
 
+/** Normalize folder paths before comparing (slashes, trailing slash). */
+function normProjectPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 export default function App() {
   const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>("ide");
   const [projectDir, setProjectDir] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem("codez-chat-width"));
+    return Number.isFinite(saved) && saved >= 280 ? Math.min(760, saved) : 380;
+  });
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
+  const [chatInsertText, setChatInsertText] = useState<{ text: string; nonce: number } | null>(null);
+  const [chatAttach, setChatAttach] = useState<{
+    attachment: ChatAttachment;
+    preview: string | null;
+    nonce: number;
+  } | null>(null);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
   const [wikiBusy, setWikiBusy] = useState(false);
@@ -55,30 +75,65 @@ export default function App() {
   }, []);
 
   const pickFolder = useCallback(async () => {
-    const dir = await openFolderDialog(projectDir);
-    if (!dir) return;
-    if (projectDir && dir !== projectDir) {
-      const ok = await confirmTerminalCloseOnProjectChange(t);
-      if (!ok) return;
-      await destroyAllTerminals();
+    try {
+      const dir = await openFolderDialog(projectDir);
+      if (!dir) return;
+      if (projectDir && normProjectPath(dir) === normProjectPath(projectDir)) return;
+      if (projectDir) {
+        const ok = await confirmTerminalCloseOnProjectChange(t);
+        if (!ok) return;
+        await destroyAllTerminals();
+      }
+      setIdeWikiOpenPath(null);
+      setProjectDir(dir);
+    } catch (e) {
+      console.error("pickFolder failed:", e);
     }
-    setIdeWikiOpenPath(null);
-    setProjectDir(dir);
   }, [projectDir, t]);
 
   const closeProject = useCallback(async () => {
     if (!projectDir) return;
-    const ok = await confirmTerminalCloseOnProjectChange(t);
-    if (!ok) return;
-    await destroyAllTerminals();
-    setIdeWikiOpenPath(null);
-    setProjectDir(null);
+    try {
+      const ok = await confirmTerminalCloseOnProjectChange(t);
+      if (!ok) return;
+      await destroyAllTerminals();
+      setIdeWikiOpenPath(null);
+      setProjectDir(null);
+    } catch (e) {
+      console.error("closeProject failed:", e);
+    }
   }, [projectDir, t]);
 
   const handleSendToChat = useCallback((paths: string[]) => {
     if (paths.length === 0) return;
     setChatOpen(true);
     setChatInsert({ paths, nonce: Date.now() });
+  }, []);
+
+  const handleSendElementToChat = useCallback((el: PickedElement) => {
+    const text = [
+      "Selected element from the browser:",
+      "```html",
+      el.html,
+      "```",
+      `selector: \`${el.selector}\``,
+    ].join("\n");
+    setChatOpen(true);
+    setChatInsertText({ text, nonce: Date.now() });
+  }, []);
+
+  const handleScreenshotToChat = useCallback((base64: string) => {
+    setChatOpen(true);
+    setChatAttach({
+      attachment: {
+        media_type: "image/png",
+        data: base64,
+        filename: `browser-${Date.now()}.png`,
+        path: null,
+      },
+      preview: `data:image/png;base64,${base64}`,
+      nonce: Date.now(),
+    });
   }, []);
 
   const handleWikiClick = useCallback(async () => {
@@ -102,6 +157,35 @@ export default function App() {
     const next = toggleAppearanceTheme();
     setAppearance(next);
   }, []);
+
+  // Drag the divider between the editor and the chat panel. The chat sits on
+  // the right, so dragging the handle left widens it.
+  const startChatResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = chatWidth;
+      const onMove = (ev: MouseEvent) => {
+        const delta = startX - ev.clientX;
+        setChatWidth(Math.min(760, Math.max(280, startW + delta)));
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [chatWidth],
+  );
+
+  useEffect(() => {
+    localStorage.setItem("codez-chat-width", String(chatWidth));
+  }, [chatWidth]);
 
   return (
     <div className="codez-app">
@@ -137,6 +221,17 @@ export default function App() {
         )}
 
         <div className="codez-titlebar-actions">
+          {mode === "ide" && (
+            <button
+              type="button"
+              className={`codez-titlebar-icon ${browserOpen ? "active" : ""}`}
+              onClick={() => setBrowserOpen((v) => !v)}
+              title={t("app.browserTitle")}
+              aria-label={t("app.browserTitle")}
+            >
+              <BrowserIcon />
+            </button>
+          )}
           {mode === "ide" && (
             <button
               type="button"
@@ -211,16 +306,30 @@ export default function App() {
                 openPathRequest={ideWikiOpenPath}
                 onOpenPathRequestHandled={() => setIdeWikiOpenPath(null)}
               />
+              <BrowserPanel
+                visible={browserOpen}
+                onClose={() => setBrowserOpen(false)}
+                onSendElementToChat={handleSendElementToChat}
+                onScreenshotToChat={handleScreenshotToChat}
+              />
             </div>
-            {chatOpen && (
-              <div className="codez-ide-chat">
-                <AssistantPanel
-                  projectDir={projectDir}
-                  onClose={() => setChatOpen(false)}
-                  insertRequest={chatInsert}
-                />
-              </div>
-            )}
+            <div
+              className="codez-ide-chat-resize"
+              onMouseDown={startChatResize}
+              hidden={!chatOpen}
+              role="separator"
+              aria-orientation="vertical"
+            />
+            {/* Kept mounted while in IDE mode so toggling chat visibility never
+                discards the active session — only show/hide. */}
+            <div className="codez-ide-chat" style={{ width: chatWidth }} hidden={!chatOpen}>
+              <AssistantPanel
+                projectDir={projectDir}
+                insertRequest={chatInsert}
+                insertTextRequest={chatInsertText}
+                attachRequest={chatAttach}
+              />
+            </div>
           </div>
         </div>
         <div className="codez-pane" hidden={mode !== "agent"}>

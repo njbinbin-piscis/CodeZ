@@ -22,8 +22,10 @@ import {
 } from "../../services/tauri/chat";
 import { getSettings, type LlmProviderConfig } from "../../services/tauri/settings";
 import { ideApi } from "../../services/tauri/ide";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
-import { modelLabel, pickChatAttachment } from "../../components/chatComposerUtils";
+import { attachmentFromPath, modelLabel, pickChatAttachment } from "../../components/chatComposerUtils";
+import ContextUsageRing, { type ContextUsageSnapshot } from "../../components/ContextUsageRing";
 import { formatUserMessageDisplay } from "../../components/chatFileRefs";
 import UserMessage from "../../components/UserMessage";
 import TaskPanel, {
@@ -53,9 +55,13 @@ function messageFromDto(m: MessageDto): ChatMessage {
 
 interface AssistantPanelProps {
   projectDir: string | null;
-  onClose: () => void;
   /** External request to insert @file references into the composer. */
   insertRequest?: { paths: string[]; nonce: number } | null;
+  /** External request to append free-form text to the composer (e.g. a picked
+   *  browser element). */
+  insertTextRequest?: { text: string; nonce: number } | null;
+  /** External request to set an attachment (e.g. a browser screenshot). */
+  attachRequest?: { attachment: ChatAttachment; preview: string | null; nonce: number } | null;
 }
 
 interface QueuedTurn {
@@ -92,7 +98,12 @@ interface MentionState {
   active: number;
 }
 
-export default function AssistantPanel({ projectDir, onClose, insertRequest }: AssistantPanelProps) {
+export default function AssistantPanel({
+  projectDir,
+  insertRequest,
+  insertTextRequest,
+  attachRequest,
+}: AssistantPanelProps) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -120,6 +131,8 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
   const [taskPanelTab, setTaskPanelTab] = useState<"todo" | "tools">("todo");
   const [modeNotice, setModeNotice] = useState<string | null>(null);
   const [planResume, setPlanResume] = useState<PlanResumeState | null>(null);
+  const [contextUsage, setContextUsage] = useState<ContextUsageSnapshot | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const {
     pendingCards,
@@ -135,6 +148,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
   const queueRef = useRef<QueuedTurn[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const runTurnRef = useRef<(turn: QueuedTurn) => Promise<void>>(async () => {});
 
   useEffect(() => {
@@ -147,6 +161,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
     setToolSteps([]);
     setError(null);
     setShowSessions(false);
+    setContextUsage(null);
     clearCards();
   }, [projectDir, clearCards]);
 
@@ -183,6 +198,28 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
       taRef.current?.setSelectionRange(len, len);
     });
   }, [insertRequest?.nonce, insertRequest?.paths]);
+
+  useEffect(() => {
+    if (!insertTextRequest?.text) return;
+    setInput((cur) => {
+      const prefix = cur.trim() ? `${cur.trimEnd()}\n` : "";
+      return `${prefix}${insertTextRequest.text} `;
+    });
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      const len = taRef.current?.value.length ?? 0;
+      taRef.current?.setSelectionRange(len, len);
+    });
+  }, [insertTextRequest?.nonce, insertTextRequest?.text]);
+
+  useEffect(() => {
+    if (!attachRequest?.attachment) return;
+    if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
+    setAttachment(attachRequest.attachment);
+    setAttachmentPreview(attachRequest.preview);
+    requestAnimationFrame(() => taRef.current?.focus());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachRequest?.nonce]);
 
   const clearAttachment = useCallback(() => {
     setAttachment(null);
@@ -264,6 +301,17 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
         setTaskPanelOpen(true);
         setTaskPanelTab("todo");
         break;
+      case "context_usage":
+        setContextUsage({
+          estimatedInputTokens: evt.estimated_input_tokens,
+          totalInputBudget: evt.total_input_budget,
+          triggerThreshold: evt.trigger_threshold,
+          cumulativeInputTokens: evt.cumulative_input_tokens,
+          cumulativeOutputTokens: evt.cumulative_output_tokens,
+          rollingSummaryVersion: evt.rolling_summary_version,
+          autoCompactThreshold: evt.auto_compact_threshold,
+        });
+        break;
       case "error":
         setError(evt.message);
         break;
@@ -280,6 +328,49 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
     });
     return () => unlisten?.();
   }, [applyEvent]);
+
+  // OS file drag-and-drop → attachment. Tauri captures native file drops at the
+  // webview level (HTML5 ondrop never fires for files), so we subscribe to the
+  // webview drag-drop stream and only react when the pointer is over this panel.
+  useEffect(() => {
+    const pointInPanel = (x: number, y: number) => {
+      const el = panelRef.current;
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const cx = x / dpr;
+      const cy = y / dpr;
+      return cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom;
+    };
+
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        const p = event.payload;
+        if (p.type === "over") {
+          setDragOver(pointInPanel(p.position.x, p.position.y));
+        } else if (p.type === "drop") {
+          const over = pointInPanel(p.position.x, p.position.y);
+          setDragOver(false);
+          if (over && p.paths.length > 0) {
+            void applyDroppedFile(p.paths[0]);
+          }
+        } else {
+          setDragOver(false);
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachmentPreview]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -427,6 +518,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
     setToolSteps([]);
     setError(null);
     setShowSessions(false);
+    setContextUsage(null);
   }, []);
 
   const switchSession = useCallback(
@@ -438,6 +530,7 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
         setToolSteps([]);
         setError(null);
         setShowSessions(false);
+        setContextUsage(null);
       } catch (e) {
         setError(String(e));
       }
@@ -520,6 +613,21 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
       setError(String(e));
     }
   }, [attachmentPreview]);
+
+  const applyDroppedFile = useCallback(
+    async (path: string) => {
+      try {
+        const picked = await attachmentFromPath(path);
+        if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
+        setAttachment(picked.attachment);
+        setAttachmentPreview(picked.preview);
+        taRef.current?.focus();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [attachmentPreview],
+  );
 
   const modelOptions = useMemo(() => {
     const opts: ComposerMenuOption[] = [
@@ -630,18 +738,24 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
         : t("chat.placeholderFollowUp");
 
   return (
-    <div className="codez-assistant">
+    <div className="codez-assistant" ref={panelRef}>
       <div className="codez-assistant-header">
         <span>{t("chat.title")}</span>
         <div className="codez-assistant-actions">
+          <ContextUsageRing usage={contextUsage} />
           <button className={showSessions ? "active" : ""} onClick={() => setShowSessions((v) => !v)} title={t("chat.sessions")}>
             ☰
           </button>
           <button onClick={newSession} title={t("chat.newChat")}>＋</button>
           <button onClick={() => void fork()} disabled={!sessionRef.current} title={t("chat.fork")}>⑂</button>
-          <button className="codez-assistant-close" onClick={onClose} title={t("chat.hide")}>✕</button>
         </div>
       </div>
+
+      {dragOver && (
+        <div className="codez-assistant-dropzone">
+          <span>{t("chat.dropToAttach")}</span>
+        </div>
+      )}
 
       {showSessions && (
         <div className="codez-session-list">

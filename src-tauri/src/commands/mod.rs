@@ -1,6 +1,7 @@
 //! Tauri command modules exposed to the CodeZ frontend.
 
 pub mod agent_task;
+pub mod browser;
 pub mod chat;
 pub mod chat_turn;
 pub mod system_prompt;

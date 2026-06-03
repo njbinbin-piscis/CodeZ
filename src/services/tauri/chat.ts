@@ -28,6 +28,16 @@ export type AgentEvent =
   | { type: "tool_start"; id: string; name: string; input: unknown }
   | { type: "tool_end"; id: string; name: string; result: string; is_error: boolean }
   | { type: "plan_update"; items: PlanTodoItem[] }
+  | {
+      type: "context_usage";
+      estimated_input_tokens: number;
+      total_input_budget: number;
+      trigger_threshold: number;
+      cumulative_input_tokens: number;
+      cumulative_output_tokens: number;
+      rolling_summary_version: number;
+      auto_compact_threshold: number;
+    }
   | { type: "interactive_ui"; request_id: string; ui_definition: unknown }
   | { type: "interactive_ui_patch"; request_id: string; patch: unknown }
   | { type: "interactive_ui_listen"; request_id: string }

@@ -147,6 +147,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .codez-ide-main .pond-ide {
@@ -158,6 +159,28 @@
   width: 380px;
   flex-shrink: 0;
   min-height: 0;
+}
+
+.codez-ide-chat[hidden] {
+  display: none;
+}
+
+/* Draggable divider between the editor area and the chat panel. */
+.codez-ide-chat-resize {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.codez-ide-chat-resize:hover {
+  background: var(--accent, #6c63ff);
+  opacity: 0.5;
+}
+
+.codez-ide-chat-resize[hidden] {
+  display: none;
 }
 
 .codez-main {
