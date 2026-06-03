@@ -27,6 +27,8 @@ import TaskPanel, {
 } from "../../components/TaskPanel";
 import type { GitFileStatus } from "../ide/types";
 import Markdown from "../ide/Markdown";
+import InteractiveCard from "../../components/chat/InteractiveCard";
+import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
 import {
@@ -94,6 +96,14 @@ export default function AgentWorkspace({
   const taRef = useRef<HTMLTextAreaElement>(null);
   const runRef = useRef<(text: string, att: ChatAttachment | null) => Promise<void>>(async () => {});
 
+  const {
+    pendingCards,
+    handleAgentEvent,
+    markSubmitted,
+    markActionSent,
+    clearCards,
+  } = useInteractiveCards();
+
   // ── Parallel task bookkeeping (M7) ──────────────────────────────────────
   // `live` gates whether incoming kernel events update the foreground view;
   // `foregroundSession` binds that view to a specific session id (null while a
@@ -156,7 +166,8 @@ export default function AgentWorkspace({
     runningSessionsRef.current.clear();
     taskKeyBySessionRef.current.clear();
     setRunningIds([]);
-  }, [projectDir, clearAttachment]);
+    clearCards();
+  }, [projectDir, clearAttachment, clearCards]);
 
   const refreshTasks = useCallback(() => {
     if (!projectDir) {
@@ -287,9 +298,10 @@ export default function AgentWorkspace({
         });
         break;
       default:
+        handleAgentEvent(evt);
         break;
     }
-  }, []);
+  }, [handleAgentEvent]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -641,6 +653,21 @@ export default function AgentWorkspace({
               </div>
             );
           })}
+          {pendingCards.map((card) => (
+            <div key={card.requestId} className="codez-agent-msg assistant">
+              <div className="codez-agent-msg-role">{t("agent.role")}</div>
+              <div className="codez-agent-msg-body">
+                <InteractiveCard
+                  requestId={card.requestId}
+                  uiDefinition={card.uiDefinition}
+                  listenOpen={card.listenOpen}
+                  wizardStepHint={card.wizardStepHint}
+                  onSubmitted={() => markSubmitted(card.requestId)}
+                  onActionSent={() => markActionSent(card.requestId)}
+                />
+              </div>
+            </div>
+          ))}
             </div>
           </div>
           {previewPath && projectDir && (

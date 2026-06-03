@@ -103,6 +103,12 @@ const en = {
 
   settings: {
     title: "Settings · LLM",
+    titleHub: "Settings",
+    tabModels: "Models",
+    tabSkills: "Skills",
+    tabExtensions: "Extensions",
+    tabRules: "Rules",
+    tabHooks: "Hooks",
     loading: "Loading settings…",
     configuredOk: "LLM configured — Chat is ready",
     configuredMissing: "No API key yet — fill in a key below",
@@ -154,6 +160,60 @@ const en = {
     mcpArgs: "Args (space-separated)",
     mcpUrl: "URL (sse)",
     mcpEnv: "Env (KEY=value per line)",
+  },
+
+  workbench: {
+    noProject: "Open a project folder first to manage project-level rules and hooks.",
+  },
+
+  skills: {
+    installedTitle: "Installed skills",
+    installedHint:
+      "Skills (SKILL.md) are installed in the global config dir and injected into the agent when a task matches.",
+    empty: "No skills installed yet. Search and install from ClawHub below.",
+    uninstall: "Uninstall",
+    marketTitle: "Skill marketplace (ClawHub)",
+    marketHint: "Search and install community skills. Leave empty to browse popular skills.",
+    searchPlaceholder: "Search skills, e.g. figma, finance…",
+    search: "Search",
+    searching: "Searching…",
+    install: "Install",
+    installing: "Installing…",
+    installed: "Installed",
+  },
+
+  rules: {
+    title: "Project rules",
+    hint: "Rules live in .codez/rules/ (also reads .cursor/rules/) and are injected as system constraints for the agent.",
+    empty: "No rules yet. Create one below.",
+    name: "File name",
+    content: "Rule content (Markdown)",
+    contentPlaceholder: "# Coding style\n- Always …\n- …",
+    add: "New rule",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    enable: "Enable",
+    disable: "Disable",
+  },
+
+  hooks: {
+    title: "Hooks",
+    hint: "Hooks live in .codez/hooks.json. Output of beforeAgentTurn hooks is injected into the agent context.",
+    empty: "No hooks yet. Create one below.",
+    namePlaceholder: "Hook name",
+    enabledLabel: "Enabled",
+    command: "Command (run with shell in the project dir)",
+    commandPlaceholder: "git status --short",
+    test: "Test run",
+    running: "Running…",
+    add: "New hook",
+    saveConfig: "Save hooks",
+    event: {
+      beforeAgentTurn: "Before agent turn",
+      afterAgentTurn: "After agent turn",
+      beforeFileEdit: "Before file edit",
+      afterFileEdit: "After file edit",
+    },
   },
 
   extensions: {

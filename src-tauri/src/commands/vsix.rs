@@ -1,7 +1,7 @@
 //! VS Code `.vsix` contribution-point ingestion.
 //!
 //! A `.vsix` is a zip whose `extension/package.json` declares `contributes.*`.
-//! Per the design (`codez-design.md` §9) we consume only the **declarative**
+//! Per the design (`codez-design.md` §10) we consume only the **declarative**
 //! data — color themes and snippets here — and never execute extension JS.
 //! TextMate grammars and LSP servers are handled elsewhere / left for later.
 

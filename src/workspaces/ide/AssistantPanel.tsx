@@ -33,6 +33,8 @@ import TaskPanel, {
 } from "../../components/TaskPanel";
 import type { FileNode } from "./types";
 import Markdown from "./Markdown";
+import InteractiveCard from "../../components/chat/InteractiveCard";
+import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import "./AssistantPanel.css";
 
 interface ChatMessage {
@@ -119,6 +121,14 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
   const [modeNotice, setModeNotice] = useState<string | null>(null);
   const [planResume, setPlanResume] = useState<PlanResumeState | null>(null);
 
+  const {
+    pendingCards,
+    handleAgentEvent,
+    markSubmitted,
+    markActionSent,
+    clearCards,
+  } = useInteractiveCards();
+
   const sessionRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -137,7 +147,8 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
     setToolSteps([]);
     setError(null);
     setShowSessions(false);
-  }, [projectDir]);
+    clearCards();
+  }, [projectDir, clearCards]);
 
   useEffect(() => {
     getSettings()
@@ -257,9 +268,10 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
         setError(evt.message);
         break;
       default:
+        handleAgentEvent(evt);
         break;
     }
-  }, []);
+  }, [handleAgentEvent]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -714,6 +726,19 @@ export default function AssistantPanel({ projectDir, onClose, insertRequest }: A
           <div key={`q-${i}`} className="codez-msg user queued">
             <div className="codez-msg-role">{t("chat.queued")}</div>
             <div className="codez-msg-text">{q}</div>
+          </div>
+        ))}
+        {pendingCards.map((card) => (
+          <div key={card.requestId} className="codez-msg assistant">
+            <div className="codez-msg-role">{t("chat.agentRole")}</div>
+            <InteractiveCard
+              requestId={card.requestId}
+              uiDefinition={card.uiDefinition}
+              listenOpen={card.listenOpen}
+              wizardStepHint={card.wizardStepHint}
+              onSubmitted={() => markSubmitted(card.requestId)}
+              onActionSent={() => markActionSent(card.requestId)}
+            />
           </div>
         ))}
       </div>

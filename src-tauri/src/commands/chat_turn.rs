@@ -450,6 +450,7 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
 }
 
 fn build_tool_registry(
+    app: tauri::AppHandle,
     db: Arc<Mutex<pisci_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     event_sink: Arc<dyn EventSink>,
@@ -505,8 +506,18 @@ fn build_tool_registry(
                     settings,
                     plan_store: plan,
                     lsp_manager,
+                    app: app.clone(),
                 }));
             }
+            registry.register(Box::new(crate::tools::chat_ui::ChatUiTool {
+                app: app.clone(),
+            }));
+            registry.register(Box::new(crate::tools::chat_ui_patch::ChatUiPatchTool {
+                app: app.clone(),
+            }));
+            registry.register(Box::new(crate::tools::chat_ui_listen::ChatUiListenTool {
+                app,
+            }));
         }
     }
 
@@ -521,6 +532,7 @@ fn build_tool_registry(
 /// every write/exec tool and the `delegate` tool itself, so sub-agents cannot
 /// mutate the workspace or recursively spawn more sub-agents.
 fn build_subagent_registry(
+    app: tauri::AppHandle,
     db: Arc<Mutex<pisci_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     event_sink: Arc<dyn EventSink>,
@@ -528,6 +540,7 @@ fn build_subagent_registry(
     lsp_manager: Arc<LspManager>,
 ) -> ToolRegistry {
     build_tool_registry(
+        app,
         db,
         settings,
         event_sink,
@@ -545,6 +558,7 @@ fn build_subagent_registry(
 /// bounded iteration budget and timeout so the parent turn stays responsive.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_subagent_research(
+    app: tauri::AppHandle,
     db: Arc<Mutex<pisci_kernel::store::db::Database>>,
     settings: Arc<Mutex<Settings>>,
     plan_store: PlanStore,
@@ -559,6 +573,7 @@ pub(crate) async fn run_subagent_research(
     };
 
     let registry = build_subagent_registry(
+        app,
         db.clone(),
         settings.clone(),
         // A no-op sink: sub-agent events are summarised back to the parent as
@@ -815,6 +830,7 @@ fn project_rules_context(workspace_root: &str) -> Option<String> {
 }
 
 pub async fn run_codez_turn(
+    app: tauri::AppHandle,
     mut request: HeadlessCliRequest,
     kernel: KernelState,
     event_sink: Arc<dyn EventSink>,
@@ -884,6 +900,7 @@ pub async fn run_codez_turn(
     }
 
     let mut registry = build_tool_registry(
+        app,
         db.clone(),
         settings.clone(),
         event_sink.clone(),
@@ -1048,6 +1065,13 @@ pub async fn run_codez_turn(
     }
     if let Some(rules) = project_rules_context(&workspace_root) {
         extra_sections.push(rules);
+    }
+    // Run user-defined `beforeAgentTurn` hooks and inject their output as
+    // additional system context (project hooks.json, M6+).
+    if let Some(hook_ctx) =
+        crate::commands::workbench::run_event_hooks(&workspace_root, "beforeAgentTurn").await
+    {
+        extra_sections.push(hook_ctx);
     }
     let combined_extra = if extra_sections.is_empty() {
         None

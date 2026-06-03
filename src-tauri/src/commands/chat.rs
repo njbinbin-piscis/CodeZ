@@ -138,6 +138,7 @@ pub async fn chat_send(
     };
 
     let result = run_codez_turn(
+        app.clone(),
         request,
         kernel,
         sink,

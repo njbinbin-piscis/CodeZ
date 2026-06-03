@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Semaphore};
+
+use serde_json::Value;
+use tokio::sync::{oneshot, Mutex, Semaphore};
 
 use pisci_kernel::agent::plan::new_plan_store;
 use pisci_kernel::agent::plan::PlanStore;
@@ -38,6 +40,8 @@ pub struct AppState {
     pub agent_slots: Arc<Semaphore>,
     /// Per-session plan board state for `plan_todo`.
     pub plan_state: PlanStore,
+    /// Pending `chat_ui` / `chat_ui_listen` response channels keyed by request id.
+    pub interactive_responses: Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>,
 }
 
 /// Default cap on concurrently running Agent turns. Overridable via the
@@ -62,6 +66,7 @@ impl AppState {
             task_cancel: Arc::new(Mutex::new(HashMap::new())),
             agent_slots: Arc::new(Semaphore::new(agent_concurrency())),
             plan_state: new_plan_store(),
+            interactive_responses: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

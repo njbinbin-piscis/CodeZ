@@ -47,6 +47,12 @@ pub fn agent_system_prompt(
          - `delegate` — offload scoped read-only investigation to a sub-agent.\n\n\
          **Multi-step work**\n\
          - `plan_todo` — track 2–7 steps for non-trivial tasks; mark items done as you go.\n\n\
+         **Structured user input (`chat_ui`)**\n\
+         - Use `chat_ui` for multi-field forms, wizards, file pickers, and confirm/cancel — not trivial yes/no.\n\
+         - When `chat_ui` / `chat_ui_listen` return `USER_INTERACTIVE_RESPONSE_JSON`, treat field ids, \
+           `__data_model__`, `__action__`, and `__action_type__` as authoritative.\n\
+         - Non-terminal actions (`__action_type__` = action): call `chat_ui_patch` then optionally \
+           `chat_ui_listen` before final submit.\n\n\
          **Skills, MCP, and user tools**\n\
          - When skills or MCP servers are listed below, read skill instructions or \
            tool schemas before use.\n\n\

@@ -24,6 +24,7 @@ pub struct DelegateTool {
     pub settings: Arc<Mutex<Settings>>,
     pub plan_store: PlanStore,
     pub lsp_manager: Arc<LspManager>,
+    pub app: tauri::AppHandle,
 }
 
 #[async_trait]
@@ -79,6 +80,7 @@ impl Tool for DelegateTool {
 
         let workspace = ctx.workspace_root.to_string_lossy().to_string();
         let findings = run_subagent_research(
+            self.app.clone(),
             self.db.clone(),
             self.settings.clone(),
             self.plan_store.clone(),

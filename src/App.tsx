@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openFolderDialog } from "./services/tauri";
+import { generateRepoWiki } from "./services/tauri/repoWiki";
 import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/ide/Terminal";
 import { getSettings } from "./services/tauri/settings";
 import { setLanguage } from "./i18n";
@@ -32,6 +33,9 @@ export default function App() {
   const [clawHubOpen, setClawHubOpen] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
   const [wikiBusy, setWikiBusy] = useState(false);
+  const [ideWikiOpenPath, setIdeWikiOpenPath] = useState<{ path: string; nonce: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     getSettings()
@@ -61,6 +65,23 @@ export default function App() {
     setChatOpen(true);
     setChatInsert({ paths, nonce: Date.now() });
   }, []);
+
+  const handleWikiClick = useCallback(async () => {
+    if (!projectDir || wikiBusy) return;
+    if (mode === "agent") {
+      setWikiBuildNonce((n) => n + 1);
+      return;
+    }
+    setWikiBusy(true);
+    try {
+      const res = await generateRepoWiki(projectDir);
+      setIdeWikiOpenPath({ path: res.path, nonce: Date.now() });
+    } catch (e) {
+      console.error("Repo wiki generation failed:", e);
+    } finally {
+      setWikiBusy(false);
+    }
+  }, [projectDir, wikiBusy, mode]);
 
   return (
     <div className="codez-app">
@@ -94,29 +115,25 @@ export default function App() {
               <ChatIcon />
             </button>
           )}
-          {mode === "agent" && (
-            <>
-              <button
-                type="button"
-                className="codez-titlebar-icon"
-                onClick={() => setClawHubOpen(true)}
-                title={t("clawhub.open")}
-                aria-label={t("clawhub.open")}
-              >
-                <ClawHubIcon />
-              </button>
-              <button
-                type="button"
-                className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
-                onClick={() => setWikiBuildNonce((n) => n + 1)}
-                disabled={!projectDir || wikiBusy}
-                title={t("agent.repoWikiHint")}
-                aria-label={t("agent.repoWiki")}
-              >
-                <WikiIcon />
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className="codez-titlebar-icon"
+            onClick={() => setClawHubOpen(true)}
+            title={t("clawhub.open")}
+            aria-label={t("clawhub.open")}
+          >
+            <ClawHubIcon />
+          </button>
+          <button
+            type="button"
+            className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
+            onClick={() => void handleWikiClick()}
+            disabled={!projectDir || wikiBusy}
+            title={t("agent.repoWikiHint")}
+            aria-label={t("agent.repoWiki")}
+          >
+            <WikiIcon />
+          </button>
           <span className="codez-titlebar-sep" aria-hidden />
           <button
             type="button"
@@ -159,6 +176,7 @@ export default function App() {
                 projectDir={projectDir}
                 onOpenFolder={pickFolder}
                 onSendToChat={handleSendToChat}
+                openPathRequest={ideWikiOpenPath}
               />
             </div>
             {chatOpen && (
@@ -182,7 +200,9 @@ export default function App() {
         </div>
       </main>
 
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
+      )}
       {extOpen && <ExtensionsPanel onClose={() => setExtOpen(false)} />}
       {clawHubOpen && <ClawHubPanel onClose={() => setClawHubOpen(false)} />}
     </div>

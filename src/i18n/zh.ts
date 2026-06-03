@@ -103,6 +103,12 @@ const zh = {
 
   settings: {
     title: "设置 · LLM",
+    titleHub: "设置",
+    tabModels: "模型",
+    tabSkills: "技能",
+    tabExtensions: "扩展",
+    tabRules: "规则",
+    tabHooks: "钩子",
     loading: "加载配置…",
     configuredOk: "LLM 已配置，Chat 可用",
     configuredMissing: "尚未配置 API Key，请先填写下方密钥",
@@ -154,6 +160,59 @@ const zh = {
     mcpArgs: "参数（空格分隔）",
     mcpUrl: "URL（sse）",
     mcpEnv: "环境变量（每行 KEY=value）",
+  },
+
+  workbench: {
+    noProject: "请先打开一个项目文件夹，再管理项目级的规则与钩子。",
+  },
+
+  skills: {
+    installedTitle: "已安装技能",
+    installedHint: "技能（SKILL.md）安装在全局配置目录下，会在匹配任务时注入到 Agent。",
+    empty: "尚未安装任何技能。可在下方从 ClawHub 搜索并安装。",
+    uninstall: "卸载",
+    marketTitle: "技能市场（ClawHub）",
+    marketHint: "搜索并安装社区技能。留空搜索可浏览热门技能。",
+    searchPlaceholder: "搜索技能，如 figma、金融…",
+    search: "搜索",
+    searching: "搜索中…",
+    install: "安装",
+    installing: "安装中…",
+    installed: "已安装",
+  },
+
+  rules: {
+    title: "项目规则",
+    hint: "规则保存在 .codez/rules/ 下（兼容 .cursor/rules/），会作为系统约束注入到 Agent。",
+    empty: "暂无规则。点击下方新建一条。",
+    name: "文件名",
+    content: "规则内容（Markdown）",
+    contentPlaceholder: "# 编码规范\n- 始终使用中文注释\n- ……",
+    add: "新建规则",
+    enabled: "已启用",
+    disabled: "已禁用",
+    enable: "启用",
+    disable: "禁用",
+  },
+
+  hooks: {
+    title: "钩子（Hooks）",
+    hint: "钩子保存在 .codez/hooks.json。beforeAgentTurn 钩子的输出会注入到 Agent 上下文。",
+    empty: "暂无钩子。点击下方新建一条。",
+    namePlaceholder: "钩子名称",
+    enabledLabel: "启用",
+    command: "命令（在项目目录下用 shell 执行）",
+    commandPlaceholder: "git status --short",
+    test: "测试运行",
+    running: "运行中…",
+    add: "新建钩子",
+    saveConfig: "保存钩子配置",
+    event: {
+      beforeAgentTurn: "Agent 回合前",
+      afterAgentTurn: "Agent 回合后",
+      beforeFileEdit: "文件编辑前",
+      afterFileEdit: "文件编辑后",
+    },
   },
 
   extensions: {

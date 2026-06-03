@@ -28,6 +28,9 @@ export type AgentEvent =
   | { type: "tool_start"; id: string; name: string; input: unknown }
   | { type: "tool_end"; id: string; name: string; result: string; is_error: boolean }
   | { type: "plan_update"; items: PlanTodoItem[] }
+  | { type: "interactive_ui"; request_id: string; ui_definition: unknown }
+  | { type: "interactive_ui_patch"; request_id: string; patch: unknown }
+  | { type: "interactive_ui_listen"; request_id: string }
   | { type: "done"; total_input_tokens: number; total_output_tokens: number }
   | { type: "cancelled" }
   | { type: "error"; message: string }

@@ -10,10 +10,17 @@ import {
   type SettingsResponse,
 } from "../../services/tauri/settings";
 import { setLanguage } from "../../i18n";
+import ExtensionsManager from "./ExtensionsManager";
+import SkillsTab from "./settings/SkillsTab";
+import RulesTab from "./settings/RulesTab";
+import HooksTab from "./settings/HooksTab";
 import "./SettingsPanel.css";
+
+type SettingsTab = "models" | "skills" | "extensions" | "rules" | "hooks";
 
 interface SettingsPanelProps {
   onClose: () => void;
+  projectDir?: string | null;
 }
 
 const PROVIDER_KEYS = [
@@ -125,8 +132,9 @@ function toForm(data: SettingsResponse): LlmSettings {
   };
 }
 
-export default function SettingsPanel({ onClose }: SettingsPanelProps) {
+export default function SettingsPanel({ onClose, projectDir = null }: SettingsPanelProps) {
   const { t } = useTranslation();
+  const [tab, setTab] = useState<SettingsTab>("models");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,17 +235,63 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     <div className="codez-settings-overlay" onClick={onClose}>
       <div className="codez-settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="codez-settings-header">
-          <span>{t("settings.title")}</span>
+          <span>{t("settings.titleHub")}</span>
           <button type="button" onClick={onClose} title={t("common.close")}>
             ✕
           </button>
         </div>
 
-        {error && <div className="codez-settings-error">{error}</div>}
+        <div className="codez-settings-tabs" role="tablist">
+          {(
+            [
+              ["models", t("settings.tabModels")],
+              ["skills", t("settings.tabSkills")],
+              ["extensions", t("settings.tabExtensions")],
+              ["rules", t("settings.tabRules")],
+              ["hooks", t("settings.tabHooks")],
+            ] as [SettingsTab, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              className={`codez-settings-tab ${tab === key ? "active" : ""}`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        {loading ? (
-          <div className="codez-settings-loading">{t("settings.loading")}</div>
-        ) : (
+        {tab === "skills" && (
+          <div className="codez-settings-body">
+            <SkillsTab />
+          </div>
+        )}
+        {tab === "extensions" && (
+          <div className="codez-settings-body">
+            <ExtensionsManager />
+          </div>
+        )}
+        {tab === "rules" && (
+          <div className="codez-settings-body">
+            <RulesTab projectDir={projectDir} />
+          </div>
+        )}
+        {tab === "hooks" && (
+          <div className="codez-settings-body">
+            <HooksTab projectDir={projectDir} />
+          </div>
+        )}
+
+        {tab === "models" && (
+          <>
+            {error && <div className="codez-settings-error">{error}</div>}
+
+            {loading ? (
+              <div className="codez-settings-loading">{t("settings.loading")}</div>
+            ) : (
           <>
             <div className="codez-settings-body">
               <div className="codez-settings-status">
@@ -675,6 +729,8 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 {busy ? t("common.saving") : t("common.save")}
               </button>
             </div>
+          </>
+            )}
           </>
         )}
       </div>

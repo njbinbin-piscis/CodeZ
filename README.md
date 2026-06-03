@@ -28,8 +28,7 @@ agent turn on the kernel via `pisci_kernel::headless::run_pisci_turn`. The
 backend `chat_send` command streams `AgentEvent`s (text + tool calls) to the UI
 over a Tauri event channel; the agent edits files in place with its own tools
 and the IDE's file watcher reloads them. Reference files in a prompt with
-`@path/to/file`. Agent mode (full autonomous task board) remains a placeholder
-for M4.
+`@path/to/file`.
 
 **M2 — Cursor-like chat & editing (done).** Assistant messages render as
 GitHub-flavored markdown with syntax-highlighted, copyable code blocks. The chat
@@ -64,6 +63,34 @@ tools in the open project with streamed steps (text + tool calls), a Stop
 button, a task list (open / delete past runs), and a Changes panel showing the
 resulting `git status` for review. The kernel event channel is shared with the
 IDE chat, so each surface only consumes events while it is the one running.
+
+**M4 — Agent task isolation (done).** Each Agent-mode task runs inside its own
+`git worktree` on a fresh `codez/task-<id>` branch under `../.codez-worktrees/`,
+so the main checkout is never written to directly. The Changes panel diffs
+`base...branch` for review, then the task can be **merged** (no-ff), **opened as
+a PR** (`gh`), or **discarded** (worktree + branch removed). Multiple tasks run
+in parallel, each isolated in its own worktree.
+
+**M5 — Codebase index + Tab completion (done).** `commands/codebase.rs` chunks
+source files into 50-line windows in `{project}/.codez/index.db` and answers
+`codebase_search` / `@codebase` with keyword/term-frequency ranking + a path-name
+boost (no embedding API key required; schema leaves room for vectors later). The
+editor also has **Tab ghost-text completion** via `ai_inline_completion`.
+
+**M6 — Skills, rules, hooks, MCP (done).** ClawHub skill marketplace
+(`clawhub_search` / `clawhub_install`) with progressive-disclosure `SKILL.md`
+injection; project rules from `.codez/rules/` (or `.cursor/rules/`); `hooks.json`
+event hooks (`beforeAgentTurn`); and MCP servers from settings registered as tools.
+
+**M7 — SubAgent delegation (done).** The main agent can `delegate` a scoped,
+**read-only** research task to a focused sub-agent (kernel loop in plan-mode tool
+surface, bounded budget/timeout, no recursion). It is marked read-only so several
+delegations run concurrently. CodeZ deliberately does **not** wire the kernel's
+Pool/Koi coordinator/board — see `docs/codez-design.md` §1.1.
+
+**M8 — Repo Wiki + auto model routing (done).** `repo_wiki_generate` builds a
+module/architecture overview from the index; opt-in `CODEZ_AUTO_MODEL_ROUTING`
+picks a fast model for plan mode and a stronger one for agent mode.
 
 `crates/codez-host` is the original kernel-link smoke binary and still builds.
 
@@ -137,4 +164,4 @@ Linux system libs (webkit2gtk-4.1, gtk-3, libsoup-3).
 ## Design
 
 The full architecture, mode design, VS Code-ecosystem compatibility strategy
-and roadmap live in `openpisci/docs/codez-design.md`.
+and roadmap live in `docs/codez-design.md`.

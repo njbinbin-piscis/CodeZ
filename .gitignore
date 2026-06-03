@@ -11,3 +11,4 @@ dist
 
 # Runtime data (chat / file-journal SQLite databases)
 .codez/
+.pisci/

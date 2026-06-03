@@ -27,6 +27,8 @@ interface IDEProps {
   onOpenFolder: () => void;
   /** Insert @file references into the chat composer (opens chat if needed). */
   onSendToChat?: (paths: string[]) => void;
+  /** Open a workspace-relative file when the path or nonce changes. */
+  openPathRequest?: { path: string; nonce: number } | null;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -48,7 +50,7 @@ function collectSelectedFilePaths(nodes: FileNode[], selected: Set<string>): str
   return out;
 }
 
-export default function IDE({ projectDir, onOpenFolder, onSendToChat }: IDEProps) {
+export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRequest }: IDEProps) {
   const { t } = useTranslation();
 
   // File tree
@@ -253,7 +255,6 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat }: IDEProps
     };
   }, [projectDir, loadFileTree, loadGitStatus, scheduleRefresh]);
 
-  // ─── Open a file ─────────────────────────────────────────────────
   const openFile = useCallback(
     async (path: string, readOnly = false) => {
       const existing = tabs.find((t) => t.path === path);
@@ -309,6 +310,11 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat }: IDEProps
     },
     [projectDir, tabs, t],
   );
+
+  useEffect(() => {
+    if (!openPathRequest?.path || !projectDir) return;
+    void openFile(openPathRequest.path);
+  }, [openPathRequest?.nonce, openPathRequest?.path, projectDir, openFile]);
 
   const setTabViewMode = useCallback((path: string, mode: TabViewMode) => {
     setTabs((prev) =>

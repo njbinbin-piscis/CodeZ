@@ -1,6 +1,6 @@
 [package]
 name = "codez-desktop"
-version = "0.0.6"
+version = "0.0.7"
 description = "CodeZ — Cursor-like AI IDE desktop host"
 authors = ["CodeZ"]
 license = "Apache-2.0"
@@ -66,6 +66,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # ClawHub marketplace HTTP client.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
 
 [lints]
 workspace = true

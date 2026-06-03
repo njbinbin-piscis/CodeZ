@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 //! CodeZ desktop host — Tauri application entry point.
 //!
 //! Bridges the React frontend (IDE / Agent modes) to native capabilities and,
@@ -108,6 +109,19 @@ pub fn run() {
             // ClawHub skill marketplace
             commands::clawhub::clawhub_search,
             commands::clawhub::clawhub_install,
+            // Workbench management: installed skills, project rules, hooks
+            commands::workbench::skills_list_installed,
+            commands::workbench::skills_uninstall,
+            commands::workbench::rules_list,
+            commands::workbench::rules_read,
+            commands::workbench::rules_write,
+            commands::workbench::rules_delete,
+            commands::workbench::rules_set_enabled,
+            commands::workbench::hooks_get,
+            commands::workbench::hooks_save,
+            commands::workbench::hooks_run,
+            // Interactive UI (chat_ui tool)
+            commands::interactive::respond_interactive_ui,
             // File journal — Review / Undo of a turn's edits
             commands::journal::journal_list_changes,
             commands::journal::journal_undo_turn,
