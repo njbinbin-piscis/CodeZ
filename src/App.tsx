@@ -13,11 +13,11 @@ import {
 import IdeWorkspace from "./workspaces/ide";
 import AgentWorkspace from "./workspaces/agent";
 import AssistantPanel from "./workspaces/ide/AssistantPanel";
-import BrowserPanel from "./workspaces/ide/BrowserPanel";
 import SettingsPanel from "./workspaces/ide/SettingsPanel";
 import ZLogo from "./components/ZLogo";
-import type { PickedElement } from "./services/tauri/browser";
+import { browserClose, type PickedElement } from "./services/tauri/browser";
 import type { ChatAttachment } from "./services/tauri/chat";
+import { terminalSnippetPut } from "./services/tauri/terminal";
 import {
   BrowserIcon,
   ChatIcon,
@@ -47,7 +47,15 @@ export default function App() {
     return Number.isFinite(saved) && saved >= 280 ? Math.min(760, saved) : 380;
   });
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
-  const [chatInsertText, setChatInsertText] = useState<{ text: string; nonce: number } | null>(null);
+  const [chatInsertElement, setChatInsertElement] = useState<{
+    element: PickedElement;
+    nonce: number;
+  } | null>(null);
+  const [chatInsertTerminal, setChatInsertTerminal] = useState<{
+    snippetId: string;
+    text: string;
+    nonce: number;
+  } | null>(null);
   const [chatAttach, setChatAttach] = useState<{
     attachment: ChatAttachment;
     preview: string | null;
@@ -85,6 +93,7 @@ export default function App() {
         await destroyAllTerminals();
       }
       setIdeWikiOpenPath(null);
+      setChatInsertElement(null);
       setProjectDir(dir);
     } catch (e) {
       console.error("pickFolder failed:", e);
@@ -98,6 +107,9 @@ export default function App() {
       if (!ok) return;
       await destroyAllTerminals();
       setIdeWikiOpenPath(null);
+      setBrowserOpen(false);
+      setChatInsertElement(null);
+      void browserClose().catch(() => {});
       setProjectDir(null);
     } catch (e) {
       console.error("closeProject failed:", e);
@@ -110,20 +122,31 @@ export default function App() {
     setChatInsert({ paths, nonce: Date.now() });
   }, []);
 
-  const handleSendElementToChat = useCallback((el: PickedElement) => {
-    const text = [
-      "Selected element from the browser:",
-      "```html",
-      el.html,
-      "```",
-      `selector: \`${el.selector}\``,
-    ].join("\n");
+  const handleSendTerminalToChat = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     setChatOpen(true);
-    setChatInsertText({ text, nonce: Date.now() });
+    try {
+      const snippetId = await terminalSnippetPut(trimmed);
+      setChatInsertTerminal({ snippetId, text: trimmed, nonce: Date.now() });
+    } catch (e) {
+      console.error("terminalSnippetPut failed:", e);
+    }
   }, []);
 
-  const handleScreenshotToChat = useCallback((base64: string) => {
-    setChatOpen(true);
+  const handleSendElementToChat = useCallback(
+    (el: PickedElement) => {
+      if (!projectDir) return;
+      setChatOpen(true);
+      setChatInsertElement({ element: el, nonce: Date.now() });
+    },
+    [projectDir],
+  );
+
+  const handleScreenshotToChat = useCallback(
+    (base64: string) => {
+      if (!projectDir) return;
+      setChatOpen(true);
     setChatAttach({
       attachment: {
         media_type: "image/png",
@@ -134,7 +157,9 @@ export default function App() {
       preview: `data:image/png;base64,${base64}`,
       nonce: Date.now(),
     });
-  }, []);
+    },
+    [projectDir],
+  );
 
   const handleWikiClick = useCallback(async () => {
     if (!projectDir || wikiBusy) return;
@@ -225,9 +250,10 @@ export default function App() {
             <button
               type="button"
               className={`codez-titlebar-icon ${browserOpen ? "active" : ""}`}
-              onClick={() => setBrowserOpen((v) => !v)}
-              title={t("app.browserTitle")}
-              aria-label={t("app.browserTitle")}
+              onClick={() => projectDir && setBrowserOpen((v) => !v)}
+              disabled={!projectDir}
+              title={projectDir ? t("app.browserTitle") : t("app.browserNeedsProject")}
+              aria-label={projectDir ? t("app.browserTitle") : t("app.browserNeedsProject")}
             >
               <BrowserIcon />
             </button>
@@ -303,12 +329,11 @@ export default function App() {
                 projectDir={projectDir}
                 onOpenFolder={pickFolder}
                 onSendToChat={handleSendToChat}
+                onSendTerminalToChat={handleSendTerminalToChat}
                 openPathRequest={ideWikiOpenPath}
                 onOpenPathRequestHandled={() => setIdeWikiOpenPath(null)}
-              />
-              <BrowserPanel
-                visible={browserOpen}
-                onClose={() => setBrowserOpen(false)}
+                browserOpen={browserOpen}
+                onBrowserOpenChange={setBrowserOpen}
                 onSendElementToChat={handleSendElementToChat}
                 onScreenshotToChat={handleScreenshotToChat}
               />
@@ -326,7 +351,8 @@ export default function App() {
               <AssistantPanel
                 projectDir={projectDir}
                 insertRequest={chatInsert}
-                insertTextRequest={chatInsertText}
+                insertElementRequest={chatInsertElement}
+                insertTerminalRequest={chatInsertTerminal}
                 attachRequest={chatAttach}
               />
             </div>

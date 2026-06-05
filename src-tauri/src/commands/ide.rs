@@ -8,6 +8,7 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write as StdWrite;
+use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -1098,6 +1099,48 @@ pub async fn ide_git_create_branch(project_dir: String, branch: String) -> Resul
 
 // ─── Terminal (PTY) ────────────────────────────────────────────────────────
 
+const TERMINAL_BUFFER_MAX_LINES: usize = 5000;
+
+/// Rolling line buffer of PTY stdout/stderr for agent `terminal_read`.
+#[derive(Default)]
+pub struct TerminalOutputLog {
+    lines: std::collections::VecDeque<String>,
+    partial: String,
+}
+
+impl TerminalOutputLog {
+    pub fn append(&mut self, data: &str) {
+        self.partial.push_str(data);
+        while let Some(pos) = self.partial.find('\n') {
+            let line = self.partial[..=pos].to_string();
+            self.partial.drain(..=pos);
+            self.lines.push_back(line);
+        }
+        while self.lines.len() > TERMINAL_BUFFER_MAX_LINES {
+            self.lines.pop_front();
+        }
+    }
+
+    pub fn tail(&self, lines: usize) -> String {
+        let n = lines.min(self.lines.len());
+        self.lines
+            .iter()
+            .skip(self.lines.len().saturating_sub(n))
+            .cloned()
+            .collect()
+    }
+
+    pub fn grep_in_tail(&self, pattern: &str, search_lines: usize) -> String {
+        let n = search_lines.min(self.lines.len());
+        self.lines
+            .iter()
+            .skip(self.lines.len().saturating_sub(n))
+            .filter(|l| l.contains(pattern))
+            .cloned()
+            .collect()
+    }
+}
+
 /// Global terminal session registry.
 pub struct TerminalRegistry {
     pub sessions: HashMap<String, TerminalSession>,
@@ -1106,6 +1149,7 @@ pub struct TerminalRegistry {
 pub struct TerminalSession {
     pub child: Box<dyn portable_pty::Child + Send>,
     pub writer: Option<Box<dyn StdWrite + Send>>,
+    pub output: Arc<std::sync::Mutex<TerminalOutputLog>>,
 }
 
 impl TerminalRegistry {
@@ -1178,6 +1222,8 @@ pub async fn ide_terminal_create(
     // Store the master pty handle for resize support
     let master_pty = pair.master;
 
+    let output_log = Arc::new(std::sync::Mutex::new(TerminalOutputLog::default()));
+
     // Register the session
     {
         let mut registry = state.terminals.lock().await;
@@ -1186,6 +1232,7 @@ pub async fn ide_terminal_create(
             TerminalSession {
                 child,
                 writer: Some(writer),
+                output: output_log.clone(),
             },
         );
     }
@@ -1201,6 +1248,9 @@ pub async fn ide_terminal_create(
                 Ok(0) => break,
                 Ok(n) => {
                     let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    if let Ok(mut log) = output_log.lock() {
+                        log.append(&data);
+                    }
                     let _ = app_clone.emit(
                         "ide-terminal-output",
                         serde_json::json!({ "id": tid, "data": data }),
@@ -1306,6 +1356,67 @@ pub async fn ide_terminal_is_alive(
         Ok(Some(_)) => Ok(false),
         Err(e) => Err(format!("Failed to check terminal status: {e}")),
     }
+}
+
+/// Read recent output from a terminal session (tail or grep within a tail window).
+#[tauri::command]
+pub async fn ide_terminal_read(
+    state: State<'_, AppState>,
+    terminal_id: Option<String>,
+    lines: Option<usize>,
+    grep: Option<String>,
+    grep_lines: Option<usize>,
+) -> Result<String, String> {
+    let registry = state.terminals.lock().await;
+    let tid = if let Some(id) = terminal_id.filter(|s| !s.trim().is_empty()) {
+        id
+    } else {
+        registry
+            .sessions
+            .keys()
+            .next()
+            .cloned()
+            .ok_or_else(|| "No terminal sessions are running".to_string())?
+    };
+    let session = registry
+        .sessions
+        .get(&tid)
+        .ok_or_else(|| format!("Terminal '{tid}' not found"))?;
+    let log = session
+        .output
+        .lock()
+        .map_err(|e| format!("terminal output lock poisoned: {e}"))?;
+    let out = if let Some(pattern) = grep.filter(|s| !s.is_empty()) {
+        let window = grep_lines.unwrap_or(100).clamp(1, TERMINAL_BUFFER_MAX_LINES);
+        log.grep_in_tail(&pattern, window)
+    } else {
+        let n = lines.unwrap_or(50).clamp(1, TERMINAL_BUFFER_MAX_LINES);
+        log.tail(n)
+    };
+    if out.is_empty() {
+        Ok(format!("[Terminal '{tid}' — no output captured yet]"))
+    } else {
+        Ok(format!("--- terminal:{tid} ---\n{out}"))
+    }
+}
+
+/// Store a user-selected terminal excerpt for `@terminal-snippet(id)` expansion.
+#[tauri::command]
+pub async fn terminal_snippet_put(
+    state: State<'_, AppState>,
+    text: String,
+) -> Result<String, String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("terminal snippet text is empty".to_string());
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    state
+        .terminal_snippets
+        .lock()
+        .await
+        .insert(id.clone(), trimmed.to_string());
+    Ok(id)
 }
 
 // ─── File Watcher (Event Bridge) ───────────────────────────────────────────

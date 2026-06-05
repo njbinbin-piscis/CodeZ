@@ -67,6 +67,8 @@ pub fn run() {
             commands::ide::ide_terminal_count,
             commands::ide::ide_terminal_destroy_all,
             commands::ide::ide_terminal_is_alive,
+            commands::ide::ide_terminal_read,
+            commands::ide::terminal_snippet_put,
             // file-change watcher
             commands::ide::ide_start_watcher,
             commands::ide::ide_stop_watcher,
@@ -98,6 +100,8 @@ pub fn run() {
             commands::browser::browser_screenshot,
             commands::browser::browser_click_at,
             commands::browser::browser_pick_at,
+            commands::browser::browser_inspect_at,
+            commands::browser::browser_set_viewport,
             commands::browser::browser_current_url,
             commands::browser::browser_is_open,
             commands::browser::browser_close,

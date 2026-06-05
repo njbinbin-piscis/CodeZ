@@ -15,17 +15,43 @@ export function formatUserMessageDisplay(content: string): string {
   return content;
 }
 
-/** Split user message into plain text segments and @file reference chips. */
-export function parseUserMessageRefs(text: string): Array<{ type: "text"; value: string } | { type: "ref"; path: string }> {
+export type UserMessagePart =
+  | { type: "text"; value: string }
+  | { type: "ref"; path: string; isDir: boolean }
+  | { type: "browser-element"; selector: string; label: string }
+  | { type: "terminal-snippet"; snippetId: string; label: string };
+
+/** Split user message into plain text, @file refs, and special chips. */
+export function parseUserMessageRefs(text: string): UserMessagePart[] {
   const normalized = formatUserMessageDisplay(text);
-  const parts: Array<{ type: "text"; value: string } | { type: "ref"; path: string }> = [];
-  const re = /(^|\s)(@([^\s]+))/g;
+  const parts: UserMessagePart[] = [];
+  const re =
+    /(^|\s)(@browser-element\(([^)]+)\)|@terminal-snippet\(([^)]+)\)|@([^\s]+))/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(normalized)) !== null) {
     const before = normalized.slice(last, match.index + (match[1]?.length ?? 0));
     if (before) parts.push({ type: "text", value: before });
-    parts.push({ type: "ref", path: match[3] });
+    if (match[2]) {
+      const selector = match[3];
+      const tagMatch = selector.match(/^([a-z][a-z0-9-]*)/i);
+      parts.push({
+        type: "browser-element",
+        selector,
+        label: tagMatch ? `<${tagMatch[1]}>` : selector,
+      });
+    } else if (match[4]) {
+      const snippetId = match[4];
+      parts.push({
+        type: "terminal-snippet",
+        snippetId,
+        label: "Terminal",
+      });
+    } else {
+      const path = match[5];
+      const isDir = /\/$/.test(path);
+      parts.push({ type: "ref", path, isDir });
+    }
     last = match.index + match[0].length;
   }
   const tail = normalized.slice(last);

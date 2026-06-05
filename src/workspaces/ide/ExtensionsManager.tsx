@@ -24,18 +24,18 @@ import { extensionService } from "../../extensions/extensionService";
 import { compatStore } from "../../extensions/compatStore";
 import { satisfies } from "../../extensions/semver";
 import { HOST_VSCODE_VERSION } from "../../extensions/common/protocol";
+import CompatIcon from "./CompatIcon";
+import "./ExtensionsPanel.css";
 
 const STORAGE_KEY = "codez.activeTheme";
 
-/** Sanitize a label into a Monaco-safe theme id. */
 function themeId(ext: VsixManifest, t: VsixTheme): string {
   return `vsix-${ext.name}-${t.label}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
 }
 
 /**
- * Reusable VS Code `.vsix` extension manager body (import, themes, snippets).
- * Rendered both inside the standalone ExtensionsPanel overlay and the Settings
- * "Extensions" tab.
+ * VS Code extension manager: Open VSX marketplace + runtime host extensions,
+ * plus a secondary section for theme/snippet-only .vsix imports.
  */
 export default function ExtensionsManager() {
   const { t: tr } = useTranslation();
@@ -44,9 +44,9 @@ export default function ExtensionsManager() {
   const [activeTheme, setActiveTheme] = useState<string>(themeStore.getSnapshot());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [themesOpen, setThemesOpen] = useState(false);
   const snippetDisposables = useRef<{ dispose: () => void }[]>([]);
 
-  // Runtime extensions (executed by the extension host) + Open VSX marketplace.
   const [installed, setInstalled] = useState<InstalledExtension[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<OpenVsxResult[]>([]);
@@ -85,7 +85,6 @@ export default function ExtensionsManager() {
     try {
       const list = await openVsxSearch(query.trim());
       setResults(list);
-      // Pre-check engines.vscode for each result (best-effort, parallel).
       void Promise.all(
         list.map(async (r) => {
           const id = `${r.namespace}.${r.name}`;
@@ -294,39 +293,42 @@ export default function ExtensionsManager() {
   }, [monaco]);
 
   return (
-    <>
-      <div className="codez-ext-toolbar">
-        <button className="codez-ext-import" onClick={() => void doImport()} disabled={busy}>
-          {busy ? tr("extensions.importing") : tr("extensions.import")}
-        </button>
-        <button
-          className="codez-ext-reset"
-          onClick={resetTheme}
-          disabled={activeTheme === "vs-dark"}
-        >
-          {tr("extensions.resetTheme")}
-        </button>
-      </div>
-
+    <div className="codez-ext-manager">
       {error && <div className="codez-ext-error">{error}</div>}
 
-      {/* Marketplace (Open VSX) + runtime extension host management */}
+      {/* ── Open VSX marketplace (primary) ─────────────────────────────── */}
       <div className="codez-ext-marketplace">
+        <div className="codez-ext-market-header">
+          <div className="codez-ext-market-title">{tr("extensions.marketTitle")}</div>
+          <p className="codez-ext-market-hint">{tr("extensions.marketHint")}</p>
+        </div>
+
         <div className="codez-ext-mk-search">
           <input
-            type="text"
-            placeholder={tr("extensions.searchOpenVsx") || "Search Open VSX…"}
+            type="search"
+            placeholder={tr("extensions.searchOpenVsx")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void doSearch();
             }}
           />
-          <button onClick={() => void doSearch()} disabled={searching}>
-            {searching ? "…" : tr("common.search") || "Search"}
+          <button
+            type="button"
+            className="codez-ext-btn codez-ext-btn-primary"
+            onClick={() => void doSearch()}
+            disabled={searching || !query.trim()}
+          >
+            {searching ? tr("common.loading") : tr("common.search")}
           </button>
-          <button onClick={() => void installVsixFull()} disabled={working === "file"} title="Install a local .vsix and run it">
-            {working === "file" ? "…" : tr("extensions.installVsix") || "Install .vsix"}
+          <button
+            type="button"
+            className="codez-ext-btn codez-ext-btn-primary"
+            onClick={() => void installVsixFull()}
+            disabled={working === "file"}
+            title={tr("extensions.installVsix")}
+          >
+            {working === "file" ? tr("extensions.installing") : tr("extensions.installVsix")}
           </button>
         </div>
 
@@ -339,36 +341,34 @@ export default function ExtensionsManager() {
               return (
                 <div key={id} className="codez-ext-mk-card">
                   <div className="codez-ext-mk-title">
-                    {r.displayName || r.name}
-                    <span className="codez-ext-ver">
-                      {r.namespace} · v{r.version}
-                    </span>
-                    {ec.known &&
-                      (ec.ok ? (
-                        <span className="codez-compat-badge ok" title={`engines.vscode: ${ec.range ?? "*"}`}>
-                          兼容
-                        </span>
+                    <span className="codez-ext-mk-name">{r.displayName || r.name}</span>
+                    <div className="codez-ext-mk-meta">
+                      <span className="codez-ext-ver">
+                        {r.namespace} · v{r.version}
+                      </span>
+                      {ec.known ? (
+                        <CompatIcon
+                          status={ec.ok ? "ok" : "warn"}
+                          range={ec.range}
+                          hostVersion={HOST_VSCODE_VERSION}
+                        />
                       ) : (
-                        <span
-                          className="codez-compat-badge warn"
-                          title={`需要 VS Code ${ec.range}，本宿主实现 ${HOST_VSCODE_VERSION}`}
-                        >
-                          可能不兼容
-                        </span>
-                      ))}
+                        <CompatIcon status="unknown" />
+                      )}
+                    </div>
                   </div>
                   {r.description && <div className="codez-ext-mk-desc">{r.description}</div>}
-                  {ec.known && !ec.ok && (
-                    <div className="codez-compat-note">
-                      需要 VS Code {ec.range}（本宿主 {HOST_VSCODE_VERSION}）
-                    </div>
-                  )}
                   <button
-                    className="codez-ext-mk-install"
+                    type="button"
+                    className="codez-ext-btn codez-ext-btn-success"
                     disabled={working === id || isInstalled}
                     onClick={() => void installFromMarketplace(r)}
                   >
-                    {isInstalled ? tr("extensions.installed") || "Installed" : working === id ? "…" : tr("extensions.install") || "Install"}
+                    {isInstalled
+                      ? tr("extensions.installed")
+                      : working === id
+                        ? tr("extensions.installing")
+                        : tr("extensions.install")}
                   </button>
                 </div>
               );
@@ -378,18 +378,28 @@ export default function ExtensionsManager() {
 
         {installed.length > 0 && (
           <div className="codez-ext-runtime">
-            <div className="codez-ext-section-title">{tr("extensions.runtimeInstalled") || "Installed extensions"}</div>
+            <div className="codez-ext-section-title">{tr("extensions.runtimeInstalled")}</div>
             {installed.map((ext) => (
               <div key={ext.id} className={`codez-ext-runtime-row ${ext.enabled ? "" : "disabled"}`}>
                 <span className="codez-ext-runtime-name" title={ext.description}>
                   {ext.display_name}
                   <span className="codez-ext-ver">v{ext.version}</span>
                 </span>
-                <button onClick={() => void toggleEnabled(ext)} disabled={working === ext.id}>
-                  {ext.enabled ? tr("extensions.disable") || "Disable" : tr("extensions.enable") || "Enable"}
+                <button
+                  type="button"
+                  className="codez-ext-btn codez-ext-btn-secondary"
+                  onClick={() => void toggleEnabled(ext)}
+                  disabled={working === ext.id}
+                >
+                  {ext.enabled ? tr("extensions.disable") : tr("extensions.enable")}
                 </button>
-                <button onClick={() => void uninstallRuntime(ext)} disabled={working === ext.id}>
-                  {tr("extensions.uninstall") || "Uninstall"}
+                <button
+                  type="button"
+                  className="codez-ext-btn codez-ext-btn-secondary"
+                  onClick={() => void uninstallRuntime(ext)}
+                  disabled={working === ext.id}
+                >
+                  {tr("extensions.uninstall")}
                 </button>
               </div>
             ))}
@@ -400,7 +410,8 @@ export default function ExtensionsManager() {
       {compat.hostVersion && (
         <div className="codez-compat-report">
           <div className="codez-ext-section-title">
-            兼容性报告 <span className="codez-ext-ver">宿主 VS Code API {compat.hostVersion}</span>
+            {tr("extensions.compatTitle")}{" "}
+            <span className="codez-ext-ver">{tr("extensions.compatHost", { version: compat.hostVersion })}</span>
           </div>
           {(() => {
             const incompatible = compat.extensions.filter((e) => !e.compatible);
@@ -410,13 +421,17 @@ export default function ExtensionsManager() {
               proposalUsers.length === 0 &&
               compat.missingApis.length === 0
             ) {
-              return <div className="codez-compat-ok">全部 {compat.extensions.length} 个扩展均通过兼容性检查。</div>;
+              return (
+                <div className="codez-compat-ok">
+                  {tr("extensions.compatOk", { count: compat.extensions.length })}
+                </div>
+              );
             }
             return (
               <>
                 {incompatible.length > 0 && (
                   <div className="codez-compat-group">
-                    <div className="codez-compat-group-title">版本不兼容（已跳过激活）</div>
+                    <div className="codez-compat-group-title">{tr("extensions.compatVersion")}</div>
                     {incompatible.map((e) => (
                       <div key={e.id} className="codez-compat-row warn">
                         <span>{e.displayName || e.id}</span>
@@ -427,7 +442,7 @@ export default function ExtensionsManager() {
                 )}
                 {proposalUsers.length > 0 && (
                   <div className="codez-compat-group">
-                    <div className="codez-compat-group-title">使用了未支持的 proposed API</div>
+                    <div className="codez-compat-group-title">{tr("extensions.compatProposals")}</div>
                     {proposalUsers.map((e) => (
                       <div key={e.id} className="codez-compat-row">
                         <span>{e.displayName || e.id}</span>
@@ -439,7 +454,7 @@ export default function ExtensionsManager() {
                 {compat.missingApis.length > 0 && (
                   <div className="codez-compat-group">
                     <div className="codez-compat-group-title">
-                      运行时调用到的未实现 API（{compat.missingApis.length}）
+                      {tr("extensions.compatMissingApis", { count: compat.missingApis.length })}
                     </div>
                     <div className="codez-compat-apis">{compat.missingApis.join("  ·  ")}</div>
                   </div>
@@ -450,59 +465,87 @@ export default function ExtensionsManager() {
         </div>
       )}
 
-      <div className="codez-ext-body">
-        {extensions.length === 0 && <div className="codez-ext-empty">{tr("extensions.empty")}</div>}
-        {extensions.map((ext) => (
-          <div key={ext.name} className="codez-ext-card">
-            <div className="codez-ext-name">
-              {ext.display_name}
-              <span className="codez-ext-ver">
-                {ext.publisher ? `${ext.publisher} · ` : ""}v{ext.version || "?"}
-              </span>
-              <button
-                type="button"
-                className="codez-ext-remove"
-                onClick={() => removeExtension(ext.name)}
-                title={tr("chat.delete")}
-              >
-                ✕
-              </button>
-            </div>
-            {ext.themes.length > 0 && (
-              <div className="codez-ext-section">
-                <div className="codez-ext-section-title">{tr("extensions.themes")}</div>
-                {ext.themes.map((t) => {
-                  const id = themeId(ext, t);
-                  return (
-                    <button
-                      key={id}
-                      className={`codez-ext-theme ${id === activeTheme ? "active" : ""}`}
-                      onClick={() => applyTheme(ext, t)}
-                    >
-                      {t.label}
-                      {id === activeTheme && (
-                        <span className="codez-ext-applied">{tr("extensions.applied")}</span>
-                      )}
-                    </button>
-                  );
-                })}
+      {/* ── Theme/snippet-only imports (secondary, collapsible) ─────────── */}
+      <details
+        className="codez-ext-themes-section"
+        open={themesOpen}
+        onToggle={(e) => setThemesOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary className="codez-ext-themes-summary">{tr("extensions.themesSection")}</summary>
+        <p className="codez-ext-themes-hint">{tr("extensions.themesSectionHint")}</p>
+        <div className="codez-ext-toolbar">
+          <button
+            type="button"
+            className="codez-ext-btn codez-ext-btn-primary"
+            onClick={() => void doImport()}
+            disabled={busy}
+          >
+            {busy ? tr("extensions.importing") : tr("extensions.import")}
+          </button>
+          <button
+            type="button"
+            className="codez-ext-btn codez-ext-btn-secondary"
+            onClick={resetTheme}
+            disabled={activeTheme === "vs-dark"}
+          >
+            {tr("extensions.resetTheme")}
+          </button>
+        </div>
+        <div className="codez-ext-body">
+          {extensions.length === 0 && <div className="codez-ext-empty">{tr("extensions.empty")}</div>}
+          {extensions.map((ext) => (
+            <div key={ext.name} className="codez-ext-card">
+              <div className="codez-ext-name">
+                {ext.display_name}
+                <span className="codez-ext-ver">
+                  {ext.publisher ? `${ext.publisher} · ` : ""}v{ext.version || "?"}
+                </span>
+                <button
+                  type="button"
+                  className="codez-ext-remove"
+                  onClick={() => removeExtension(ext.name)}
+                  title={tr("common.close")}
+                >
+                  ✕
+                </button>
               </div>
-            )}
-            {ext.snippets.length > 0 && (
-              <div className="codez-ext-section">
-                <div className="codez-ext-section-title">
-                  {tr("extensions.snippetsFor")}: {ext.snippets.map((s) => s.language).join(", ")}
+              {ext.themes.length > 0 && (
+                <div className="codez-ext-section">
+                  <div className="codez-ext-section-title">{tr("extensions.themes")}</div>
+                  {ext.themes.map((t) => {
+                    const id = themeId(ext, t);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`codez-ext-theme ${id === activeTheme ? "active" : ""}`}
+                        onClick={() => applyTheme(ext, t)}
+                      >
+                        {t.label}
+                        {id === activeTheme && (
+                          <span className="codez-ext-applied">{tr("extensions.applied")}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
-            {ext.languages.length > 0 && (
-              <div className="codez-ext-langs">
-                {tr("extensions.languages")}: {ext.languages.join(", ")}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </>
+              )}
+              {ext.snippets.length > 0 && (
+                <div className="codez-ext-section">
+                  <div className="codez-ext-section-title">
+                    {tr("extensions.snippetsFor")}: {ext.snippets.map((s) => s.language).join(", ")}
+                  </div>
+                </div>
+              )}
+              {ext.languages.length > 0 && (
+                <div className="codez-ext-langs">
+                  {tr("extensions.languages")}: {ext.languages.join(", ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 }

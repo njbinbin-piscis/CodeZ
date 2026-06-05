@@ -83,6 +83,14 @@ export class ExtensionService {
         contributes: (e.contributes as Record<string, unknown>) ?? undefined,
       }));
 
+    // No enabled extensions → don't pay the cost of booting the Node sidecar
+    // (and don't surface a spurious "host error" on a fresh install). The host
+    // is started lazily the next time a project opens with extensions present.
+    if (extensions.length === 0) {
+      extensionUiStore.setRunning(false);
+      return;
+    }
+
     this.transport = new TauriExtHostTransport((line) => extensionUiStore.appendHostLog(line));
     await this.transport.connect();
 

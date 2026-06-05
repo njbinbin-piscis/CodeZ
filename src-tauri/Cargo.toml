@@ -1,6 +1,6 @@
 [package]
 name = "codez-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "CodeZ — Cursor-like AI IDE desktop host"
 authors = ["CodeZ"]
 license = "Apache-2.0"

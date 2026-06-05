@@ -1,19 +1,25 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import FileTree, { type FileTreeContextMenu } from "./FileTree";
-import { ExplorerIcon, SearchIcon, SourceControlIcon, TerminalIcon } from "./ActivityIcons";
+import { ExplorerIcon, SearchIcon, SourceControlIcon, TerminalIcon, ExtensionsIcon } from "./ActivityIcons";
 import EditorTabs from "./EditorTabs";
 import FileViewer from "./FileViewer";
-import TerminalPanel from "./Terminal";
 import GitPanel from "./GitPanel";
 import SearchPanel from "./SearchPanel";
+import ExtensionsManager from "./ExtensionsManager";
+import BottomPanel, { type BottomTab } from "./BottomPanel";
+import IdeStatusBar from "./IdeStatusBar";
 import ExtensionHostProvider from "../../extensions/ui/ExtensionHostProvider";
 import { ideApi, onFileChanged } from "../../services/tauri/ide";
 import { openPath } from "../../services/tauri";
+import BrowserPanel from "./BrowserPanel";
+import { BROWSER_TAB_PATH, isBrowserTab } from "./browserTab";
+import { browserClose } from "../../services/tauri/browser";
+import type { PickedElement } from "../../services/tauri/browser";
 import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
 import "./IDE.css";
 
-type SidebarTab = "explorer" | "search" | "git";
+type SidebarTab = "explorer" | "search" | "git" | "extensions";
 
 /** Right-click context menu state (shown over a tab). */
 interface TabContextMenu {
@@ -26,12 +32,19 @@ interface TabContextMenu {
 interface IDEProps {
   projectDir: string | null;
   onOpenFolder: () => void;
-  /** Insert @file references into the chat composer (opens chat if needed). */
+  /** Insert file/dir chips into the chat composer (opens chat if needed). */
   onSendToChat?: (paths: string[]) => void;
+  /** Insert a terminal selection chip into the chat composer. */
+  onSendTerminalToChat?: (text: string) => void;
   /** Open a workspace-relative file when the path or nonce changes. */
   openPathRequest?: { path: string; nonce: number } | null;
   /** Called after `openPathRequest` has been consumed (clears parent state). */
   onOpenPathRequestHandled?: () => void;
+  /** Embedded browser tab (editor area, not overlay). */
+  browserOpen?: boolean;
+  onBrowserOpenChange?: (open: boolean) => void;
+  onSendElementToChat?: (el: PickedElement) => void;
+  onScreenshotToChat?: (base64: string) => void;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -41,11 +54,13 @@ interface FileTreeHandle {
   startCreate?: (isDir: boolean) => void;
 }
 
-function collectSelectedFilePaths(nodes: FileNode[], selected: Set<string>): string[] {
+function collectSelectedPaths(nodes: FileNode[], selected: Set<string>): string[] {
   const out: string[] = [];
   const walk = (list: FileNode[]) => {
     for (const n of list) {
-      if (selected.has(n.path) && !n.is_dir) out.push(n.path);
+      if (selected.has(n.path)) {
+        out.push(n.is_dir ? (n.path.endsWith("/") ? n.path : `${n.path}/`) : n.path);
+      }
       if (n.children) walk(n.children);
     }
   };
@@ -53,7 +68,18 @@ function collectSelectedFilePaths(nodes: FileNode[], selected: Set<string>): str
   return out;
 }
 
-export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRequest, onOpenPathRequestHandled }: IDEProps) {
+export default function IDE({
+  projectDir,
+  onOpenFolder,
+  onSendToChat,
+  onSendTerminalToChat,
+  openPathRequest,
+  onOpenPathRequestHandled,
+  browserOpen = false,
+  onBrowserOpenChange,
+  onSendElementToChat,
+  onScreenshotToChat,
+}: IDEProps) {
   const { t } = useTranslation();
 
   // File tree
@@ -78,15 +104,53 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
   const [gitModified, setGitModified] = useState<Set<string>>(new Set());
   const [gitAdded, setGitAdded] = useState<Set<string>>(new Set());
 
-  // UI state
-  const [showTerminal, setShowTerminal] = useState(false);
+  // UI state — unified bottom panel (terminal + extension consoles)
+  const [bottomOpen, setBottomOpen] = useState(false);
+  const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("explorer");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Resizable panel widths
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const [terminalHeight, setTerminalHeight] = useState(200);
+  const [bottomHeight, setBottomHeight] = useState(240);
   const ideRef = useRef<HTMLDivElement>(null);
+
+  const openBottomPanel = useCallback((tab: BottomTab) => {
+    setBottomTab(tab);
+    setBottomOpen(true);
+  }, []);
+
+  const openExtensionsSidebar = useCallback(() => {
+    setSidebarTab("extensions");
+    setSidebarCollapsed(false);
+  }, []);
+
+  const browserTab = useMemo(
+    (): OpenTab => ({
+      path: BROWSER_TAB_PATH,
+      name: t("browser.tabTitle"),
+      language: null,
+      content: "",
+      isDirty: false,
+      isReadOnly: true,
+    }),
+    [t],
+  );
+
+  const headerTabs = useMemo(() => {
+    if (browserOpen && projectDir) return [browserTab, ...tabs];
+    return tabs;
+  }, [browserOpen, projectDir, browserTab, tabs]);
+
+  useEffect(() => {
+    if (browserOpen && projectDir) {
+      setActiveTabPath(BROWSER_TAB_PATH);
+      return;
+    }
+    setActiveTabPath((cur) =>
+      isBrowserTab(cur) ? tabsRef.current[0]?.path ?? null : cur,
+    );
+  }, [browserOpen, projectDir]);
 
   // Right-click context menu for tab headers
   const [tabContextMenu, setTabContextMenu] = useState<TabContextMenu | null>(null);
@@ -118,7 +182,8 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
     setGitModified(new Set());
     setGitAdded(new Set());
     setFileTreeSelection(new Set());
-    setShowTerminal(false);
+    setBottomOpen(false);
+    setBottomTab("terminal");
   }, [projectDir]);
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) || null;
@@ -185,14 +250,14 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
     [sidebarWidth],
   );
 
-  const startTerminalResize = useCallback(
+  const startBottomResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       const startY = e.clientY;
-      const startH = terminalHeight;
+      const startH = bottomHeight;
       const onMove = (ev: MouseEvent) => {
         const delta = startY - ev.clientY;
-        setTerminalHeight(Math.min(400, Math.max(120, startH + delta)));
+        setBottomHeight(Math.min(560, Math.max(120, startH + delta)));
       };
       const onUp = () => {
         window.removeEventListener("mousemove", onMove);
@@ -205,7 +270,7 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
     },
-    [terminalHeight],
+    [bottomHeight],
   );
 
   // ─── Initialize ──────────────────────────────────────────────────
@@ -469,6 +534,21 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
     [removeTab, t],
   );
 
+  const handleTabClose = useCallback(
+    (path: string) => {
+      if (isBrowserTab(path)) {
+        onBrowserOpenChange?.(false);
+        void browserClose().catch(() => {});
+        setActiveTabPath((cur) =>
+          isBrowserTab(cur) ? tabsRef.current[0]?.path ?? null : cur,
+        );
+        return;
+      }
+      closeTab(path);
+    },
+    [closeTab, onBrowserOpenChange],
+  );
+
   // ─── Context menu actions ─────────────────────────────────────────
   const closeAllTabs = useCallback(async () => {
     const dir = projectDirRef.current;
@@ -649,6 +729,7 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
 
   return (
     <div className="pond-ide" ref={ideRef}>
+      <div className="ide-body">
       {/* Activity bar (icon strip) */}
       <div className="ide-activity-bar">
         <button
@@ -675,13 +756,20 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
             <span className="activity-badge">{gitModified.size + gitAdded.size}</span>
           )}
         </button>
+        <button
+          className={sidebarTab === "extensions" && !sidebarCollapsed ? "active" : ""}
+          onClick={() => switchSidebarTab("extensions")}
+          title={t("extensions.nav") || "Extensions"}
+        >
+          <ExtensionsIcon />
+        </button>
         <div style={{ flex: 1 }} />
         <button
-          className={showTerminal ? "active" : ""}
+          className={bottomOpen ? "active" : ""}
           disabled={!projectDir}
           onClick={() => {
             if (!projectDir) return;
-            setShowTerminal((v) => !v);
+            setBottomOpen((v) => !v);
           }}
           title={projectDir ? (t("ide.terminal") || "Terminal") : t("ide.terminalNeedProject")}
         >
@@ -692,7 +780,12 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
       {/* Sidebar content */}
       {!sidebarCollapsed && (
         <div className="ide-sidebar" style={{ width: sidebarWidth }}>
-          {!projectDir ? (
+          {sidebarTab === "extensions" ? (
+            <div className="ide-sidebar-section ide-extensions-sidebar">
+              <div className="ide-sidebar-title">{t("extensions.nav") || "Extensions"}</div>
+              <ExtensionsManager />
+            </div>
+          ) : !projectDir ? (
             <div className="ide-sidebar-empty">
               <div className="ide-sidebar-empty-title">
                 {sidebarTab === "explorer" && (t("ide.explorer") || "Explorer")}
@@ -755,10 +848,10 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
       {/* Editor area */}
       <div className="ide-editor-area">
         <EditorTabs
-          tabs={tabs}
+          tabs={headerTabs}
           activeTabPath={activeTabPath}
           onTabClick={setActiveTabPath}
-          onTabClose={closeTab}
+          onTabClose={handleTabClose}
           onSave={saveFile}
           onTabContextMenu={handleTabContextMenu}
           onCloseAll={closeAllTabs}
@@ -790,6 +883,13 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
                 {t("common.dismiss")}
               </button>
             </div>
+          ) : isBrowserTab(activeTabPath) && browserOpen ? (
+            <BrowserPanel
+              onClose={() => handleTabClose(BROWSER_TAB_PATH)}
+              onSendElementToChat={(el) => onSendElementToChat?.(el)}
+              onScreenshotToChat={(base64) => onScreenshotToChat?.(base64)}
+              chatEnabled={Boolean(projectDir)}
+            />
           ) : activeTab ? (
             <FileViewer
               tab={activeTab}
@@ -813,24 +913,32 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
           )}
         </div>
 
-        {/* Terminal — kept mounted while project is open; visibility toggles only */}
+        {/* Unified bottom panel — terminal + extension consoles, mounted while
+            project is open; visibility toggles only */}
         {projectDir && (
           <>
-            {showTerminal && (
+            {bottomOpen && (
               <div
                 className="ide-resize-handle-v"
-                onMouseDown={startTerminalResize}
+                onMouseDown={startBottomResize}
               />
             )}
-            <TerminalPanel
+            <BottomPanel
               projectDir={projectDir}
-              visible={showTerminal}
-              onHide={() => setShowTerminal(false)}
-              height={terminalHeight}
+              open={bottomOpen}
+              activeTab={bottomTab}
+              onTabChange={setBottomTab}
+              onClose={() => setBottomOpen(false)}
+              height={bottomHeight}
+              onSendTerminalToChat={onSendTerminalToChat}
             />
           </>
         )}
       </div>
+      </div>
+
+      {/* Full-width application status bar */}
+      <IdeStatusBar onOpenPanel={openBottomPanel} onOpenExtensions={openExtensionsSidebar} />
 
       {/* File tree right-click context menu */}
       {fileTreeContextMenu && (
@@ -841,13 +949,19 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
           <button onClick={() => { openFile(fileTreeContextMenu.targetPath); setFileTreeContextMenu(null); }}>
             {t("ide.openFile") || "Open"}
           </button>
-          {!fileTreeContextMenu.isDir && onSendToChat && (
+          {onSendToChat && (
             <button
               onClick={() => {
                 const paths =
                   fileTreeSelection.size > 1 && fileTreeSelection.has(fileTreeContextMenu.targetPath)
-                    ? collectSelectedFilePaths(fileTree, fileTreeSelection)
-                    : [fileTreeContextMenu.targetPath];
+                    ? collectSelectedPaths(fileTree, fileTreeSelection)
+                    : [
+                        fileTreeContextMenu.isDir
+                          ? fileTreeContextMenu.targetPath.endsWith("/")
+                            ? fileTreeContextMenu.targetPath
+                            : `${fileTreeContextMenu.targetPath}/`
+                          : fileTreeContextMenu.targetPath,
+                      ];
                 if (paths.length > 0) onSendToChat(paths);
                 setFileTreeContextMenu(null);
               }}

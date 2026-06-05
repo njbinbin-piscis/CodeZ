@@ -19,6 +19,7 @@ use piscis_kernel::agent::tool::{
     new_tool_registry_handle, ToolContext, ToolRegistry, ToolRegistryHandleExt,
 };
 
+use crate::browser::BrowserManager;
 use crate::lsp::manager::LspManager;
 use piscis_kernel::headless::KernelState;
 use piscis_kernel::llm::{self, ContentBlock, LlmMessage, MessageContent};
@@ -331,7 +332,9 @@ fn collect_at_refs(raw: &str) -> Vec<String> {
             }
             if start < i {
                 let path = &raw[start..i];
-                if !refs.iter().any(|p| p == path) {
+                if path.starts_with("browser-element(") || path.starts_with("terminal-snippet(") {
+                    // Handled by dedicated expanders below.
+                } else if !refs.iter().any(|p| p == path) {
                     refs.push(path.to_string());
                 }
             }
@@ -405,6 +408,138 @@ fn codebase_context_block(raw: &str, workspace_root: &str) -> Option<String> {
         ));
     }
     Some(block)
+}
+
+fn collect_browser_element_refs(raw: &str) -> Vec<String> {
+    let needle = "@browser-element(";
+    let mut refs = Vec::new();
+    let mut i = 0usize;
+    while let Some(rel) = raw[i..].find(needle) {
+        let open = i + rel + needle.len();
+        if let Some(close_rel) = raw[open..].find(')') {
+            let selector = raw[open..open + close_rel].trim();
+            if !selector.is_empty() && !refs.iter().any(|s| s == selector) {
+                refs.push(selector.to_string());
+            }
+            i = open + close_rel + 1;
+        } else {
+            break;
+        }
+    }
+    refs
+}
+
+async fn expand_browser_element_refs(raw: &str, browser: &BrowserManager) -> String {
+    let refs = collect_browser_element_refs(raw);
+    if refs.is_empty() {
+        return raw.to_string();
+    }
+
+    let browser_open = browser.is_open().await;
+    let page_url = if browser_open {
+        browser.current_url().await.unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let mut blocks = Vec::new();
+    for selector in refs {
+        if !browser_open {
+            blocks.push(format!(
+                "[Browser element `@browser-element({selector})` — embedded browser is not open. \
+                 Use the `browser` tool (get_text / eval) with selector `{selector}` on the live page.]"
+            ));
+            continue;
+        }
+        match browser.query_selector(&selector).await {
+            Ok(Some(el)) => {
+                let dom_path = if el.dom_path.is_empty() {
+                    "(n/a)".to_string()
+                } else {
+                    el.dom_path.clone()
+                };
+                let react_component = if el.react_component.is_empty() {
+                    "(n/a)".to_string()
+                } else {
+                    el.react_component.clone()
+                };
+                blocks.push(format!(
+                    "Referenced browser element `@browser-element({selector})` on {page_url}:\n\
+                     - Tag: {}\n\
+                     - Selector: {}\n\
+                     - DOM Path: {dom_path}\n\
+                     - React Component: {react_component}\n\
+                     - Position: {}×{} at ({}, {})\n\
+                     - Text: {}\n\
+                     - HTML:\n```html\n{}\n```\n\
+                     (Re-query with the `browser` tool and selector `{selector}` for live updates.)",
+                    el.tag,
+                    el.selector,
+                    el.rect_width,
+                    el.rect_height,
+                    el.rect_x,
+                    el.rect_y,
+                    el.text,
+                    el.html,
+                ));
+            }
+            Ok(None) => blocks.push(format!(
+                "[Browser element `{selector}` not found on the current page ({page_url}).]"
+            )),
+            Err(e) => blocks.push(format!(
+                "[Failed to query browser element `{selector}`: {e}]"
+            )),
+        }
+    }
+
+    format!(
+        "Context from referenced browser elements:\n\n{}\n\n---\n\n{}",
+        blocks.join("\n\n"),
+        raw
+    )
+}
+
+fn collect_terminal_snippet_refs(raw: &str) -> Vec<String> {
+    let needle = "@terminal-snippet(";
+    let mut refs = Vec::new();
+    let mut i = 0usize;
+    while let Some(rel) = raw[i..].find(needle) {
+        let open = i + rel + needle.len();
+        if let Some(close_rel) = raw[open..].find(')') {
+            let id = raw[open..open + close_rel].trim();
+            if !id.is_empty() && !refs.iter().any(|s| s == id) {
+                refs.push(id.to_string());
+            }
+            i = open + close_rel + 1;
+        } else {
+            break;
+        }
+    }
+    refs
+}
+
+fn expand_terminal_snippets(raw: &str, snippets: &std::collections::HashMap<String, String>) -> String {
+    let refs = collect_terminal_snippet_refs(raw);
+    if refs.is_empty() {
+        return raw.to_string();
+    }
+    let mut blocks = Vec::new();
+    for id in refs {
+        if let Some(text) = snippets.get(&id) {
+            blocks.push(format!(
+                "Terminal selection `@terminal-snippet({id})`:\n```\n{text}\n```"
+            ));
+        } else {
+            blocks.push(format!(
+                "[Terminal snippet `{id}` not found — it may have expired.]"
+            ));
+        }
+    }
+    format!(
+        "Context from terminal selections:\n\n{}\n\n---\n\n{}",
+        blocks.join("\n\n"),
+        raw
+    )
 }
 
 fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
@@ -518,6 +653,9 @@ fn build_tool_registry(
                 registry.register(Box::new(crate::tools::browser::BrowserTool {
                     manager,
                     shots_dir,
+                }));
+                registry.register(Box::new(crate::tools::terminal_read::TerminalReadTool {
+                    terminals: app.state::<crate::state::AppState>().terminals.clone(),
                 }));
             }
             registry.register(Box::new(crate::tools::chat_ui::ChatUiTool {
@@ -872,6 +1010,7 @@ pub async fn run_codez_turn(
     clear_plan: bool,
     display_prompt: Option<String>,
     lsp_manager: Arc<LspManager>,
+    browser: BrowserManager,
     journal: Arc<crate::journal::FileJournal>,
     config_dir: PathBuf,
 ) -> Result<HeadlessCliResponse> {
@@ -930,7 +1069,7 @@ pub async fn run_codez_turn(
     }
 
     let mut registry = build_tool_registry(
-        app,
+        app.clone(),
         db.clone(),
         settings.clone(),
         event_sink.clone(),
@@ -965,7 +1104,15 @@ pub async fn run_codez_turn(
     let display_for_db = display_prompt
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| request.prompt.clone());
-    let llm_user_content = expand_file_refs(&effective_prompt, &workspace_root);
+    let with_browser = expand_browser_element_refs(&effective_prompt, &browser).await;
+    let snippets = {
+        use tauri::Manager as _;
+        let snippets_map = app.state::<crate::state::AppState>().terminal_snippets.clone();
+        let guard = snippets_map.lock().await;
+        guard.clone()
+    };
+    let with_terminal = expand_terminal_snippets(&with_browser, &snippets);
+    let llm_user_content = expand_file_refs(&with_terminal, &workspace_root);
 
     let session_id = match request.session_id.clone().filter(|s| !s.is_empty()) {
         Some(id) => {

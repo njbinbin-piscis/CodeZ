@@ -1,6 +1,84 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
+import type { ComposerChip } from "./composerChips";
+import { chipDisplayLabel } from "./composerChips";
 import type { ChatAttachment, ChatMode } from "../services/tauri/chat";
 import "./ChatComposer.css";
+
+function BrowserElementGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M8 20h8" />
+      <path d="M12 16v4" />
+    </svg>
+  );
+}
+
+function FileRefGlyph({ isDir }: { isDir: boolean }) {
+  if (isDir) {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
+function TerminalGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M7 9l3 3-3 3" />
+      <path d="M12 15h5" />
+    </svg>
+  );
+}
+
+function ChipGlyph({ chip }: { chip: ComposerChip }) {
+  switch (chip.kind) {
+    case "browser-element":
+      return <BrowserElementGlyph />;
+    case "file-ref":
+      return <FileRefGlyph isDir={chip.isDir} />;
+    case "terminal-snippet":
+      return <TerminalGlyph />;
+    case "image-attachment":
+      return null;
+  }
+}
+
+function chipClassName(chip: ComposerChip): string {
+  switch (chip.kind) {
+    case "browser-element":
+      return "codez-composer-chip-browser";
+    case "file-ref":
+      return "codez-composer-chip-file";
+    case "terminal-snippet":
+      return "codez-composer-chip-terminal";
+    case "image-attachment":
+      return "codez-composer-chip-image";
+  }
+}
+
+function chipTitle(chip: ComposerChip): string | undefined {
+  switch (chip.kind) {
+    case "browser-element":
+      return chip.element.selector;
+    case "file-ref":
+      return chip.path;
+    case "terminal-snippet":
+      return chip.preview;
+    case "image-attachment":
+      return chip.attachment.filename ?? chip.attachment.path ?? undefined;
+  }
+}
 
 export interface ComposerMenuOption {
   id: string;
@@ -109,6 +187,7 @@ export interface ChatComposerProps {
   canSend?: boolean;
   textareaRef?: RefObject<HTMLTextAreaElement>;
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   modelId: string;
   modelOptions: ComposerMenuOption[];
   onModelChange: (id: string) => void;
@@ -128,6 +207,9 @@ export interface ChatComposerProps {
   modeNotice?: string | null;
   mentionPopup?: ReactNode;
   composerClassName?: string;
+  /** Non-editable chips (e.g. picked browser elements) shown above the textarea. */
+  chips?: ComposerChip[];
+  onRemoveChip?: (id: string) => void;
   /** When true, lock input controls (e.g. no project folder open). */
   inputDisabled?: boolean;
 }
@@ -142,6 +224,7 @@ export default function ChatComposer({
   canSend: canSendProp,
   textareaRef,
   onKeyDown,
+  onPaste,
   modelId,
   modelOptions,
   onModelChange,
@@ -157,9 +240,12 @@ export default function ChatComposer({
   modeNotice,
   mentionPopup,
   composerClassName = "",
+  chips = [],
+  onRemoveChip,
   inputDisabled = false,
 }: ChatComposerProps) {
-  const canSend = canSendProp ?? Boolean(value.trim() || attachment);
+  const { t } = useTranslation();
+  const canSend = canSendProp ?? Boolean(value.trim() || attachment || chips.length > 0);
   const locked = inputDisabled && !busy;
 
   return (
@@ -168,6 +254,52 @@ export default function ChatComposer({
       <div
         className={`codez-composer${modeSelector?.chatMode === "plan" ? " is-plan" : ""}${busy ? " is-busy" : ""}${composerClassName ? ` ${composerClassName}` : ""}`}
       >
+        {chips.length > 0 && (
+          <div className="codez-composer-chips">
+            {chips.map((chip) =>
+              chip.kind === "image-attachment" ? (
+                <span
+                  key={chip.id}
+                  className={`codez-composer-chip ${chipClassName(chip)}`}
+                  title={chipTitle(chip) ?? chipDisplayLabel(chip, t)}
+                >
+                  <img src={chip.preview} alt="" className="codez-composer-chip-thumb" />
+                  <span className="codez-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
+                  {onRemoveChip && !busy && !locked && (
+                    <button
+                      type="button"
+                      className="codez-composer-chip-remove"
+                      onClick={() => onRemoveChip(chip.id)}
+                      aria-label={t("chat.removeChip")}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              ) : (
+                <span
+                  key={chip.id}
+                  className={`codez-composer-chip ${chipClassName(chip)}`}
+                  title={chipTitle(chip)}
+                >
+                  <ChipGlyph chip={chip} />
+                  <span className="codez-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
+                  {onRemoveChip && !busy && !locked && (
+                    <button
+                      type="button"
+                      className="codez-composer-chip-remove"
+                      onClick={() => onRemoveChip(chip.id)}
+                      aria-label={t("chat.removeChip")}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              ),
+            )}
+          </div>
+        )}
+
         {attachment && (
           <div className="codez-attachment-preview">
             {attachmentPreview ? (
@@ -198,6 +330,7 @@ export default function ChatComposer({
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           rows={1}
           disabled={busy || locked}
         />

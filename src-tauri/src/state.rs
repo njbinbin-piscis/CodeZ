@@ -52,6 +52,8 @@ pub struct AppState {
     pub ext_host: Arc<ExtHostManager>,
     /// Debug Adapter Protocol broker (one active adapter at a time).
     pub dap: Arc<DapManager>,
+    /// Ephemeral terminal text selections keyed by uuid (`@terminal-snippet(id)`).
+    pub terminal_snippets: Arc<Mutex<HashMap<String, String>>>,
 }
 
 /// Default cap on concurrently running Agent turns. Overridable via the
@@ -80,6 +82,7 @@ impl AppState {
             browser: BrowserManager::new(),
             ext_host: Arc::new(ExtHostManager::new()),
             dap: Arc::new(DapManager::new()),
+            terminal_snippets: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

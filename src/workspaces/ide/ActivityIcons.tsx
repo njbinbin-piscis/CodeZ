@@ -51,3 +51,14 @@ export function TerminalIcon(props: ActivityIconProps) {
     </IconWrap>
   );
 }
+
+export function ExtensionsIcon(props: ActivityIconProps) {
+  return (
+    <IconWrap {...props}>
+      <path
+        d="M10 3.5a1.5 1.5 0 0 1 3 0V6h2.5A1.5 1.5 0 0 1 17 7.5V10h2.5a1.5 1.5 0 0 1 0 3H17v3.5a1.5 1.5 0 0 1-1.5 1.5H12v-2.5a1.5 1.5 0 0 0-3 0V18H6.5A1.5 1.5 0 0 1 5 16.5V13H3.5a1.5 1.5 0 0 1 0-3H5V7.5A1.5 1.5 0 0 1 6.5 6H10V3.5z"
+        strokeLinejoin="round"
+      />
+    </IconWrap>
+  );
+}

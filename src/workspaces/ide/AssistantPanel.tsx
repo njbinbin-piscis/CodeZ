@@ -20,11 +20,28 @@ import {
   type PlanTodoItem,
   type SessionMeta,
 } from "../../services/tauri/chat";
-import { getSettings, type LlmProviderConfig } from "../../services/tauri/settings";
+import { getSettings, type LlmProviderConfig, type SettingsResponse } from "../../services/tauri/settings";
 import { ideApi } from "../../services/tauri/ide";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
-import { attachmentFromPath, modelLabel, pickChatAttachment } from "../../components/chatComposerUtils";
+import {
+  composePromptWithChips,
+  createBrowserElementChip,
+  createFileRefChip,
+  createImageAttachmentChip,
+  createTerminalSnippetChip,
+  extractImageAttachment,
+  type ComposerChip,
+} from "../../components/composerChips";
+import type { PickedElement } from "../../services/tauri/browser";
+import {
+  absPathToProjectRel,
+  blobToDataUrl,
+  dataUrlToBase64,
+  modelLabel,
+  pickChatAttachment,
+} from "../../components/chatComposerUtils";
+import { visionCapable } from "../../components/visionUtils";
 import ContextUsageRing, { type ContextUsageSnapshot } from "../../components/ContextUsageRing";
 import { formatUserMessageDisplay } from "../../components/chatFileRefs";
 import UserMessage from "../../components/UserMessage";
@@ -57,9 +74,10 @@ interface AssistantPanelProps {
   projectDir: string | null;
   /** External request to insert @file references into the composer. */
   insertRequest?: { paths: string[]; nonce: number } | null;
-  /** External request to append free-form text to the composer (e.g. a picked
-   *  browser element). */
-  insertTextRequest?: { text: string; nonce: number } | null;
+  /** External request to add a picked browser element chip to the composer. */
+  insertElementRequest?: { element: PickedElement; nonce: number } | null;
+  /** External request to add a terminal selection chip to the composer. */
+  insertTerminalRequest?: { snippetId: string; text: string; nonce: number } | null;
   /** External request to set an attachment (e.g. a browser screenshot). */
   attachRequest?: { attachment: ChatAttachment; preview: string | null; nonce: number } | null;
 }
@@ -73,6 +91,14 @@ interface QueuedTurn {
 interface PlanResumeState {
   text: string;
   attachment: ChatAttachment | null;
+}
+
+function revokeImageChipPreviews(chips: ComposerChip[]) {
+  for (const chip of chips) {
+    if (chip.kind === "image-attachment" && chip.preview.startsWith("blob:")) {
+      URL.revokeObjectURL(chip.preview);
+    }
+  }
 }
 
 function flattenFiles(nodes: FileNode[], acc: string[] = []): string[] {
@@ -101,7 +127,8 @@ interface MentionState {
 export default function AssistantPanel({
   projectDir,
   insertRequest,
-  insertTextRequest,
+  insertElementRequest,
+  insertTerminalRequest,
   attachRequest,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
@@ -121,8 +148,8 @@ export default function AssistantPanel({
   const [modelId, setModelId] = useState(() => localStorage.getItem("codez-model-id") ?? "");
   const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
   const [defaultModelLabel, setDefaultModelLabel] = useState("");
-  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
-  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanTodoItem[]>([]);
   const [review, setReview] = useState<{ turnId: string; changes: JournalChange[] } | null>(null);
   const [undoing, setUndoing] = useState(false);
@@ -133,6 +160,7 @@ export default function AssistantPanel({
   const [planResume, setPlanResume] = useState<PlanResumeState | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsageSnapshot | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [composerChips, setComposerChips] = useState<ComposerChip[]>([]);
 
   const {
     pendingCards,
@@ -163,17 +191,31 @@ export default function AssistantPanel({
     setShowSessions(false);
     setContextUsage(null);
     clearCards();
+    setComposerChips((cur) => {
+      revokeImageChipPreviews(cur);
+      return [];
+    });
   }, [projectDir, clearCards]);
 
   useEffect(() => {
     getSettings()
       .then((s) => {
+        setAppSettings(s);
         setLlmProviders(s.llm_providers ?? []);
         const label = s.model?.trim() ? `${s.provider}/${s.model}` : s.provider || "default";
         setDefaultModelLabel(label);
       })
-      .catch(() => setLlmProviders([]));
+      .catch(() => {
+        setAppSettings(null);
+        setLlmProviders([]);
+      });
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     localStorage.setItem("codez-chat-mode", chatMode);
@@ -185,47 +227,74 @@ export default function AssistantPanel({
 
   useEffect(() => {
     if (!insertRequest?.paths.length) return;
-    const refs = insertRequest.paths
-      .map((p) => `@${p.replace(/^[/\\]+/, "")}`)
-      .join(" ");
-    setInput((cur) => {
-      const prefix = cur.trim() ? `${cur.trimEnd()} ` : "";
-      return `${prefix}${refs} `;
+    const newChips = insertRequest.paths.map((p) => {
+      const isDir = /[/\\]$/.test(p);
+      const rel = p.replace(/^[/\\]+/, "");
+      const path = isDir ? `${rel.replace(/[/\\]+$/, "")}/` : rel;
+      return createFileRefChip(path, isDir);
     });
-    requestAnimationFrame(() => {
-      taRef.current?.focus();
-      const len = taRef.current?.value.length ?? 0;
-      taRef.current?.setSelectionRange(len, len);
-    });
+    setComposerChips((cur) => [...cur, ...newChips]);
+    requestAnimationFrame(() => taRef.current?.focus());
   }, [insertRequest?.nonce, insertRequest?.paths]);
 
   useEffect(() => {
-    if (!insertTextRequest?.text) return;
-    setInput((cur) => {
-      const prefix = cur.trim() ? `${cur.trimEnd()}\n` : "";
-      return `${prefix}${insertTextRequest.text} `;
-    });
-    requestAnimationFrame(() => {
-      taRef.current?.focus();
-      const len = taRef.current?.value.length ?? 0;
-      taRef.current?.setSelectionRange(len, len);
-    });
-  }, [insertTextRequest?.nonce, insertTextRequest?.text]);
+    if (!insertElementRequest?.element) return;
+    setComposerChips((cur) => [...cur, createBrowserElementChip(insertElementRequest.element)]);
+    requestAnimationFrame(() => taRef.current?.focus());
+  }, [insertElementRequest?.nonce, insertElementRequest?.element]);
+
+  useEffect(() => {
+    if (!insertTerminalRequest?.snippetId) return;
+    const lineCount = insertTerminalRequest.text.split(/\r?\n/).length;
+    const preview = insertTerminalRequest.text.replace(/\s+/g, " ").trim().slice(0, 80);
+    setComposerChips((cur) => [
+      ...cur,
+      createTerminalSnippetChip(insertTerminalRequest.snippetId, preview, lineCount),
+    ]);
+    requestAnimationFrame(() => taRef.current?.focus());
+  }, [insertTerminalRequest?.nonce, insertTerminalRequest?.snippetId, insertTerminalRequest?.text]);
 
   useEffect(() => {
     if (!attachRequest?.attachment) return;
-    if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
-    setAttachment(attachRequest.attachment);
-    setAttachmentPreview(attachRequest.preview);
+    if (attachRequest.attachment.media_type.startsWith("image/")) {
+      if (!appSettings || !visionCapable(appSettings, modelId, llmProviders)) {
+        setToast(t("chat.visionRequired"));
+        return;
+      }
+    }
+    const preview =
+      attachRequest.preview ??
+      (attachRequest.attachment.data
+        ? `data:${attachRequest.attachment.media_type};base64,${attachRequest.attachment.data}`
+        : "");
+    if (!preview) return;
+    setComposerChips((cur) => {
+      revokeImageChipPreviews(cur.filter((c) => c.kind === "image-attachment"));
+      return [
+        ...cur.filter((c) => c.kind !== "image-attachment"),
+        createImageAttachmentChip(attachRequest.attachment, preview),
+      ];
+    });
     requestAnimationFrame(() => taRef.current?.focus());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachRequest?.nonce]);
+  }, [
+    attachRequest?.nonce,
+    attachRequest?.attachment,
+    attachRequest?.preview,
+    appSettings,
+    modelId,
+    llmProviders,
+    t,
+  ]);
 
-  const clearAttachment = useCallback(() => {
-    setAttachment(null);
-    if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
-    setAttachmentPreview(null);
-  }, [attachmentPreview]);
+  const addImageChip = useCallback((attachment: ChatAttachment, preview: string) => {
+    setComposerChips((cur) => {
+      revokeImageChipPreviews(cur.filter((c) => c.kind === "image-attachment"));
+      return [
+        ...cur.filter((c) => c.kind !== "image-attachment"),
+        createImageAttachmentChip(attachment, preview),
+      ];
+    });
+  }, []);
 
   useEffect(() => {
     if (!projectDir) {
@@ -329,7 +398,19 @@ export default function AssistantPanel({
     return () => unlisten?.();
   }, [applyEvent]);
 
-  // OS file drag-and-drop → attachment. Tauri captures native file drops at the
+  const applyDroppedPaths = useCallback(
+    (paths: string[]) => {
+      if (!projectDir) return;
+      const chips = paths.map((abs) =>
+        createFileRefChip(absPathToProjectRel(abs, projectDir), false),
+      );
+      setComposerChips((cur) => [...cur, ...chips]);
+      taRef.current?.focus();
+    },
+    [projectDir],
+  );
+
+  // OS file drag-and-drop → file-ref chips. Tauri captures native file drops at the
   // webview level (HTML5 ondrop never fires for files), so we subscribe to the
   // webview drag-drop stream and only react when the pointer is over this panel.
   useEffect(() => {
@@ -354,7 +435,7 @@ export default function AssistantPanel({
           const over = pointInPanel(p.position.x, p.position.y);
           setDragOver(false);
           if (over && p.paths.length > 0) {
-            void applyDroppedFile(p.paths[0]);
+            applyDroppedPaths(p.paths);
           }
         } else {
           setDragOver(false);
@@ -369,8 +450,7 @@ export default function AssistantPanel({
       cancelled = true;
       unlisten?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachmentPreview]);
+  }, [applyDroppedPaths]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -463,16 +543,19 @@ export default function AssistantPanel({
   }, [review, projectDir]);
 
   const submit = useCallback(() => {
-    const text = input.trim();
-    if (!text && !attachment) return;
+    const text = composePromptWithChips(composerChips, input);
+    const pendingAttachment = extractImageAttachment(composerChips);
+    if (!text && !pendingAttachment) return;
     if (!projectDir) {
       setError(t("chat.noProject"));
       return;
     }
-    const pendingAttachment = attachment;
     setInput("");
+    setComposerChips((cur) => {
+      revokeImageChipPreviews(cur);
+      return [];
+    });
     setMention(null);
-    clearAttachment();
 
     const unfinished = planItems.filter((i) => i.status === "pending" || i.status === "in_progress");
     if (unfinished.length > 0) {
@@ -480,7 +563,7 @@ export default function AssistantPanel({
       return;
     }
     doSend(text, pendingAttachment, true);
-  }, [input, attachment, projectDir, planItems, clearAttachment, doSend, t]);
+  }, [input, composerChips, projectDir, planItems, doSend, t]);
 
   const onModeChange = (mode: ChatMode) => {
     setChatMode(mode);
@@ -603,30 +686,64 @@ export default function AssistantPanel({
   );
 
   const handleAttach = useCallback(async () => {
+    if (!projectDir) return;
     try {
       const picked = await pickChatAttachment();
       if (!picked) return;
-      if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
-      setAttachment(picked.attachment);
-      setAttachmentPreview(picked.preview);
+      if (picked.attachment.media_type.startsWith("image/")) {
+        if (!appSettings || !visionCapable(appSettings, modelId, llmProviders)) {
+          setToast(t("chat.visionRequired"));
+          return;
+        }
+        const preview =
+          picked.preview ??
+          (picked.attachment.data
+            ? `data:${picked.attachment.media_type};base64,${picked.attachment.data}`
+            : "");
+        if (!preview) return;
+        addImageChip(picked.attachment, preview);
+      } else if (picked.attachment.path) {
+        const rel = absPathToProjectRel(picked.attachment.path, projectDir);
+        setComposerChips((cur) => [...cur, createFileRefChip(rel, false)]);
+      }
+      taRef.current?.focus();
     } catch (e) {
       setError(String(e));
     }
-  }, [attachmentPreview]);
+  }, [projectDir, appSettings, modelId, llmProviders, addImageChip, t]);
 
-  const applyDroppedFile = useCallback(
-    async (path: string) => {
-      try {
-        const picked = await attachmentFromPath(path);
-        if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
-        setAttachment(picked.attachment);
-        setAttachmentPreview(picked.preview);
-        taRef.current?.focus();
-      } catch (e) {
-        setError(String(e));
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (!item.type.startsWith("image/")) continue;
+        e.preventDefault();
+        if (!appSettings || !visionCapable(appSettings, modelId, llmProviders)) {
+          setToast(t("chat.visionRequired"));
+          return;
+        }
+        const file = item.getAsFile();
+        if (!file) return;
+        try {
+          const dataUrl = await blobToDataUrl(file);
+          const data = dataUrlToBase64(dataUrl);
+          addImageChip(
+            {
+              media_type: file.type || "image/png",
+              data,
+              filename: file.name || "paste.png",
+              path: null,
+            },
+            dataUrl,
+          );
+        } catch (err) {
+          setError(String(err));
+        }
+        return;
       }
     },
-    [attachmentPreview],
+    [appSettings, modelId, llmProviders, addImageChip, t],
   );
 
   const modelOptions = useMemo(() => {
@@ -651,7 +768,7 @@ export default function AssistantPanel({
     [t],
   );
 
-  const canSend = Boolean(projectDir && (input.trim() || attachment));
+  const canSend = Boolean(projectDir && (input.trim() || composerChips.length > 0));
 
   const unfinishedCount = planItems.filter((i) => i.status === "pending" || i.status === "in_progress").length;
 
@@ -751,9 +868,11 @@ export default function AssistantPanel({
         </div>
       </div>
 
+      {toast && <div className="codez-assistant-toast">{toast}</div>}
+
       {dragOver && (
         <div className="codez-assistant-dropzone">
-          <span>{t("chat.dropToAttach")}</span>
+          <span>{t("chat.dropToAddRefs")}</span>
         </div>
       )}
 
@@ -908,15 +1027,26 @@ export default function AssistantPanel({
         placeholder={inputPlaceholder}
         canSend={canSend}
         inputDisabled={!projectDir}
+        chips={composerChips}
+        onRemoveChip={(id) =>
+          setComposerChips((cur) => {
+            const removed = cur.find((c) => c.id === id);
+            if (removed?.kind === "image-attachment" && removed.preview.startsWith("blob:")) {
+              URL.revokeObjectURL(removed.preview);
+            }
+            return cur.filter((c) => c.id !== id);
+          })
+        }
         textareaRef={taRef}
         onKeyDown={onKeyDown}
+        onPaste={(e) => void handlePaste(e)}
         modelId={modelId}
         modelOptions={modelOptions}
         onModelChange={setModelId}
-        attachment={attachment}
-        attachmentPreview={attachmentPreview}
+        attachment={null}
+        attachmentPreview={null}
         onAttach={() => void handleAttach()}
-        onClearAttachment={clearAttachment}
+        onClearAttachment={() => {}}
         attachTitle={t("chat.attachFile")}
         removeAttachmentTitle={t("chat.removeAttachment")}
         stopTitle={t("chat.stop")}

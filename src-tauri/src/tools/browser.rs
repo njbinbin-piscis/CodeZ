@@ -33,6 +33,7 @@ impl Tool for BrowserTool {
          - 'navigate' { url }: load a URL, wait for it to settle.\n\
          - 'screenshot' {}: capture the page to a PNG file; returns its path.\n\
          - 'click' { selector }: click the first element matching a CSS selector.\n\
+         - 'click_at' { x, y }: click at viewport coordinates (same frame as the panel).\n\
          - 'type' { selector, text, submit? }: focus the element, type text, and \
            optionally press Enter (submit=true).\n\
          - 'get_text' { selector? }: return innerText of a selector (or the page).\n\
@@ -49,11 +50,13 @@ impl Tool for BrowserTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["navigate", "screenshot", "click", "type", "get_text", "eval", "assert", "current_url", "close"],
+                    "enum": ["navigate", "screenshot", "click", "click_at", "type", "get_text", "eval", "assert", "current_url", "close"],
                     "description": "Which browser action to perform."
                 },
                 "url": { "type": "string", "description": "For 'navigate'." },
                 "selector": { "type": "string", "description": "CSS selector for click/type/get_text/assert." },
+                "x": { "type": "number", "description": "For 'click_at': viewport X in CSS pixels." },
+                "y": { "type": "number", "description": "For 'click_at': viewport Y in CSS pixels." },
                 "text": { "type": "string", "description": "For 'type': text to enter." },
                 "submit": { "type": "boolean", "description": "For 'type': press Enter after typing." },
                 "script": { "type": "string", "description": "For 'eval': a JS expression." },
@@ -112,6 +115,18 @@ impl Tool for BrowserTool {
                 match self.manager.click_selector(&selector).await {
                     Ok(_) => Ok(ToolResult::ok(format!("Clicked '{selector}'"))),
                     Err(e) => Ok(ToolResult::err(format!("click failed: {e}"))),
+                }
+            }
+            "click_at" => {
+                let x = input.get("x").and_then(|v| v.as_f64());
+                let y = input.get("y").and_then(|v| v.as_f64());
+                let (Some(x), Some(y)) = (x, y) else {
+                    return Ok(ToolResult::err("'x' and 'y' are required for click_at"));
+                };
+                match self.manager.click_at(x, y).await {
+                    Ok(true) => Ok(ToolResult::ok(format!("Clicked at ({x}, {y})"))),
+                    Ok(false) => Ok(ToolResult::err(format!("No element at ({x}, {y})"))),
+                    Err(e) => Ok(ToolResult::err(format!("click_at failed: {e}"))),
                 }
             }
             "type" => {
@@ -190,7 +205,7 @@ impl Tool for BrowserTool {
                 Err(e) => Ok(ToolResult::err(format!("close failed: {e}"))),
             },
             other => Ok(ToolResult::err(format!(
-                "unknown action '{other}'. Valid: navigate, screenshot, click, type, get_text, eval, assert, current_url, close"
+                "unknown action '{other}'. Valid: navigate, screenshot, click, click_at, type, get_text, eval, assert, current_url, close"
             ))),
         }
     }

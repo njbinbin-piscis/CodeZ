@@ -634,7 +634,7 @@ checksum = "5417da527aa9bf6a1e10a781231effd1edd3ee82f27d5f8529ac9b279babce96"
 
 [[package]]
 name = "codez-desktop"
-version = "0.0.9"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",

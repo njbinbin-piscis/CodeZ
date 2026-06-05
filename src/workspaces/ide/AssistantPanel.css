@@ -481,3 +481,20 @@
   background: var(--accent, #7c6af7);
   color: #fff;
 }
+
+.codez-assistant-toast {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 120px;
+  z-index: 30;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(30, 24, 12, 0.96);
+  color: #fde68a;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}

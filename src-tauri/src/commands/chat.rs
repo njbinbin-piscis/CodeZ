@@ -146,6 +146,7 @@ pub async fn chat_send(
         clear_plan.unwrap_or(true),
         display_prompt,
         state.lsp_manager.clone(),
+        state.browser.clone(),
         journal.clone(),
         config_dir,
     )

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { isBrowserTab } from "./browserTab";
 import type { OpenTab } from "./types";
 
 interface TabContextMenu {
@@ -55,7 +56,7 @@ export default function EditorTabs({
         {tabs.map((tab) => (
           <div
             key={tab.path}
-            className={`ide-tab ${tab.path === activeTabPath ? "active" : ""}`}
+            className={`ide-tab${isBrowserTab(tab.path) ? " browser-tab" : ""} ${tab.path === activeTabPath ? "active" : ""}`}
             onClick={() => onTabClick(tab.path)}
             onContextMenu={(e) => onTabContextMenu?.(e, tab.path)}
           >

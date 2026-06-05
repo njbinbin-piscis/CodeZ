@@ -30,6 +30,24 @@ export function dataUrlToBase64(dataUrl: string): string | null {
   return idx >= 0 ? dataUrl.slice(idx + 1) : null;
 }
 
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Map an absolute path to a workspace-relative path when possible. */
+export function absPathToProjectRel(absPath: string, projectDir: string): string {
+  const normRoot = projectDir.replace(/\\/g, "/").replace(/\/+$/, "");
+  const norm = absPath.replace(/\\/g, "/");
+  if (norm.startsWith(`${normRoot}/`)) return norm.slice(normRoot.length + 1);
+  if (norm.startsWith(normRoot)) return norm.slice(normRoot.length).replace(/^\//, "");
+  return norm.split("/").pop() ?? norm;
+}
+
 export function modelLabel(p: LlmProviderConfig): string {
   return p.label?.trim() || p.id;
 }

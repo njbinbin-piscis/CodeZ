@@ -81,6 +81,7 @@ export interface ExtensionUiSnapshot {
   debugOutput: string[];
   hostLog: string[];
   running: boolean;
+  hostError: string | null;
 }
 
 const EMPTY: ExtensionUiSnapshot = {
@@ -97,6 +98,7 @@ const EMPTY: ExtensionUiSnapshot = {
   debugOutput: [],
   hostLog: [],
   running: false,
+  hostError: null,
 };
 
 class ExtensionUiStore {
@@ -114,6 +116,7 @@ class ExtensionUiStore {
   private debugOutput: string[] = [];
   private hostLog: string[] = [];
   private running = false;
+  private hostError: string | null = null;
   private seq = 1;
   private snapshot: ExtensionUiSnapshot = EMPTY;
 
@@ -139,6 +142,7 @@ class ExtensionUiStore {
       debugOutput: [...this.debugOutput],
       hostLog: [...this.hostLog],
       running: this.running,
+      hostError: this.hostError,
     };
     for (const l of this.listeners) l();
   }
@@ -149,6 +153,12 @@ class ExtensionUiStore {
 
   setRunning(running: boolean): void {
     this.running = running;
+    if (running) this.hostError = null;
+    this.emit();
+  }
+
+  setHostError(error: string | null): void {
+    this.hostError = error;
     this.emit();
   }
 
@@ -331,6 +341,7 @@ class ExtensionUiStore {
     this.scm.clear();
     this.tests.clear();
     this.debugOutput = [];
+    this.hostError = null;
     this.emit();
   }
 }

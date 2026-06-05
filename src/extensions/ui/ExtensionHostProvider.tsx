@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { extensionService } from "../extensionService";
-import ExtensionStatusBar from "./StatusBar";
-import ExtensionPanel from "./ExtensionPanel";
+import { extensionUiStore } from "../extensionUiStore";
 import MessageToasts from "./MessageToasts";
 import QuickInput from "./QuickInput";
 import "./extensions.css";
@@ -13,25 +12,22 @@ interface Props {
 }
 
 /**
- * Mounts the VS Code extension ecosystem for the open project: boots the host
- * sidecar, renders the global UI surfaces (toasts, quick input, status bar) and
- * the contributed-UI dock (views/output/scm/tests/debug/webviews).
+ * Owns the VS Code extension host lifecycle for the open project and renders the
+ * global overlay surfaces (message toasts + quick input). All docked UI (status
+ * bar items, output/debug/views/scm/tests/webviews) is rendered by the IDE
+ * shell's status bar + unified bottom panel, which read the shared store.
  */
 export default function ExtensionHostProvider({ projectDir, enabled = true }: Props) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     if (!projectDir || !enabled) {
       void extensionService.stop();
       return;
     }
     let cancelled = false;
-    extensionService
-      .start(projectDir)
-      .catch((e) => {
-        if (!cancelled) setError(String(e));
-      });
+    extensionUiStore.setHostError(null);
+    extensionService.start(projectDir).catch((e) => {
+      if (!cancelled) extensionUiStore.setHostError(String(e));
+    });
     return () => {
       cancelled = true;
       void extensionService.stop();
@@ -44,13 +40,6 @@ export default function ExtensionHostProvider({ projectDir, enabled = true }: Pr
     <>
       <MessageToasts />
       <QuickInput />
-      {panelOpen && <ExtensionPanel onClose={() => setPanelOpen(false)} />}
-      <ExtensionStatusBar panelOpen={panelOpen} onTogglePanel={() => setPanelOpen((v) => !v)} />
-      {error && (
-        <div className="codez-ext-host-error" title={error} onClick={() => setError(null)}>
-          Extension host error (click to dismiss)
-        </div>
-      )}
     </>
   );
 }

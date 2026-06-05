@@ -47,6 +47,83 @@
   opacity: 0.95;
 }
 
+.codez-composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 12px 0;
+}
+
+.codez-composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--text-primary, #e8e8f0);
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.2;
+  user-select: none;
+}
+
+.codez-composer-chip-browser {
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.codez-composer-chip-file {
+  border: 1px solid rgba(124, 106, 247, 0.3);
+  background: rgba(124, 106, 247, 0.1);
+}
+
+.codez-composer-chip-terminal {
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.codez-composer-chip-image {
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+  padding: 3px 6px 3px 3px;
+}
+
+.codez-composer-chip-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--bg-primary);
+}
+
+.codez-composer-chip svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.codez-composer-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.codez-composer-chip-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.codez-composer-chip-remove:hover {
+  color: var(--text-primary, #e8e8f0);
+}
+
 .codez-attachment-preview {
   display: flex;
   align-items: center;
