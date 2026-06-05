@@ -1,0 +1,19 @@
+{
+  "name": "codez-extension-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CodeZ VS Code-compatible extension host (clean-room, Theia-style).",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "dist/host.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node build.mjs && node dist/smoke.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}

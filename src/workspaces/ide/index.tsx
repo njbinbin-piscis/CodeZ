@@ -7,6 +7,7 @@ import FileViewer from "./FileViewer";
 import TerminalPanel from "./Terminal";
 import GitPanel from "./GitPanel";
 import SearchPanel from "./SearchPanel";
+import ExtensionHostProvider from "../../extensions/ui/ExtensionHostProvider";
 import { ideApi, onFileChanged } from "../../services/tauri/ide";
 import { openPath } from "../../services/tauri";
 import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
@@ -890,6 +891,9 @@ export default function IDE({ projectDir, onOpenFolder, onSendToChat, openPathRe
           </button>
         </div>
       )}
+
+      {/* VS Code extension ecosystem: host sidecar + contributed UI surfaces */}
+      <ExtensionHostProvider projectDir={projectDir} />
     </div>
   );
 }

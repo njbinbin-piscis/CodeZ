@@ -105,6 +105,21 @@ pub fn run() {
             commands::repo_wiki::repo_wiki_generate,
             // VS Code .vsix contribution-point ingestion
             commands::vsix::import_vsix,
+            // VS Code extension ecosystem: install/manage + extension host sidecar
+            commands::vsix::vsix_install,
+            commands::vsix::vsix_install_from_url,
+            commands::vsix::vsix_list,
+            commands::vsix::vsix_uninstall,
+            commands::vsix::vsix_set_enabled,
+            commands::vsix::vsix_extensions_dir,
+            commands::ext_host::ext_host_start,
+            commands::ext_host::ext_host_send,
+            commands::ext_host::ext_host_stop,
+            commands::ext_host::ext_host_status,
+            // Debug Adapter Protocol broker
+            commands::dap::dap_start,
+            commands::dap::dap_send,
+            commands::dap::dap_stop,
             // chat session management
             commands::session::chat_list_sessions,
             commands::session::chat_get_messages,

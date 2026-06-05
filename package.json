@@ -1,11 +1,12 @@
 {
   "name": "codez",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:exthost": "npm --prefix extension-host install && npm --prefix extension-host run build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri"

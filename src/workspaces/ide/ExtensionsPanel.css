@@ -162,3 +162,160 @@
   font-size: 11.5px;
   color: var(--text-dim, #9a9ab0);
 }
+
+/* ── Open VSX marketplace + runtime extension management ─────────────────── */
+.codez-ext-marketplace {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--codez-border, #2a2f3d);
+}
+.codez-ext-mk-search {
+  display: flex;
+  gap: 6px;
+}
+.codez-ext-mk-search input {
+  flex: 1;
+  background: #11151c;
+  border: 1px solid #313847;
+  color: #e6eaf2;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.codez-ext-mk-search button {
+  background: #36506f;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.codez-ext-mk-results {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.codez-ext-mk-card {
+  border: 1px solid #2a2f3d;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.codez-ext-mk-title {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.codez-ext-mk-desc {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 4px 0 6px;
+}
+.codez-ext-mk-install {
+  background: #2f7d4f;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.codez-ext-mk-install:disabled {
+  background: #3a414f;
+  cursor: default;
+}
+.codez-ext-runtime {
+  margin-top: 10px;
+}
+.codez-ext-runtime-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.codez-ext-runtime-row.disabled {
+  opacity: 0.5;
+}
+.codez-ext-runtime-name {
+  flex: 1;
+}
+.codez-ext-runtime-row button {
+  background: #2c3242;
+  border: none;
+  color: #cdd3e0;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+/* ── Compatibility badges + report ───────────────────────────────────────── */
+.codez-compat-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.codez-compat-badge.ok {
+  background: rgba(47, 125, 79, 0.25);
+  color: #6fd29a;
+  border: 1px solid #2f7d4f;
+}
+.codez-compat-badge.warn {
+  background: rgba(196, 120, 30, 0.2);
+  color: #e0a44c;
+  border: 1px solid #8a5a1e;
+}
+.codez-compat-note {
+  font-size: 11px;
+  color: #e0a44c;
+  margin: 2px 0 4px;
+}
+.codez-compat-report {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: #20242e;
+  border: 1px solid #2b313d;
+  border-radius: 6px;
+}
+.codez-compat-ok {
+  font-size: 12px;
+  color: #6fd29a;
+  padding: 4px 0;
+}
+.codez-compat-group {
+  margin-top: 8px;
+}
+.codez-compat-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.codez-compat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.codez-compat-row.warn span:first-child {
+  color: #e0a44c;
+}
+.codez-compat-reason {
+  opacity: 0.6;
+  text-align: right;
+  font-size: 11px;
+}
+.codez-compat-apis {
+  font-family: monospace;
+  font-size: 11px;
+  opacity: 0.7;
+  word-break: break-word;
+}

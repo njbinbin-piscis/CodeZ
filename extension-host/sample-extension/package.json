@@ -1,0 +1,12 @@
+{
+  "name": "codez-sample",
+  "displayName": "CodeZ Sample Extension",
+  "publisher": "codez",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "activationEvents": ["*"],
+  "contributes": {
+    "commands": [{ "command": "codezSample.hello", "title": "CodeZ: Hello" }]
+  }
+}

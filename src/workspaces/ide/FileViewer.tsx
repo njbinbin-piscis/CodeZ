@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import CodeEditor from "./CodeEditor";
 import ImagePreview from "./ImagePreview";
 import MarkdownPreview from "./MarkdownPreview";
+import NotebookEditor from "../../extensions/notebook/NotebookEditor";
 import { isHtmlPath, isMarkdownPath, isPreviewablePath } from "./FileIcon";
 import type { OpenTab, TabViewMode } from "./types";
 import "./MarkdownPreview.css";
@@ -47,6 +48,14 @@ export default function FileViewer({
         onChange={onChange}
         onSave={onSave}
       />
+    );
+  }
+
+  if (tab.path.toLowerCase().endsWith(".ipynb") && !tab.isReadOnly) {
+    return (
+      <div className="codez-file-view-body">
+        <NotebookEditor content={tab.content} onChange={onChange} />
+      </div>
     );
   }
 

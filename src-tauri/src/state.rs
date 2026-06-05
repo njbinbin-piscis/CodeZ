@@ -15,6 +15,8 @@ use piscis_kernel::agent::plan::new_plan_store;
 use piscis_kernel::agent::plan::PlanStore;
 
 use crate::browser::BrowserManager;
+use crate::commands::dap::DapManager;
+use crate::commands::ext_host::ExtHostManager;
 use crate::commands::ide::TerminalRegistry;
 use crate::lsp::manager::LspManager;
 
@@ -46,6 +48,10 @@ pub struct AppState {
     /// Embedded Chromium session shared by the Browser panel and the agent
     /// `browser` tool (lazily launched on first use).
     pub browser: BrowserManager,
+    /// VS Code extension host sidecar lifecycle (Node process + RPC stdin).
+    pub ext_host: Arc<ExtHostManager>,
+    /// Debug Adapter Protocol broker (one active adapter at a time).
+    pub dap: Arc<DapManager>,
 }
 
 /// Default cap on concurrently running Agent turns. Overridable via the
@@ -72,6 +78,8 @@ impl AppState {
             plan_state: new_plan_store(),
             interactive_responses: Arc::new(Mutex::new(HashMap::new())),
             browser: BrowserManager::new(),
+            ext_host: Arc::new(ExtHostManager::new()),
+            dap: Arc::new(DapManager::new()),
         }
     }
 }

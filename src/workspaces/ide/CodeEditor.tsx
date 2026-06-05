@@ -13,6 +13,7 @@ import { inlineEdit, aiInlineCompletion } from "../../services/tauri/edit";
 import { diffLines } from "./lineDiff";
 import { editorApplyBus } from "./editorApplyBus";
 import { registerPersistedSnippets } from "./extensionStore";
+import { attachBreakpointGutter } from "../../extensions/debug/breakpoints";
 import "./InlineEdit.css";
 
 /** localStorage flag gating AI Tab (ghost-text) completion. */
@@ -60,6 +61,8 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
   const lspRef = useRef<LspProvidersRegistration | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bpDisposeRef = useRef<any>(null);
   const [inline, setInline] = useState<InlineEditState | null>(null);
   const inlineStateRef = useRef<InlineEditState | null>(null);
   inlineStateRef.current = inline;
@@ -465,6 +468,16 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
       const lang = tab.language || languageForFile(tab.path);
       const fullPath = projectDir ? `${projectDir}/${tab.path}` : tab.path;
 
+      // ── Debug breakpoints (DAP) — gutter toggling + rendering ───────
+      bpDisposeRef.current?.dispose?.();
+      if (!tab.isReadOnly) {
+        try {
+          bpDisposeRef.current = attachBreakpointGutter(editor, monaco, fullPath);
+        } catch {
+          // non-fatal
+        }
+      }
+
       if (lang && projectDir) {
         // Clean up previous LSP connection
         lspRef.current?.dispose();
@@ -511,10 +524,12 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
     }
     lastContentRef.current = tab.content;
 
-    // Cleanup LSP on unmount
+    // Cleanup LSP + breakpoint gutter on unmount
     return () => {
       lspRef.current?.dispose();
       lspRef.current = null;
+      bpDisposeRef.current?.dispose?.();
+      bpDisposeRef.current = null;
     };
   }, [tab.path, tab.content]);
 
@@ -562,6 +577,7 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
         options={{
           readOnly: tab.isReadOnly,
           minimap: { enabled: true },
+          glyphMargin: true,
           fontSize: 13,
           fontFamily: 'Consolas, "Courier New", monospace',
           scrollBeyondLastLine: false,

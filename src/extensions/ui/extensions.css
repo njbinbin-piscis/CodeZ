@@ -1,0 +1,231 @@
+/* VS Code extension ecosystem UI surfaces. */
+
+.codez-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px;
+  background: #1f2330;
+  border-top: 1px solid #2a2f3d;
+  font-size: 12px;
+  color: #cdd3e0;
+  flex-shrink: 0;
+}
+.codez-statusbar-item {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0 8px;
+  height: 22px;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.codez-statusbar-item:hover {
+  background: #2c3242;
+}
+.codez-statusbar-ext.running {
+  color: #6cc7ff;
+}
+
+/* Toasts */
+.codez-ext-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+  max-width: 360px;
+}
+.codez-ext-toast {
+  background: #262b38;
+  border: 1px solid #353c4d;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  color: #e4e8f1;
+  font-size: 13px;
+}
+.codez-ext-toast.sev-0 { border-left-color: #f14c4c; }
+.codez-ext-toast.sev-1 { border-left-color: #e2c08d; }
+.codez-ext-toast.sev-2 { border-left-color: #4daafc; }
+.codez-ext-toast-row { display: flex; align-items: center; gap: 8px; }
+.codez-ext-toast-badge { font-size: 11px; opacity: 0.7; text-transform: uppercase; }
+.codez-ext-toast-msg { flex: 1; }
+.codez-ext-toast-x { background: none; border: none; color: inherit; cursor: pointer; opacity: 0.6; }
+.codez-ext-toast-detail { margin-top: 6px; opacity: 0.8; font-size: 12px; }
+.codez-ext-toast-actions { margin-top: 8px; display: flex; gap: 6px; }
+.codez-ext-toast-actions button {
+  background: #36506f; border: none; color: #fff;
+  padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+
+/* Quick input */
+.codez-quick-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 90px;
+  z-index: 2100;
+}
+.codez-quick {
+  width: 560px;
+  max-width: 90vw;
+  background: #21252f;
+  border: 1px solid #3a414f;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.codez-quick-prompt { padding: 10px 12px 0; color: #aeb6c5; font-size: 12px; }
+.codez-quick input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a1e27;
+  border: none;
+  border-bottom: 1px solid #313847;
+  color: #e6eaf2;
+  padding: 12px 14px;
+  font-size: 14px;
+  outline: none;
+}
+.codez-quick-list { max-height: 320px; overflow-y: auto; }
+.codez-quick-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #dde2ec;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.codez-quick-item:hover { background: #2b3140; }
+.codez-quick-desc { opacity: 0.6; font-size: 12px; }
+.codez-quick-empty { padding: 14px; opacity: 0.6; }
+.codez-quick-footer { padding: 8px 14px; border-top: 1px solid #313847; text-align: right; }
+.codez-quick-footer button { background: #36506f; border: none; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+
+/* Extension dock panel */
+.codez-ext-panel-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  height: 260px;
+  background: #1b1f29;
+  border-top: 1px solid #2a2f3d;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+.codez-ext-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid #2a2f3d;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+.codez-ext-panel-tabs button {
+  background: none;
+  border: none;
+  color: #aeb6c5;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 2px solid transparent;
+}
+.codez-ext-panel-tabs button.active { color: #fff; border-bottom-color: #4daafc; }
+.codez-ext-panel-count {
+  margin-left: 5px;
+  background: #36506f;
+  color: #cfe6ff;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+.codez-ext-panel-body { flex: 1; overflow: auto; padding: 6px 0; }
+.codez-ext-panel-empty { padding: 16px; opacity: 0.6; font-size: 13px; }
+.codez-ext-view-section { margin-bottom: 8px; }
+.codez-ext-view-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  padding: 4px 12px;
+}
+.codez-ext-output select { margin: 4px 12px; background: #11151c; color: #ddd; border: 1px solid #313847; }
+.codez-ext-output pre, .codez-ext-debug {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: #cdd3e0;
+}
+.codez-webview-frame { width: 100%; height: 200px; border: 1px solid #2a2f3d; background: #fff; }
+
+/* Tree */
+.codez-tree { font-size: 13px; }
+.codez-tree-row { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; }
+.codez-tree-row:hover { background: #262b38; }
+.codez-tree-twist { width: 12px; opacity: 0.7; }
+.codez-tree-icon { opacity: 0.7; font-size: 11px; }
+.codez-tree-desc { opacity: 0.5; font-size: 12px; }
+.codez-tree-empty, .codez-tree-label { color: #dde2ec; }
+.codez-scm-group-label { padding: 4px 12px; font-size: 12px; font-weight: 600; }
+.codez-scm-resource { padding: 2px 22px; font-size: 12px; color: #cdd3e0; }
+.codez-test-run { background: none; border: none; color: #6cc78a; cursor: pointer; }
+
+/* Breakpoint glyph in the editor gutter */
+.codez-bp-glyph {
+  background: #e51400;
+  border-radius: 50%;
+  width: 10px !important;
+  height: 10px !important;
+  margin-left: 5px;
+  margin-top: 4px;
+}
+
+/* Debug view */
+.codez-debug-view { padding: 4px 8px; }
+.codez-debug-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+.codez-debug-toolbar button {
+  background: #2c3242; border: none; color: #cdd3e0;
+  width: 26px; height: 24px; border-radius: 4px; cursor: pointer;
+}
+.codez-debug-toolbar button:disabled { opacity: 0.4; cursor: default; }
+.codez-debug-stop { color: #f14c4c !important; }
+.codez-debug-state { font-size: 12px; opacity: 0.7; margin-left: 6px; }
+.codez-debug-idle { font-size: 12px; opacity: 0.6; }
+.codez-debug-cols { display: flex; gap: 12px; }
+.codez-debug-col { flex: 1; min-width: 0; }
+.codez-debug-frame, .codez-debug-var { font-size: 12px; padding: 2px 0; }
+.codez-debug-var { display: flex; gap: 8px; }
+.codez-debug-var-name { color: #9cdcfe; }
+.codez-debug-var-val { color: #cdd3e0; opacity: 0.85; }
+.codez-debug-muted { opacity: 0.5; font-size: 12px; }
+
+.codez-ext-host-error {
+  position: fixed;
+  bottom: 30px;
+  left: 8px;
+  background: #5a1d1d;
+  color: #ffd7d7;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 2000;
+}
