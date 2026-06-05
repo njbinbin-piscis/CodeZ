@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run build:exthost
+      - run: npm --prefix extension-host run smoke
       - run: npm run build
 
   rust:
@@ -49,6 +51,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run build:exthost
       - run: npm run build
       - name: cargo check (workspace)
         run: cargo check --workspace --all-targets
