@@ -939,7 +939,14 @@ export default function WorkZWorkspace({
         />
       )}
       {workflowOpen && workflowRunId && (
-        <WorkflowRunPanel runId={workflowRunId} onClose={() => setWorkflowOpen(false)} />
+        <WorkflowRunPanel
+          runId={workflowRunId}
+          onClose={() => setWorkflowOpen(false)}
+          onRerun={(id) => {
+            setWorkflowRunId(id);
+            setWorkflowStatus("running");
+          }}
+        />
       )}
       {runsOpen && (
         <WorkflowRunsList

@@ -4,6 +4,7 @@ import {
   cancelWorkflow,
   getWorkflowRun,
   resumeWorkflowHuman,
+  startWorkflow,
   subscribeWorkflowEvents,
   type WorkflowRun,
 } from "../../services/tauri/workflow";
@@ -13,6 +14,8 @@ import "./WorkflowRunPanel.css";
 interface Props {
   runId: string;
   onClose: () => void;
+  /** Switch the view to a freshly started run (re-run of a finished one). */
+  onRerun?: (runId: string) => void;
 }
 
 const KIND_GLYPH: Record<string, string> = {
@@ -29,11 +32,27 @@ const KIND_GLYPH: Record<string, string> = {
  * the shared blackboard, the step history, and a human-input prompt when the
  * run pauses on a `human` node. Refreshes on every `agentz:workflow-event`.
  */
-export default function WorkflowRunPanel({ runId, onClose }: Props) {
+export default function WorkflowRunPanel({ runId, onClose, onRerun }: Props) {
   const { t } = useTranslation();
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [humanValue, setHumanValue] = useState("");
   const [liveText, setLiveText] = useState<Record<string, string>>({});
+  const [rerunning, setRerunning] = useState(false);
+
+  const rerun = useCallback(async () => {
+    if (!run || rerunning) return;
+    const goal = typeof run.blackboard.goal === "string" ? run.blackboard.goal : "";
+    setRerunning(true);
+    try {
+      const started = await startWorkflow(run.project_dir, run.team_id, goal);
+      onRerun?.(started.run_id);
+    } finally {
+      setRerunning(false);
+    }
+  }, [run, rerunning, onRerun]);
+
+  const finished =
+    run?.status === "completed" || run?.status === "failed" || run?.status === "cancelled";
 
   const refresh = useCallback(async () => {
     try {
@@ -117,6 +136,11 @@ export default function WorkflowRunPanel({ runId, onClose }: Props) {
             {run && (run.status === "running" || run.status === "waiting_human") && (
               <button type="button" onClick={() => void cancelWorkflow(runId)}>
                 {t("workflow.cancel")}
+              </button>
+            )}
+            {finished && onRerun && (
+              <button type="button" onClick={() => void rerun()} disabled={rerunning}>
+                {t("workflow.rerun")}
               </button>
             )}
             <button type="button" onClick={onClose}>

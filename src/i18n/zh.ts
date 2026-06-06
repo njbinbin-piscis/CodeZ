@@ -100,6 +100,7 @@ const zh = {
     openHistory: "历史",
     clearFinished: "清理已结束",
     deleteRun: "删除该运行",
+    rerun: "再次运行",
     status: {
       running: "运行中",
       waiting_human: "等待输入",

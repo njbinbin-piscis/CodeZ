@@ -100,6 +100,7 @@ const en = {
     openHistory: "History",
     clearFinished: "Clear finished",
     deleteRun: "Delete run",
+    rerun: "Re-run",
     status: {
       running: "Running",
       waiting_human: "Waiting",
