@@ -1,12 +1,12 @@
 # CodeZ
 
-A Cursor-like **AI IDE** with two first-class modes, built on the shared
+A Cursor/Codex-like **AI IDE** with two first-class modes, built on the shared
 [`piscis-engine`](https://github.com/njbinbin-piscis/piscis-engine) agent kernel:
 
-- **IDE mode** (≈ Cursor): editor-centric — Monaco + LSP, Tab completion,
+- **IDE mode** (≈ Cursor/Codebuddy): editor-centric — Monaco + LSP, Tab completion,
   Cmd-K inline edit, an AI chat side panel with `@`-references and inline
   diff apply.
-- **Agent mode** (≈ Codex): task-centric — submit a task, the agent works
+- **Agent mode** (≈ Codex/Workbuddy): task-centric — submit a task, the agent works
   autonomously in an isolated git worktree (plan → edit → test → iterate),
   then you review the diff / open a PR.
 
