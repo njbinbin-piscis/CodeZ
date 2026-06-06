@@ -267,13 +267,41 @@ async fn run_in_process_koi_turn(
     let sink: Arc<dyn EventSink> = Arc::new(PoolTurnEventSink { app: app.clone() });
     let registry = build_koi_registry(&app, db.clone(), settings.clone(), sink.clone()).await;
 
-    // The coordinator already assembled the full Koi system prompt; pass it as
-    // extra system context (appended after the kernel's headless core prompt).
-    let extra_context = match request.extra_system_context.as_deref() {
-        Some(extra) if !extra.trim().is_empty() => {
-            format!("{}\n\n{}", request.system_prompt.trim(), extra.trim())
+    // Inject the team's org_spec (规约) so every member Koi shares the same
+    // organizational contract, not just the coordinator. The kernel coordinator
+    // does not pre-inject it on the desktop path, so we read it from the pool
+    // session in the project DB the turn already runs against.
+    let org_spec_ctx = {
+        let guard = db.lock().await;
+        match guard.get_pool_session(&request.pool_id) {
+            Ok(Some(session)) if !session.org_spec.trim().is_empty() => {
+                Some(truncate_chars(&session.org_spec, 4000))
+            }
+            _ => None,
         }
-        _ => request.system_prompt.clone(),
+    };
+
+    // Assemble extra system context layered after the kernel's headless core
+    // prompt: the coordinator-assembled Koi prompt, then the shared org_spec,
+    // then any coordinator-provided extra context.
+    let extra_context = {
+        let mut sections: Vec<String> = Vec::new();
+        let base = request.system_prompt.trim();
+        if !base.is_empty() {
+            sections.push(base.to_string());
+        }
+        if let Some(org) = org_spec_ctx {
+            sections.push(format!("## Project Organization\n{}", org));
+        }
+        if let Some(extra) = request
+            .extra_system_context
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            sections.push(extra.to_string());
+        }
+        sections.join("\n\n")
     };
 
     let cli_request = HeadlessCliRequest {
@@ -324,6 +352,15 @@ async fn run_in_process_koi_turn(
             })
         }
     }
+}
+
+/// Clip a context slice to a character budget so a large org_spec cannot crowd
+/// out the actual assignment in a member Koi's context window.
+fn truncate_chars(content: &str, max_chars: usize) -> String {
+    if max_chars == 0 || content.chars().count() <= max_chars {
+        return content.to_string();
+    }
+    format!("{}...", content.chars().take(max_chars).collect::<String>())
 }
 
 fn cancelled_outcome(handle: KoiTurnHandle, reason: &str) -> KoiTurnOutcome {

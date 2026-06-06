@@ -285,6 +285,14 @@ pub async fn teams_create_pool(
         team.id,
         member_koi_ids.len()
     );
+
+    // Swarm teams have no always-on coordinator; start a background patrol so
+    // crashed/timed-out Koi turns and idle-owner pending todos get re-driven.
+    drop(db);
+    if team.mode == "swarm" {
+        crate::runtime::patrol::ensure_pool_patrol(&app, &project_dir);
+    }
+
     Ok(PoolCreated {
         pool_id: pool.id,
         name: team.name,
