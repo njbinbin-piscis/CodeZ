@@ -42,6 +42,52 @@ function freshId(kind: string): string {
   return `${kind}-${Date.now().toString(36)}-${idCounter}`;
 }
 
+/** Color an edge by its routing role so branch/loop topology reads at a glance. */
+function edgeColor(label: string | null | undefined): string {
+  const l = (label ?? "").trim().toLowerCase();
+  if (!l || l === "default") return "#6b6b80";
+  if (l === "body") return "#4e9bf7";
+  return "#f7b84e";
+}
+
+/**
+ * Assign x/y by a layered BFS from the entry node so a fresh or tangled graph
+ * snaps into a readable left-to-right pipeline. Unreachable nodes trail behind.
+ */
+function autoLayout(graph: WorkflowGraph): WorkflowNode[] {
+  const adj = new Map<string, string[]>();
+  for (const e of graph.edges) {
+    if (!adj.has(e.from)) adj.set(e.from, []);
+    adj.get(e.from)!.push(e.to);
+  }
+  const depth = new Map<string, number>();
+  const queue: string[] = [graph.entry];
+  depth.set(graph.entry, 0);
+  while (queue.length) {
+    const cur = queue.shift()!;
+    const d = depth.get(cur)!;
+    for (const nxt of adj.get(cur) ?? []) {
+      if (!depth.has(nxt)) {
+        depth.set(nxt, d + 1);
+        queue.push(nxt);
+      }
+    }
+  }
+  let trailing = 0;
+  const maxDepth = Math.max(0, ...Array.from(depth.values()));
+  const rowCursor = new Map<number, number>();
+  return graph.nodes.map((n) => {
+    let d = depth.get(n.id);
+    if (d === undefined) {
+      d = maxDepth + 1 + trailing;
+      trailing += 1;
+    }
+    const row = rowCursor.get(d) ?? 0;
+    rowCursor.set(d, row + 1);
+    return { ...n, x: 80 + d * 230, y: 60 + row * 130 };
+  });
+}
+
 /**
  * Recompute the runner's routing fields (branch cases/default_to, loop body_to)
  * from the canvas edges, so edges are the single source of truth for routing.
@@ -100,15 +146,23 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
 
   const rfEdges: Edge[] = useMemo(
     () =>
-      graph.edges.map((e, i) => ({
-        id: `e-${i}-${e.from}-${e.to}`,
-        source: e.from,
-        target: e.to,
-        label: e.label || undefined,
-        animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: selectedEdge === `${e.from}->${e.to}` ? "#7c6af7" : "#555" },
-      })),
+      graph.edges.map((e, i) => {
+        const selected = selectedEdge === `${e.from}->${e.to}`;
+        const color = selected ? "#7c6af7" : edgeColor(e.label);
+        return {
+          id: `e-${i}-${e.from}-${e.to}`,
+          source: e.from,
+          target: e.to,
+          label: e.label || undefined,
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed, color },
+          labelBgPadding: [4, 2] as [number, number],
+          labelBgBorderRadius: 4,
+          labelBgStyle: { fill: "#1a1a24", fillOpacity: 0.9 },
+          labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
+          style: { stroke: color, strokeWidth: selected ? 2.5 : 1.5 },
+        };
+      }),
     [graph.edges, selectedEdge],
   );
 
@@ -234,6 +288,13 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
             {KIND_META[k].glyph} {t(`workflow.kind.${k}`)}
           </button>
         ))}
+        <button
+          type="button"
+          className="wf-toolbar-layout"
+          onClick={() => onChange({ ...graph, nodes: autoLayout(graph) })}
+        >
+          ⊞ {t("workflow.autoLayout")}
+        </button>
       </div>
 
       <div className="wf-canvas-wrap">

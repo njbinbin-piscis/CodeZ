@@ -26,6 +26,12 @@
   font-size: 12px;
 }
 
+.wf-toolbar-layout {
+  margin-left: auto;
+  border-color: var(--accent, #7c6af7) !important;
+  color: var(--accent, #7c6af7) !important;
+}
+
 .wf-canvas-wrap {
   display: grid;
   grid-template-columns: 1fr 280px;

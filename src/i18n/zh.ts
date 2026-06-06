@@ -47,6 +47,7 @@ const zh = {
     modeWorkflow: "工作流编排（Workflow）",
     designer: "工作流设计器",
     addNode: "添加节点",
+    autoLayout: "自动布局",
     inspectorHint: "选中画布上的节点或连线进行编辑。拖动节点间的圆点可连线。",
     nodeLabel: "节点名称",
     agent: "执行智能体",

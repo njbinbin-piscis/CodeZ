@@ -47,6 +47,7 @@ const en = {
     modeWorkflow: "Workflow (graph)",
     designer: "Workflow designer",
     addNode: "Add node",
+    autoLayout: "Auto layout",
     inspectorHint: "Select a node or edge to edit. Drag from a node handle to connect.",
     nodeLabel: "Node label",
     agent: "Agent",
