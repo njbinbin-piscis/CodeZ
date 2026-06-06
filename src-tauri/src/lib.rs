@@ -38,6 +38,8 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
             }
+            // Phase 5: install built-in agent/team packs on first run.
+            commands::seed::seed_builtin_packs(app.handle());
             // Phase 0A: drive headless agent turns for inbound IM messages.
             commands::gateway::spawn_inbound_consumer(app.handle().clone());
             Ok(())

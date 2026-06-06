@@ -21,6 +21,7 @@ pub mod marketplace;
 pub mod platform;
 pub mod pool;
 pub mod repo_wiki;
+pub mod seed;
 pub mod teams;
 pub mod session;
 pub mod settings;
