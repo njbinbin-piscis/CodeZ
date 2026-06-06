@@ -9,8 +9,10 @@
 pub mod browser;
 pub mod commands;
 pub mod context_assembly;
+pub mod gateway;
 pub mod journal;
 pub mod lsp;
+pub mod runtime;
 pub mod state;
 pub mod tools;
 
@@ -36,6 +38,8 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
             }
+            // Phase 0A: drive headless agent turns for inbound IM messages.
+            commands::gateway::spawn_inbound_consumer(app.handle().clone());
             Ok(())
         })
         .manage(AppState::new())
@@ -137,6 +141,50 @@ pub fn run() {
             // ClawHub skill marketplace
             commands::clawhub::clawhub_search,
             commands::clawhub::clawhub_install,
+            // IM gateway "assistants" (Phase 0A): Feishu / WeCom / DingTalk / WeChat …
+            commands::gateway::get_im_settings,
+            commands::gateway::save_im_settings,
+            commands::gateway::list_gateway_channels,
+            commands::gateway::connect_gateway_channels,
+            commands::gateway::disconnect_gateway_channels,
+            commands::gateway::start_wechat_login,
+            commands::gateway::poll_wechat_login,
+            // Connectors (Phase 0B): authenticated external services exposed as MCP tools
+            commands::connectors::connectors_list,
+            commands::connectors::connectors_install,
+            commands::connectors::connectors_uninstall,
+            commands::connectors::connectors_set_enabled,
+            commands::connectors::connectors_save_credentials,
+            commands::connectors::connectors_get_credentials,
+            // Agents (Phase 2): installable single-Koi personas + kois sync
+            commands::agents::agents_list,
+            commands::agents::agents_get,
+            commands::agents::agents_save,
+            commands::agents::agents_install,
+            commands::agents::agents_uninstall,
+            commands::agents::agents_sync,
+            // Teams (Phase 3): installable Pool templates + pool creation
+            commands::teams::teams_list,
+            commands::teams::teams_get,
+            commands::teams::teams_save,
+            commands::teams::teams_install,
+            commands::teams::teams_uninstall,
+            commands::teams::teams_create_pool,
+            // Pool (Phase 3): team collaboration board reads + lifecycle
+            commands::pool::pool_list,
+            commands::pool::pool_get,
+            commands::pool::pool_members,
+            commands::pool::pool_messages,
+            commands::pool::pool_todos,
+            commands::pool::pool_kois,
+            commands::pool::pool_set_status,
+            commands::pool::pool_delete,
+            // User tools (executable plugin manifests in {config}/user-tools)
+            commands::user_tools::user_tools_list,
+            commands::user_tools::user_tools_install,
+            commands::user_tools::user_tools_uninstall,
+            commands::user_tools::user_tools_save_config,
+            commands::user_tools::user_tools_get_config,
             // Workbench management: installed skills, project rules, hooks
             commands::workbench::skills_list_installed,
             commands::workbench::skills_uninstall,

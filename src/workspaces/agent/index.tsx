@@ -31,6 +31,8 @@ import InteractiveCard from "../../components/chat/InteractiveCard";
 import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
+import CollabBoard from "./CollabBoard";
+import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
 import {
   collectArtifacts,
   type AgentStep,
@@ -84,6 +86,12 @@ export default function AgentWorkspace({
   );
   const [worktree, setWorktree] = useState<AgentTaskInfo | null>(null);
   const [reviewTask, setReviewTask] = useState<AgentTaskInfo | null>(null);
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
+  const [activeTeam, setActiveTeam] = useState<string>("");
+  const [activePoolId, setActivePoolId] = useState<string | null>(null);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const activePoolRef = useRef<string | null>(null);
+  activePoolRef.current = activePoolId;
 
   // Session ids of tasks currently running (foreground or background). Drives
   // the sidebar running indicators and whether the active task shows as busy.
@@ -136,6 +144,20 @@ export default function AgentWorkspace({
   useEffect(() => {
     localStorage.setItem("codez-model-id", modelId);
   }, [modelId]);
+
+  useEffect(() => {
+    listTeams()
+      .then((list) => {
+        setTeams(list);
+        setActiveTeam((cur) => (cur && !list.some((tm) => tm.id === cur) ? "" : cur));
+      })
+      .catch(() => setTeams([]));
+  }, []);
+
+  // Reset pool binding when the team selection changes.
+  useEffect(() => {
+    setActivePoolId(null);
+  }, [activeTeam, projectDir]);
 
   useEffect(() => {
     localStorage.setItem("codez-agent-isolate", isolate ? "1" : "0");
@@ -362,8 +384,28 @@ export default function AgentWorkspace({
           return;
         }
       }
+      // Team mode: ensure a Pool exists for the selected team, then instruct the
+      // agent to orchestrate its members via the pool tools.
+      let effectivePrompt = text;
+      if (activeTeam) {
+        try {
+          let poolId = activePoolRef.current;
+          if (!poolId) {
+            const created = await createPoolFromTeam(projectDir!, activeTeam);
+            poolId = created.pool_id;
+            setActivePoolId(poolId);
+            activePoolRef.current = poolId;
+          }
+          effectivePrompt =
+            `You are the coordinator of team pool "${activeTeam}" (pool_id: ${poolId}). ` +
+            `Use the pool_org and pool_chat tools to break this down into todos, assign them ` +
+            `to member Koi, and integrate their results.\n\nTask:\n${text}`;
+        } catch (e) {
+          setError(String(e));
+        }
+      }
       const res = await chatSend({
-        prompt: text,
+        prompt: effectivePrompt,
         sessionId: startSession,
         projectDir: projectDir!,
         workspaceDir: wt?.worktree_path ?? null,
@@ -706,6 +748,32 @@ export default function AgentWorkspace({
             />
             <span>{isolate ? t("agent.isolateOn") : t("agent.isolateOff")}</span>
           </label>
+          {teams.length > 0 && (
+            <label className="codez-agent-team-select" title={t("agent.teamHint")}>
+              <span>{t("agent.team")}</span>
+              <select
+                value={activeTeam}
+                disabled={busy}
+                onChange={(e) => setActiveTeam(e.target.value)}
+              >
+                <option value="">{t("agent.teamNone")}</option>
+                {teams.map((tm) => (
+                  <option key={tm.id} value={tm.id}>
+                    {tm.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {activePoolId && (
+            <button
+              type="button"
+              className="codez-agent-review-btn"
+              onClick={() => setBoardOpen(true)}
+            >
+              {t("collab.openBoard")}
+            </button>
+          )}
           {worktree && (
             <button
               type="button"
@@ -796,6 +864,13 @@ export default function AgentWorkspace({
           sendTitle={t("agent.run")}
         />
       </section>
+      {boardOpen && activePoolId && projectDir && (
+        <CollabBoard
+          projectDir={projectDir}
+          poolId={activePoolId}
+          onClose={() => setBoardOpen(false)}
+        />
+      )}
       {reviewTask && projectDir && (
         <AgentTaskReview
           projectDir={projectDir}

@@ -22,6 +22,9 @@ pub struct McpServerDto {
     pub url: String,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    /// For sse / http transports: extra HTTP headers (e.g. Authorization).
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 }
@@ -97,6 +100,7 @@ fn mcp_to_dto(s: &McpServerConfig) -> McpServerDto {
         args: s.args.clone(),
         url: s.url.clone(),
         env: s.env.clone(),
+        headers: s.headers.clone(),
         enabled: s.enabled,
     }
 }
@@ -241,6 +245,7 @@ pub async fn save_settings(
             args: m.args,
             url: m.url,
             env: m.env,
+            headers: m.headers,
             enabled: m.enabled,
         })
         .collect();

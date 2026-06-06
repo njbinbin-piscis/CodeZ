@@ -68,10 +68,20 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Match piscis-kernel — used for checkpoint restore via Database.conn.
 rusqlite = { version = "0.31", features = ["bundled"] }
 
-# ClawHub marketplace HTTP client.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# ClawHub marketplace HTTP client + IM gateway HTTP calls (feishu media upload
+# needs multipart form bodies).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 urlencoding = "2"
 uuid = { version = "1", features = ["v4"] }
+
+# IM gateway (Phase 0A) — assistants connecting Feishu / WeCom / DingTalk /
+# WeChat etc. WeChat's iLink bridge needs AES-ECB crypto + md5 + QR rendering.
+aes = "0.8.4"
+ecb = "0.1.2"
+md5 = "0.8.0"
+hex = "0.4"
+getrandom = "0.2"
+qrcode = "0.14"
 
 [lints]
 workspace = true

@@ -177,6 +177,91 @@ function ComposerMenu({
   );
 }
 
+function SkillGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 2l2.4 6.9H22l-5.8 4.2 2.2 6.9L12 16l-6.4 4 2.2-6.9L2 8.9h7.6z" />
+    </svg>
+  );
+}
+
+export interface SkillSelector {
+  options: ComposerMenuOption[];
+  selected: string[];
+  onChange: (slugs: string[]) => void;
+  label: string;
+  emptyHint?: string;
+}
+
+function SkillsMenu({ selector, disabled }: { selector: SkillSelector; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { options, selected, onChange, label, emptyHint } = selector;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  };
+
+  const count = selected.length;
+  return (
+    <div className="codez-composer-menu text" ref={rootRef}>
+      <button
+        type="button"
+        className={`codez-composer-menu-trigger${count > 0 ? " has-skills" : ""}`}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        title={label}
+      >
+        <span className="codez-composer-menu-icon">
+          <SkillGlyph />
+        </span>
+        <span className="codez-composer-menu-label">{count > 0 ? `${label} · ${count}` : label}</span>
+        <ChevronDown />
+      </button>
+      {open && (
+        <div className="codez-composer-menu-popup" role="listbox" aria-multiselectable="true">
+          {options.length === 0 ? (
+            <div className="codez-composer-menu-empty">{emptyHint ?? "—"}</div>
+          ) : (
+            options.map((opt) => {
+              const active = selected.includes(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={`codez-skill-option${active ? " active" : ""}`}
+                  onClick={() => toggle(opt.id)}
+                >
+                  <span className="codez-skill-option-head">
+                    <span className="codez-composer-menu-check" aria-hidden>
+                      {active ? "✓" : ""}
+                    </span>
+                    <span className="codez-composer-menu-option-label">{opt.label}</span>
+                  </span>
+                  {opt.hint && <span className="codez-composer-menu-option-hint">{opt.hint}</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface ChatComposerProps {
   value: string;
   onChange: (value: string, caret?: number) => void;
@@ -203,6 +288,14 @@ export interface ChatComposerProps {
     chatMode: ChatMode;
     options: ComposerMenuOption[];
     onChange: (mode: ChatMode) => void;
+  };
+  /** Optional multi-select of installed skills to enable for the conversation. */
+  skillSelector?: SkillSelector;
+  /** Optional single-select of an installed agent persona to run as. */
+  agentSelector?: {
+    value: string;
+    options: ComposerMenuOption[];
+    onChange: (id: string) => void;
   };
   modeNotice?: string | null;
   mentionPopup?: ReactNode;
@@ -237,6 +330,8 @@ export default function ChatComposer({
   stopTitle = "Stop",
   sendTitle = "Send",
   modeSelector,
+  skillSelector,
+  agentSelector,
   modeNotice,
   mentionPopup,
   composerClassName = "",
@@ -354,6 +449,16 @@ export default function ChatComposer({
               variant="text"
               disabled={busy || locked}
             />
+            {agentSelector && agentSelector.options.length > 1 && (
+              <ComposerMenu
+                value={agentSelector.value}
+                options={agentSelector.options}
+                onChange={agentSelector.onChange}
+                variant="text"
+                disabled={busy || locked}
+              />
+            )}
+            {skillSelector && <SkillsMenu selector={skillSelector} disabled={busy || locked} />}
             <button
               type="button"
               className="codez-composer-icon-btn"

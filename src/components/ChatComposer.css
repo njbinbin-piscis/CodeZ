@@ -313,6 +313,29 @@
   line-height: 1.35;
 }
 
+.codez-composer-menu-trigger.has-skills {
+  color: var(--accent, #7c6af7);
+}
+
+.codez-composer-menu-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.codez-skill-option-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.codez-composer-menu-check {
+  display: inline-block;
+  width: 12px;
+  color: var(--accent, #7c6af7);
+  font-weight: 700;
+}
+
 .codez-composer-icon-btn {
   display: inline-flex;
   align-items: center;

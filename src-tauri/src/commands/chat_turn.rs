@@ -589,6 +589,8 @@ fn build_tool_registry(
     chat_mode: &str,
     lsp_manager: Arc<LspManager>,
     user_tools_dir: Option<PathBuf>,
+    extra_enabled_tools: &[String],
+    enable_pool: bool,
 ) -> ToolRegistry {
     let mut builtin_tool_enabled = None;
     if chat_mode == "plan" {
@@ -598,6 +600,26 @@ fn build_tool_registry(
         }
         builtin_tool_enabled = Some(map);
     }
+    // User-selected skills can re-enable tools they need (e.g. a tool that plan
+    // mode disabled). The map is an override (missing = enabled), so this only
+    // ever expands the surface, never restricts it.
+    if !extra_enabled_tools.is_empty() {
+        let map = builtin_tool_enabled.get_or_insert_with(HashMap::new);
+        for name in extra_enabled_tools {
+            map.insert(name.clone(), true);
+        }
+    }
+
+    // Phase 3: the main agent turn carries the pool wiring (in-process Koi
+    // runtime + event sink) so `pool_org` / `pool_chat` register and team
+    // (Pool) collaboration can fan out to member Koi. Sub-agent / plan
+    // registries pass `enable_pool = false` to avoid recursion.
+    let (subagent_runtime, pool_event_sink) = if enable_pool {
+        let (rt, sink) = crate::runtime::koi::pool_wiring(&app);
+        (Some(rt), Some(sink))
+    } else {
+        (None, None)
+    };
 
     let mut handle = new_tool_registry_handle();
     let cfg = NeutralToolsConfig {
@@ -608,8 +630,8 @@ fn build_tool_registry(
         user_tools_dir,
         event_sink: Some(event_sink),
         plan_store: Some(plan_store),
-        pool_event_sink: None,
-        subagent_runtime: None,
+        pool_event_sink,
+        subagent_runtime,
         coordinator_config: Default::default(),
     };
     let db_for_delegate = cfg.db.clone();
@@ -699,6 +721,8 @@ fn build_subagent_registry(
         "plan",
         lsp_manager,
         None,
+        &[],
+        false,
     )
 }
 
@@ -865,14 +889,28 @@ fn inject_image_block(messages: &mut [LlmMessage], media_type: &str, data_b64: &
     }
 }
 
-/// Build an "## Available skills" block from installed ClawHub SKILL.md files
-/// under `{config}/skills/*/SKILL.md`. Progressive disclosure: list each
-/// skill's name + summary and tell the agent to `file_read` the full SKILL.md
-/// (path included) when a task matches.
-fn skills_context(config_dir: &std::path::Path) -> Option<String> {
+/// A parsed installed skill (SKILL.md + frontmatter), including its optional
+/// `tools` / `mcp_servers` bindings (Phase 1).
+pub(crate) struct SkillManifest {
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub path: std::path::PathBuf,
+    /// Builtin tool names this skill wants enabled while active.
+    pub tools: Vec<String>,
+    /// MCP server names (from `settings.mcp_servers`) this skill binds.
+    pub mcp_servers: Vec<String>,
+    /// Full SKILL.md body with the YAML frontmatter stripped.
+    pub body: String,
+}
+
+/// Load all installed skills under `{config}/skills/*/SKILL.md`.
+pub(crate) fn load_installed_skills(config_dir: &std::path::Path) -> Vec<SkillManifest> {
     let skills_root = config_dir.join("skills");
-    let entries = std::fs::read_dir(&skills_root).ok()?;
-    let mut lines = Vec::new();
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&skills_root) else {
+        return out;
+    };
     for entry in entries.flatten() {
         let dir = entry.path();
         if !dir.is_dir() {
@@ -882,30 +920,153 @@ fn skills_context(config_dir: &std::path::Path) -> Option<String> {
         let Ok(content) = std::fs::read_to_string(&skill_md) else {
             continue;
         };
-        let (name, desc) = parse_skill_meta(&content, &entry.file_name().to_string_lossy());
-        lines.push(format!(
-            "- **{name}** — {desc}\n  (read `{}` for full instructions before using)",
-            skill_md.display()
-        ));
+        let slug = entry.file_name().to_string_lossy().to_string();
+        let meta = parse_skill_frontmatter(&content, &slug);
+        out.push(SkillManifest {
+            slug,
+            name: meta.name,
+            description: meta.description,
+            path: skill_md,
+            tools: meta.tools,
+            mcp_servers: meta.mcp_servers,
+            body: strip_frontmatter(&content).trim().to_string(),
+        });
     }
-    if lines.is_empty() {
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+/// True when `needle` matches a skill by slug or display name (case-insensitive).
+fn skill_matches(skill: &SkillManifest, needle: &str) -> bool {
+    needle.eq_ignore_ascii_case(&skill.slug) || needle.eq_ignore_ascii_case(&skill.name)
+}
+
+/// Build the "## ... skills" system block. With no `enabled` selection this is
+/// progressive disclosure over every installed skill (list name + summary +
+/// path). When the user selects skills for the conversation, only those are
+/// injected — in full — with a strong directive to follow them.
+fn skills_context(config_dir: &std::path::Path, enabled: &[String]) -> Option<String> {
+    let skills = load_installed_skills(config_dir);
+    if skills.is_empty() {
         return None;
     }
+
+    if enabled.is_empty() {
+        let lines: Vec<String> = skills
+            .iter()
+            .map(|s| {
+                format!(
+                    "- **{}** — {}\n  (read `{}` for full instructions before using)",
+                    s.name,
+                    s.description,
+                    s.path.display()
+                )
+            })
+            .collect();
+        return Some(format!(
+            "## Available skills\nYou have these installed skills. When a task matches one, \
+             read its SKILL.md first, then follow it:\n{}",
+            lines.join("\n")
+        ));
+    }
+
+    let selected: Vec<&SkillManifest> = skills
+        .iter()
+        .filter(|s| enabled.iter().any(|e| skill_matches(s, e)))
+        .collect();
+    if selected.is_empty() {
+        return None;
+    }
+    let blocks: Vec<String> = selected
+        .iter()
+        .map(|s| format!("### Skill: {}\n{}", s.name, s.body))
+        .collect();
     Some(format!(
-        "## Available skills\nYou have these installed skills. When a task matches one, \
-         read its SKILL.md first, then follow it:\n{}",
-        lines.join("\n")
+        "## Enabled skills (user-selected for this conversation)\nThe user explicitly \
+         enabled these skills for this conversation. Follow their instructions \
+         carefully and use the tools they prescribe:\n\n{}",
+        blocks.join("\n\n---\n\n")
     ))
 }
 
-/// Extract `name` + `description` from a SKILL.md YAML frontmatter (falls back
-/// to the first `# heading` / a generic summary).
-fn parse_skill_meta(content: &str, fallback: &str) -> (String, String) {
-    let mut name = fallback.to_string();
-    let mut desc = String::new();
+struct SkillMeta {
+    name: String,
+    description: String,
+    tools: Vec<String>,
+    mcp_servers: Vec<String>,
+}
+
+/// Remove a leading YAML frontmatter block (`---\n...\n---`) from a document.
+fn strip_frontmatter(content: &str) -> &str {
     if let Some(rest) = content.strip_prefix("---") {
         if let Some(end) = rest.find("\n---") {
-            for line in rest[..end].lines() {
+            // Skip past the closing `---` line.
+            let after = &rest[end + 4..];
+            return after.trim_start_matches(['\r', '\n']);
+        }
+    }
+    content
+}
+
+/// Parse a YAML list value that may be inline (`[a, b]` / `a, b`) or a block
+/// list on following lines (`- a`). Returns the items and how many *following*
+/// lines were consumed.
+fn parse_yaml_list(inline: &str, following: &[&str]) -> (Vec<String>, usize) {
+    let clean = |s: &str| {
+        s.trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .trim()
+            .to_string()
+    };
+    let inline = inline.trim();
+    if inline.starts_with('[') {
+        let inner = inline.trim_start_matches('[').trim_end_matches(']');
+        let items = inner
+            .split(',')
+            .map(clean)
+            .filter(|s| !s.is_empty())
+            .collect();
+        return (items, 0);
+    }
+    if !inline.is_empty() {
+        let items = inline
+            .split(',')
+            .map(clean)
+            .filter(|s| !s.is_empty())
+            .collect();
+        return (items, 0);
+    }
+    let mut items = Vec::new();
+    let mut consumed = 0;
+    for line in following {
+        let trimmed = line.trim();
+        if let Some(item) = trimmed.strip_prefix("- ") {
+            let v = clean(item);
+            if !v.is_empty() {
+                items.push(v);
+            }
+            consumed += 1;
+        } else {
+            break;
+        }
+    }
+    (items, consumed)
+}
+
+/// Extract `name`/`description`/`tools`/`mcp_servers` from a SKILL.md YAML
+/// frontmatter (falls back to the first non-heading line for description).
+fn parse_skill_frontmatter(content: &str, fallback: &str) -> SkillMeta {
+    let mut name = fallback.to_string();
+    let mut description = String::new();
+    let mut tools = Vec::new();
+    let mut mcp_servers = Vec::new();
+    if let Some(rest) = content.strip_prefix("---") {
+        if let Some(end) = rest.find("\n---") {
+            let lines: Vec<&str> = rest[..end].lines().collect();
+            let mut i = 0;
+            while i < lines.len() {
+                let line = lines[i];
                 if let Some(v) = line.strip_prefix("name:") {
                     let n = v.trim().trim_matches('"').trim_matches('\'');
                     if !n.is_empty() {
@@ -914,14 +1075,23 @@ fn parse_skill_meta(content: &str, fallback: &str) -> (String, String) {
                 } else if let Some(v) = line.strip_prefix("description:") {
                     let d = v.trim().trim_matches('"').trim_matches('\'');
                     if !d.is_empty() {
-                        desc = d.to_string();
+                        description = d.to_string();
                     }
+                } else if let Some(v) = line.strip_prefix("tools:") {
+                    let (items, consumed) = parse_yaml_list(v, &lines[i + 1..]);
+                    tools = items;
+                    i += consumed;
+                } else if let Some(v) = line.strip_prefix("mcp_servers:") {
+                    let (items, consumed) = parse_yaml_list(v, &lines[i + 1..]);
+                    mcp_servers = items;
+                    i += consumed;
                 }
+                i += 1;
             }
         }
     }
-    if desc.is_empty() {
-        desc = content
+    if description.is_empty() {
+        description = content
             .lines()
             .find(|l| !l.trim().is_empty() && !l.starts_with("---") && !l.starts_with('#'))
             .unwrap_or("")
@@ -930,7 +1100,12 @@ fn parse_skill_meta(content: &str, fallback: &str) -> (String, String) {
             .take(160)
             .collect();
     }
-    (name, desc)
+    SkillMeta {
+        name,
+        description,
+        tools,
+        mcp_servers,
+    }
 }
 
 /// Read project rules from `{workspace}/.codez/rules/` (preferred) or
@@ -1013,6 +1188,8 @@ pub async fn run_codez_turn(
     browser: BrowserManager,
     journal: Arc<crate::journal::FileJournal>,
     config_dir: PathBuf,
+    enabled_skills: Vec<String>,
+    agent_id: Option<String>,
 ) -> Result<HeadlessCliResponse> {
     if !matches!(request.mode, HeadlessCliMode::Piscis) {
         return Err(anyhow!("CodeZ chat only supports mode=piscis"));
@@ -1021,14 +1198,36 @@ pub async fn run_codez_turn(
     let (db, settings) = kernel;
     let chat_mode = if chat_mode == "plan" { "plan" } else { "agent" };
 
+    // Phase 2: a selected agent contributes its persona (system prompt), skills,
+    // tools, MCP bindings, and optional model. Skills/tools/MCP fold into the
+    // same wiring the composer skill selector uses.
+    let agent = agent_id
+        .as_deref()
+        .and_then(|id| crate::commands::agents::resolve_agent(&config_dir, id));
+    let mut enabled_skills = enabled_skills;
+    if let Some(agent) = agent.as_ref() {
+        for slug in &agent.skills {
+            if !enabled_skills.iter().any(|s| s.eq_ignore_ascii_case(slug)) {
+                enabled_skills.push(slug.clone());
+            }
+        }
+    }
+
     // Auto-route to a fast/smart model by task tier when the caller left the
     // model unspecified (M8, opt-in via CODEZ_AUTO_MODEL_ROUTING).
     let model_id = match model_id.filter(|v| !v.trim().is_empty()) {
         Some(id) => Some(id),
-        None => {
-            let s = settings.lock().await;
-            auto_route_model(&s, chat_mode)
-        }
+        None => match agent
+            .as_ref()
+            .and_then(|a| a.llm_provider_id.clone())
+            .filter(|v| !v.trim().is_empty())
+        {
+            Some(id) => Some(id),
+            None => {
+                let s = settings.lock().await;
+                auto_route_model(&s, chat_mode)
+            }
+        },
     };
 
     let settings_snapshot = {
@@ -1068,6 +1267,30 @@ pub async fn run_codez_turn(
         request.extra_system_context = Some(extra);
     }
 
+    // Phase 1: skills the user selected for this conversation bind their
+    // `tools` (re-enabled) and `mcp_servers` (registered even if globally off),
+    // and have their full instructions injected below.
+    let selected_skills: Vec<SkillManifest> = if enabled_skills.is_empty() {
+        Vec::new()
+    } else {
+        load_installed_skills(&config_dir)
+            .into_iter()
+            .filter(|s| enabled_skills.iter().any(|e| skill_matches(s, e)))
+            .collect()
+    };
+    let mut skill_enabled_tools: Vec<String> = selected_skills
+        .iter()
+        .flat_map(|s| s.tools.clone())
+        .collect();
+    let mut skill_mcp_names: std::collections::HashSet<String> = selected_skills
+        .iter()
+        .flat_map(|s| s.mcp_servers.clone())
+        .collect();
+    if let Some(agent) = agent.as_ref() {
+        skill_enabled_tools.extend(agent.tools.iter().cloned());
+        skill_mcp_names.extend(agent.mcp_servers.iter().cloned());
+    }
+
     let mut registry = build_tool_registry(
         app.clone(),
         db.clone(),
@@ -1077,12 +1300,37 @@ pub async fn run_codez_turn(
         chat_mode,
         lsp_manager,
         Some(config_dir.join("user-tools")),
+        &skill_enabled_tools,
+        chat_mode != "plan",
     );
     // Register MCP server tools (M6) from settings.mcp_servers — async because
     // it connects to stdio/SSE servers. Plan mode keeps them (read-context).
     let mcp_servers = { settings.lock().await.mcp_servers.clone() };
     if !mcp_servers.is_empty() {
         piscis_kernel::tools::register_mcp_tools(&mut registry, &mcp_servers).await;
+    }
+    // A selected skill can bind an MCP server that is disabled globally; force
+    // those on (without mutating saved settings) so the skill works this turn.
+    if !skill_mcp_names.is_empty() {
+        let bound: Vec<piscis_kernel::store::settings::McpServerConfig> = mcp_servers
+            .iter()
+            .filter(|m| !m.enabled && skill_mcp_names.contains(&m.name))
+            .map(|m| {
+                let mut c = m.clone();
+                c.enabled = true;
+                c
+            })
+            .collect();
+        if !bound.is_empty() {
+            piscis_kernel::tools::register_mcp_tools(&mut registry, &bound).await;
+        }
+    }
+    // Connectors (Phase 0B): enabled + authorized external services resolve to
+    // MCP configs and register their tools alongside the regular MCP servers.
+    let connector_configs =
+        crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
+    if !connector_configs.is_empty() {
+        piscis_kernel::tools::register_mcp_tools(&mut registry, &connector_configs).await;
     }
     let default_timeout = Duration::from_secs(600);
 
@@ -1239,7 +1487,17 @@ pub async fn run_codez_turn(
             extra_sections.push(existing.to_string());
         }
     }
-    if let Some(skills) = skills_context(&config_dir) {
+    if let Some(agent) = agent.as_ref() {
+        if !agent.system_prompt.trim().is_empty() {
+            extra_sections.push(format!(
+                "## Active agent: {}\nYou are acting as this agent. Follow its role and \
+                 instructions:\n{}",
+                agent.name,
+                agent.system_prompt.trim()
+            ));
+        }
+    }
+    if let Some(skills) = skills_context(&config_dir, &enabled_skills) {
         extra_sections.push(skills);
     }
     if let Some(rules) = project_rules_context(&workspace_root) {

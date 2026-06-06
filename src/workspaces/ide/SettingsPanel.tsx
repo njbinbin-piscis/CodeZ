@@ -12,11 +12,22 @@ import {
 import { setLanguage } from "../../i18n";
 import ExtensionsManager from "./ExtensionsManager";
 import SkillsTab from "./settings/SkillsTab";
+import AssistantsTab from "./settings/AssistantsTab";
+import ConnectorsTab from "./settings/ConnectorsTab";
+import StudioTab from "./settings/StudioTab";
 import RulesTab from "./settings/RulesTab";
 import HooksTab from "./settings/HooksTab";
 import "./SettingsPanel.css";
 
-type SettingsTab = "models" | "skills" | "extensions" | "rules" | "hooks";
+type SettingsTab =
+  | "models"
+  | "skills"
+  | "studio"
+  | "assistants"
+  | "connectors"
+  | "extensions"
+  | "rules"
+  | "hooks";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -246,6 +257,9 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
             [
               ["models", t("settings.tabModels")],
               ["skills", t("settings.tabSkills")],
+              ["studio", t("settings.tabStudio")],
+              ["assistants", t("settings.tabAssistants")],
+              ["connectors", t("settings.tabConnectors")],
               ["extensions", t("settings.tabExtensions")],
               ["rules", t("settings.tabRules")],
               ["hooks", t("settings.tabHooks")],
@@ -267,6 +281,21 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
         {tab === "skills" && (
           <div className="codez-settings-body">
             <SkillsTab />
+          </div>
+        )}
+        {tab === "studio" && (
+          <div className="codez-settings-body">
+            <StudioTab />
+          </div>
+        )}
+        {tab === "assistants" && (
+          <div className="codez-settings-body">
+            <AssistantsTab />
+          </div>
+        )}
+        {tab === "connectors" && (
+          <div className="codez-settings-body">
+            <ConnectorsTab />
           </div>
         )}
         {tab === "extensions" && (

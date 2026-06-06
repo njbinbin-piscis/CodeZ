@@ -76,6 +76,8 @@ pub async fn chat_send(
     project_dir: Option<String>,
     workspace_dir: Option<String>,
     task_key: Option<String>,
+    enabled_skills: Option<Vec<String>>,
+    agent_id: Option<String>,
 ) -> Result<ChatResult, String> {
     let project = require_project_dir(project_dir.as_deref().or(workspace.as_deref()))?;
     // When an isolated worktree is provided, the agent works inside it (and the
@@ -149,6 +151,8 @@ pub async fn chat_send(
         state.browser.clone(),
         journal.clone(),
         config_dir,
+        enabled_skills.unwrap_or_default(),
+        agent_id.filter(|a| !a.trim().is_empty()),
     )
     .await;
 

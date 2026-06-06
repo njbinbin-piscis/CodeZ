@@ -21,6 +21,8 @@ import {
   type SessionMeta,
 } from "../../services/tauri/chat";
 import { getSettings, type LlmProviderConfig, type SettingsResponse } from "../../services/tauri/settings";
+import { listInstalledSkills, type InstalledSkill } from "../../services/tauri/workbench";
+import { listAgents, type AgentInfo } from "../../services/tauri/agents";
 import { ideApi } from "../../services/tauri/ide";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
@@ -161,6 +163,19 @@ export default function AssistantPanel({
   const [contextUsage, setContextUsage] = useState<ContextUsageSnapshot | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [composerChips, setComposerChips] = useState<ComposerChip[]>([]);
+  const [installedSkills, setInstalledSkills] = useState<InstalledSkill[]>([]);
+  const [enabledSkills, setEnabledSkills] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("codez-enabled-skills");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [activeAgent, setActiveAgent] = useState<string>(
+    () => localStorage.getItem("codez-active-agent") ?? "",
+  );
 
   const {
     pendingCards,
@@ -212,6 +227,23 @@ export default function AssistantPanel({
   }, []);
 
   useEffect(() => {
+    listInstalledSkills()
+      .then((skills) => {
+        setInstalledSkills(skills);
+        const slugs = new Set(skills.map((s) => s.slug));
+        setEnabledSkills((cur) => cur.filter((s) => slugs.has(s)));
+      })
+      .catch(() => setInstalledSkills([]));
+    listAgents()
+      .then((list) => {
+        setAgents(list);
+        const ids = new Set(list.map((a) => a.id));
+        setActiveAgent((cur) => (cur && !ids.has(cur) ? "" : cur));
+      })
+      .catch(() => setAgents([]));
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 4500);
     return () => window.clearTimeout(timer);
@@ -224,6 +256,14 @@ export default function AssistantPanel({
   useEffect(() => {
     localStorage.setItem("codez-model-id", modelId);
   }, [modelId]);
+
+  useEffect(() => {
+    localStorage.setItem("codez-enabled-skills", JSON.stringify(enabledSkills));
+  }, [enabledSkills]);
+
+  useEffect(() => {
+    localStorage.setItem("codez-active-agent", activeAgent);
+  }, [activeAgent]);
 
   useEffect(() => {
     if (!insertRequest?.paths.length) return;
@@ -478,6 +518,8 @@ export default function AssistantPanel({
         chatMode,
         modelId: modelId || null,
         clearPlan: turn.clearPlan,
+        enabledSkills: enabledSkills.length > 0 ? enabledSkills : null,
+        agentId: activeAgent || null,
       });
       sessionRef.current = res.session_id;
       setMessages((m) => {
@@ -1055,6 +1097,29 @@ export default function AssistantPanel({
           chatMode,
           options: modeOptions,
           onChange: onModeChange,
+        }}
+        skillSelector={{
+          label: t("chat.skills"),
+          emptyHint: t("chat.skillsEmpty"),
+          selected: enabledSkills,
+          onChange: setEnabledSkills,
+          options: installedSkills.map((s) => ({
+            id: s.slug,
+            label: s.name,
+            hint: s.description,
+          })),
+        }}
+        agentSelector={{
+          value: activeAgent,
+          onChange: setActiveAgent,
+          options: [
+            { id: "", label: t("chat.agentDefault") },
+            ...agents.map((a) => ({
+              id: a.id,
+              label: a.icon ? `${a.icon} ${a.name}` : a.name,
+              hint: a.description || a.role,
+            })),
+          ],
         }}
         modeNotice={modeNotice}
         mentionPopup={

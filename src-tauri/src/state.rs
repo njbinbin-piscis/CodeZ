@@ -18,6 +18,7 @@ use crate::browser::BrowserManager;
 use crate::commands::dap::DapManager;
 use crate::commands::ext_host::ExtHostManager;
 use crate::commands::ide::TerminalRegistry;
+use crate::gateway::GatewayManager;
 use crate::lsp::manager::LspManager;
 
 /// Application state managed by Tauri and injected into commands via
@@ -54,6 +55,10 @@ pub struct AppState {
     pub dap: Arc<DapManager>,
     /// Ephemeral terminal text selections keyed by uuid (`@terminal-snippet(id)`).
     pub terminal_snippets: Arc<Mutex<HashMap<String, String>>>,
+    /// IM gateway manager (Phase 0A "assistants"): registers Feishu / WeCom /
+    /// DingTalk / WeChat etc. channels and routes inbound messages to a headless
+    /// agent turn. Shared with the inbound consumer loop spawned at startup.
+    pub gateway: Arc<GatewayManager>,
 }
 
 /// Default cap on concurrently running Agent turns. Overridable via the
@@ -83,6 +88,7 @@ impl AppState {
             ext_host: Arc::new(ExtHostManager::new()),
             dap: Arc::new(DapManager::new()),
             terminal_snippets: Arc::new(Mutex::new(HashMap::new())),
+            gateway: Arc::new(GatewayManager::new()),
         }
     }
 }

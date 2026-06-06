@@ -88,6 +88,10 @@ export function chatSend(args: {
   clearPlan?: boolean;
   /** Unique key for a parallel Agent task so it can be cancelled on its own (M7). */
   taskKey?: string | null;
+  /** Skill slugs the user enabled for this turn (Phase 1). Empty = none. */
+  enabledSkills?: string[] | null;
+  /** Agent persona id to run as (Phase 2). Null = default assistant. */
+  agentId?: string | null;
 }): Promise<ChatResult> {
   return invoke<ChatResult>("chat_send", {
     prompt: args.prompt,
@@ -101,6 +105,8 @@ export function chatSend(args: {
     modelId: args.modelId ?? null,
     clearPlan: args.clearPlan ?? true,
     taskKey: args.taskKey ?? null,
+    enabledSkills: args.enabledSkills ?? null,
+    agentId: args.agentId ?? null,
   });
 }
 

@@ -20,8 +20,8 @@ anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 
 # Shared agent runtime — pin rev across openpiscis, CodeZ, agent-workbench (v0.8.38).
-piscis-core = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-core", rev = "v0.8.38" }
-piscis-kernel = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-kernel", rev = "v0.8.38" }
+piscis-core = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-core", rev = "v0.8.42" }
+piscis-kernel = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-kernel", rev = "v0.8.42" }
 
 # For local engine hacking, add a
 # `[patch."https://github.com/njbinbin-piscis/piscis-engine.git"]` section here
