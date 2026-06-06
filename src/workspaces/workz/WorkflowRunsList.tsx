@@ -4,6 +4,7 @@ import {
   clearFinishedWorkflowRuns,
   deleteWorkflowRun,
   listWorkflowRuns,
+  subscribeWorkflowEvents,
   type WorkflowRun,
 } from "../../services/tauri/workflow";
 import "./WorkflowRunPanel.css";
@@ -31,6 +32,16 @@ export default function WorkflowRunsList({ teamId, onSelect, onClose }: Props) {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // Keep the list live: a run finishing / advancing while the browser is open
+  // should refresh its status without a manual reload.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    subscribeWorkflowEvents(() => void refresh()).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
   }, [refresh]);
 
   const removeRun = useCallback(
