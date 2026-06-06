@@ -6,7 +6,7 @@ function activate(context) {
   let hellos = 0;
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("codezSample.hello", (name) => {
+    vscode.commands.registerCommand("agentzSample.hello", (name) => {
       hellos++;
       vscode.window.showInformationMessage(`Hello, ${name || "world"}! (#${hellos})`);
       return `hello:${name || "world"}:${hellos}`;
@@ -18,8 +18,8 @@ function activate(context) {
       "javascript",
       {
         provideCompletionItems(document, position) {
-          const item = new vscode.CompletionItem("codezHello", vscode.CompletionItemKind.Snippet);
-          item.insertText = new vscode.SnippetString("codezHello(${1:arg})");
+          const item = new vscode.CompletionItem("agentzHello", vscode.CompletionItemKind.Snippet);
+          item.insertText = new vscode.SnippetString("agentzHello(${1:arg})");
           item.detail = `from ${document.languageId} @ ${position.line}:${position.character}`;
           item.documentation = new vscode.MarkdownString("**AgentZ** sample completion");
           return [item];
@@ -39,7 +39,7 @@ function activate(context) {
     }),
   );
 
-  const diagnostics = vscode.languages.createDiagnosticCollection("codezSample");
+  const diagnostics = vscode.languages.createDiagnosticCollection("agentzSample");
   context.subscriptions.push(diagnostics);
 
   return {
