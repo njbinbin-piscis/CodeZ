@@ -72,6 +72,9 @@ pub struct TeamInfo {
     pub mode: String,
     pub workflow_hint: String,
     pub members: Vec<String>,
+    /// Organization contract (swarm mode). Surfaced so the coordinator turn can
+    /// share the same contract its member Koi receive.
+    pub org_spec: String,
 }
 
 impl From<TeamManifest> for TeamInfo {
@@ -83,6 +86,7 @@ impl From<TeamManifest> for TeamInfo {
             mode: m.mode,
             workflow_hint: m.workflow_hint,
             members: m.members,
+            org_spec: m.org_spec,
         }
     }
 }

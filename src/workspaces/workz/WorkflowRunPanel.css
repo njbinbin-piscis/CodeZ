@@ -256,6 +256,21 @@
 }
 
 .agentz-wfruns-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 9px;
+  background: var(--bg-elev, #14141c);
+  overflow: hidden;
+}
+
+.agentz-wfruns-row:hover {
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-wfruns-open {
+  flex: 1;
   display: grid;
   grid-template-columns: 84px 1fr;
   grid-template-areas: "status name" "status goal" "status meta";
@@ -263,15 +278,24 @@
   align-items: center;
   text-align: left;
   padding: 8px 12px;
-  border: 1px solid var(--border, #2a2a38);
-  border-radius: 9px;
-  background: var(--bg-elev, #14141c);
+  border: none;
+  background: transparent;
   color: var(--text, #e8e8f0);
   cursor: pointer;
 }
 
-.agentz-wfruns-row:hover {
-  border-color: var(--accent, #7c6af7);
+.agentz-wfruns-del {
+  border: none;
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.agentz-wfruns-del:hover {
+  color: #fc5c65;
+  background: rgba(252, 92, 101, 0.1);
 }
 
 .agentz-wfruns-status {

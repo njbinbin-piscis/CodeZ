@@ -382,6 +382,126 @@ pub async fn workflow_cancel(app: AppHandle, run_id: String) -> Result<(), Strin
     Ok(())
 }
 
+/// Delete a single persisted run. Refuses to delete a run that is still
+/// `running` or `waiting_human` (cancel it first), so the driver never races a
+/// file delete out from under itself.
+#[tauri::command]
+pub async fn workflow_delete_run(app: AppHandle, run_id: String) -> Result<(), String> {
+    if let Ok(run) = load_run(&app, &run_id) {
+        if run.status == "running" || run.status == "waiting_human" {
+            return Err("cannot delete an active run; cancel it first".to_string());
+        }
+    }
+    let path = runs_dir(&app)?.join(format!("{}.json", safe_run_id(&run_id)));
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Delete every finished run (completed / failed / cancelled), leaving active
+/// runs untouched. Returns how many were removed.
+#[tauri::command]
+pub async fn workflow_clear_finished(app: AppHandle) -> Result<u32, String> {
+    let dir = runs_dir(&app)?;
+    let mut removed = 0u32;
+    for run in load_all_runs(&dir) {
+        if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
+            let path = dir.join(format!("{}.json", safe_run_id(&run.run_id)));
+            if std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent_graph() -> WorkflowGraph {
+        serde_json::from_value(serde_json::json!({
+            "entry": "start",
+            "max_total_steps": 50,
+            "nodes": [
+                { "id": "start", "type": "start" },
+                { "id": "a", "type": "agent", "agent_id": "coder", "max_retries": 2, "on_error": "skip" },
+                { "id": "end", "type": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "a" },
+                { "from": "a", "to": "end" }
+            ]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn valid_graph_passes() {
+        assert!(agent_graph().validate().is_ok());
+    }
+
+    #[test]
+    fn agent_fault_fields_round_trip() {
+        let g = agent_graph();
+        let a = g.node("a").unwrap();
+        assert_eq!(a.max_retries, 2);
+        assert_eq!(a.on_error.as_deref(), Some("skip"));
+    }
+
+    #[test]
+    fn agent_fault_fields_default_when_absent() {
+        let g: WorkflowGraph = serde_json::from_value(serde_json::json!({
+            "entry": "start",
+            "nodes": [
+                { "id": "start", "type": "start" },
+                { "id": "a", "type": "agent", "agent_id": "coder" }
+            ],
+            "edges": [{ "from": "start", "to": "a" }]
+        }))
+        .unwrap();
+        let a = g.node("a").unwrap();
+        assert_eq!(a.max_retries, 0);
+        assert_eq!(a.on_error, None);
+        // max_total_steps falls back to the default circuit breaker.
+        assert_eq!(g.max_total_steps, default_max_steps());
+    }
+
+    #[test]
+    fn missing_entry_is_rejected() {
+        let g: WorkflowGraph = serde_json::from_value(serde_json::json!({
+            "entry": "ghost",
+            "nodes": [{ "id": "start", "type": "start" }],
+            "edges": []
+        }))
+        .unwrap();
+        assert!(g.validate().is_err());
+    }
+
+    #[test]
+    fn agent_without_id_is_rejected() {
+        let g: WorkflowGraph = serde_json::from_value(serde_json::json!({
+            "entry": "start",
+            "nodes": [
+                { "id": "start", "type": "start" },
+                { "id": "a", "type": "agent" }
+            ],
+            "edges": [{ "from": "start", "to": "a" }]
+        }))
+        .unwrap();
+        assert!(g.validate().is_err());
+    }
+
+    #[test]
+    fn next_of_follows_first_edge() {
+        let g = agent_graph();
+        assert_eq!(g.next_of("start").as_deref(), Some("a"));
+        assert_eq!(g.next_of("a").as_deref(), Some("end"));
+        assert_eq!(g.next_of("end"), None);
+    }
+}
+
 /// Provide a value for a `human` node and resume the run from that node's
 /// successor.
 #[tauri::command]

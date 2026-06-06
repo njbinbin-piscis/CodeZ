@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listWorkflowRuns, type WorkflowRun } from "../../services/tauri/workflow";
+import {
+  clearFinishedWorkflowRuns,
+  deleteWorkflowRun,
+  listWorkflowRuns,
+  type WorkflowRun,
+} from "../../services/tauri/workflow";
 import "./WorkflowRunPanel.css";
 
 interface Props {
@@ -28,7 +33,31 @@ export default function WorkflowRunsList({ teamId, onSelect, onClose }: Props) {
     void refresh();
   }, [refresh]);
 
+  const removeRun = useCallback(
+    async (runId: string) => {
+      try {
+        await deleteWorkflowRun(runId);
+        setRuns((prev) => prev.filter((r) => r.run_id !== runId));
+      } catch {
+        void refresh();
+      }
+    },
+    [refresh],
+  );
+
+  const clearFinished = useCallback(async () => {
+    try {
+      await clearFinishedWorkflowRuns();
+    } finally {
+      void refresh();
+    }
+  }, [refresh]);
+
   const visible = runs.filter((r) => showAll || !teamId || r.team_id === teamId);
+  const hasFinished = visible.some((r) =>
+    ["completed", "failed", "cancelled"].includes(r.status),
+  );
+  const isActive = (s: string) => s === "running" || s === "waiting_human";
 
   return (
     <div className="agentz-wfrun-overlay" onClick={onClose}>
@@ -46,6 +75,11 @@ export default function WorkflowRunsList({ teamId, onSelect, onClose }: Props) {
                 {t("workflow.showAllTeams")}
               </label>
             )}
+            {hasFinished && (
+              <button type="button" onClick={() => void clearFinished()}>
+                {t("workflow.clearFinished")}
+              </button>
+            )}
             <button type="button" onClick={() => void refresh()}>
               ⟳
             </button>
@@ -58,23 +92,34 @@ export default function WorkflowRunsList({ teamId, onSelect, onClose }: Props) {
         <div className="agentz-wfruns-list">
           {visible.length === 0 && <p className="agentz-settings-hint">{t("workflow.noRuns")}</p>}
           {visible.map((r) => (
-            <button
-              key={r.run_id}
-              type="button"
-              className="agentz-wfruns-row"
-              onClick={() => onSelect(r.run_id)}
-            >
-              <span className={`agentz-wfruns-status ${r.status}`}>
-                {t(`workflow.status.${r.status}`)}
-              </span>
-              <span className="agentz-wfruns-name">{r.team_name}</span>
-              <span className="agentz-wfruns-goal">
-                {typeof r.blackboard.goal === "string" ? r.blackboard.goal : ""}
-              </span>
-              <span className="agentz-wfruns-meta">
-                {t("workflow.steps")}: {r.steps} · {new Date(r.created_at).toLocaleString()}
-              </span>
-            </button>
+            <div key={r.run_id} className="agentz-wfruns-row">
+              <button
+                type="button"
+                className="agentz-wfruns-open"
+                onClick={() => onSelect(r.run_id)}
+              >
+                <span className={`agentz-wfruns-status ${r.status}`}>
+                  {t(`workflow.status.${r.status}`)}
+                </span>
+                <span className="agentz-wfruns-name">{r.team_name}</span>
+                <span className="agentz-wfruns-goal">
+                  {typeof r.blackboard.goal === "string" ? r.blackboard.goal : ""}
+                </span>
+                <span className="agentz-wfruns-meta">
+                  {t("workflow.steps")}: {r.steps} · {new Date(r.created_at).toLocaleString()}
+                </span>
+              </button>
+              {!isActive(r.status) && (
+                <button
+                  type="button"
+                  className="agentz-wfruns-del"
+                  title={t("workflow.deleteRun")}
+                  onClick={() => void removeRun(r.run_id)}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>

@@ -420,10 +420,15 @@ export default function WorkZWorkspace({
             setActivePoolId(poolId);
             activePoolRef.current = poolId;
           }
+          const orgSpec = teams.find((tm) => tm.id === activeTeam)?.org_spec?.trim();
+          const orgSection = orgSpec
+            ? `\n\nYour team operates under this organization contract (org_spec); ` +
+              `every member Koi receives it too, so hold yourself and them to it:\n${orgSpec}`
+            : "";
           effectivePrompt =
             `You are the coordinator of team pool "${activeTeam}" (pool_id: ${poolId}). ` +
             `Use the pool_org and pool_chat tools to break this down into todos, assign them ` +
-            `to member Koi, and integrate their results.\n\nTask:\n${text}`;
+            `to member Koi, and integrate their results.${orgSection}\n\nTask:\n${text}`;
         } catch (e) {
           setError(String(e));
         }

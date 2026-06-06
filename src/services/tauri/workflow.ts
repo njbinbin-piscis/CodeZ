@@ -198,6 +198,14 @@ export function cancelWorkflow(runId: string): Promise<void> {
   return invoke<void>("workflow_cancel", { runId });
 }
 
+export function deleteWorkflowRun(runId: string): Promise<void> {
+  return invoke<void>("workflow_delete_run", { runId });
+}
+
+export function clearFinishedWorkflowRuns(): Promise<number> {
+  return invoke<number>("workflow_clear_finished");
+}
+
 export function resumeWorkflowHuman(
   runId: string,
   outputKey: string,

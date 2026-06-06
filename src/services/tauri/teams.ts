@@ -15,6 +15,8 @@ export interface TeamInfo {
   mode: TeamMode;
   workflow_hint: string;
   members: string[];
+  /** Organization contract (swarm mode). */
+  org_spec: string;
 }
 
 export interface TeamManifest {

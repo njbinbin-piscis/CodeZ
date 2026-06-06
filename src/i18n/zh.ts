@@ -98,6 +98,8 @@ const zh = {
     showAllTeams: "显示全部团队",
     noRuns: "暂无运行记录",
     openHistory: "历史",
+    clearFinished: "清理已结束",
+    deleteRun: "删除该运行",
     status: {
       running: "运行中",
       waiting_human: "等待输入",

@@ -98,6 +98,8 @@ const en = {
     showAllTeams: "Show all teams",
     noRuns: "No runs yet",
     openHistory: "History",
+    clearFinished: "Clear finished",
+    deleteRun: "Delete run",
     status: {
       running: "Running",
       waiting_human: "Waiting",

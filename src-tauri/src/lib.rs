@@ -178,6 +178,8 @@ pub fn run() {
             commands::workflow::workflow_list_runs,
             commands::workflow::workflow_cancel,
             commands::workflow::workflow_resume_human,
+            commands::workflow::workflow_delete_run,
+            commands::workflow::workflow_clear_finished,
             // Pool (Phase 3): team collaboration board reads + lifecycle
             commands::pool::pool_list,
             commands::pool::pool_get,

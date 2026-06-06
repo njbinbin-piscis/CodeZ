@@ -600,3 +600,89 @@ fn truncate(s: &str, max: usize) -> String {
     out.push('…');
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::workflow::{WorkflowGraph, WorkflowRun};
+    use serde_json::Map;
+
+    fn run_with(entries: &[(&str, &str)]) -> WorkflowRun {
+        let mut blackboard = Map::new();
+        for (k, v) in entries {
+            blackboard.insert((*k).to_string(), Value::String((*v).to_string()));
+        }
+        WorkflowRun {
+            run_id: "wf-test".into(),
+            team_id: "t".into(),
+            team_name: "Team".into(),
+            pool_id: "p".into(),
+            project_dir: "/tmp".into(),
+            status: "running".into(),
+            cursor: None,
+            blackboard,
+            iter_counts: Map::new(),
+            steps: 0,
+            history: Vec::new(),
+            error: None,
+            graph: WorkflowGraph::default(),
+            created_at: "now".into(),
+            updated_at: "now".into(),
+        }
+    }
+
+    #[test]
+    fn expr_contains_is_case_insensitive() {
+        let run = run_with(&[("review", "Looks good — APPROVED")]);
+        assert!(eval_expr("review contains approved", &run));
+        assert!(!eval_expr("review !contains approved", &run));
+        assert!(!eval_expr("review contains rejected", &run));
+    }
+
+    #[test]
+    fn expr_equality_and_inequality() {
+        let run = run_with(&[("status", "done")]);
+        assert!(eval_expr("status == done", &run));
+        assert!(eval_expr("status == DONE", &run));
+        assert!(!eval_expr("status != done", &run));
+        assert!(eval_expr("status != blocked", &run));
+    }
+
+    #[test]
+    fn expr_quotes_are_stripped() {
+        let run = run_with(&[("label", "ship it")]);
+        assert!(eval_expr("label == \"ship it\"", &run));
+        assert!(eval_expr("label == 'ship it'", &run));
+    }
+
+    #[test]
+    fn expr_bare_key_truthiness() {
+        let truthy = run_with(&[("flag", "yes")]);
+        assert!(eval_expr("flag", &truthy));
+        for falsy in ["", "false", "0", "no"] {
+            let run = run_with(&[("flag", falsy)]);
+            assert!(!eval_expr("flag", &run), "expected '{falsy}' to be falsy");
+        }
+        // Missing key is falsy.
+        assert!(!eval_expr("missing", &run_with(&[])));
+    }
+
+    #[test]
+    fn template_substitutes_known_keys_only() {
+        let run = run_with(&[("goal", "ship feature"), ("review", "ok")]);
+        assert_eq!(
+            render_template("Goal: {{goal}} / Review: {{review}}", &run),
+            "Goal: ship feature / Review: ok"
+        );
+        // Unknown placeholders are left intact rather than blanked.
+        assert_eq!(render_template("{{unknown}}", &run), "{{unknown}}");
+    }
+
+    #[test]
+    fn truncate_caps_length_and_marks_elision() {
+        assert_eq!(truncate("hello", 10), "hello");
+        let out = truncate("hello world", 5);
+        assert_eq!(out.chars().count(), 6); // 5 + ellipsis
+        assert!(out.ends_with('…'));
+    }
+}
