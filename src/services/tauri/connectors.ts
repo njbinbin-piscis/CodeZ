@@ -26,6 +26,23 @@ export interface ConnectorInfo {
   fields: ConnectorAuthField[];
   enabled: boolean;
   authorized: boolean;
+  /** Present for `kind: api` connectors. */
+  url?: string | null;
+  use_case?: string | null;
+  parameters?: string | null;
+}
+
+export interface CreateApiConnectorRequest {
+  id: string;
+  name: string;
+  url: string;
+  api_key: string;
+  use_case?: string;
+  parameters?: string;
+  method?: string;
+  category?: string;
+  icon?: string;
+  description?: string;
 }
 
 export function listConnectors(): Promise<ConnectorInfo[]> {
@@ -54,4 +71,9 @@ export function saveConnectorCredentials(
 
 export function getConnectorCredentials(id: string): Promise<Record<string, string>> {
   return invoke<Record<string, string>>("connectors_get_credentials", { id });
+}
+
+/** Create an inline HTTP API connector (video / ASR / TTS / OCR / custom). */
+export function createApiConnector(req: CreateApiConnectorRequest): Promise<ConnectorInfo> {
+  return invoke<ConnectorInfo>("connectors_create_api", { req });
 }

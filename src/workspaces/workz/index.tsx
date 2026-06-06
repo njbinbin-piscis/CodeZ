@@ -13,13 +13,21 @@ import {
   type PlanTodoItem,
   type SessionMeta,
 } from "../../services/tauri/chat";
-import { getSettings, type LlmProviderConfig } from "../../services/tauri/settings";
+import { getSettings, type LlmProviderConfig, type SettingsResponse } from "../../services/tauri/settings";
 import { ideApi } from "../../services/tauri/ide";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask";
 import { generateRepoWiki } from "../../services/tauri/repoWiki";
 import AgentTaskReview from "./AgentTaskReview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
-import { modelLabel, pickChatAttachment } from "../../components/chatComposerUtils";
+import {
+  modelLabel,
+  pickChatAttachment,
+  attachmentFromPath,
+  blobToDataUrl,
+  dataUrlToBase64,
+} from "../../components/chatComposerUtils";
+import { visionCapable } from "../../components/visionUtils";
 import TaskPanel, {
   mergePlanItems,
   parsePlanFromToolInput,
@@ -35,6 +43,7 @@ import CollabBoard from "./CollabBoard";
 import WorkflowRunPanel from "./WorkflowRunPanel";
 import WorkflowRunsList from "./WorkflowRunsList";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
+import { listAgents, type AgentInfo } from "../../services/tauri/agents";
 import {
   startWorkflow,
   subscribeWorkflowEvents,
@@ -81,9 +90,12 @@ export default function WorkZWorkspace({
   const [wikiBusy, setWikiBusy] = useState(false);
   const [modelId, setModelId] = useState(() => localStorage.getItem("agentz-model-id") ?? "");
   const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
+  const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
   const [defaultModelLabel, setDefaultModelLabel] = useState("");
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanTodoItem[]>([]);
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
   const [taskPanelOpen, setTaskPanelOpen] = useState(true);
@@ -95,6 +107,10 @@ export default function WorkZWorkspace({
   const [reviewTask, setReviewTask] = useState<AgentTaskInfo | null>(null);
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [activeTeam, setActiveTeam] = useState<string>("");
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string>(
+    () => localStorage.getItem("agentz-workz-agent") ?? "",
+  );
   const [activePoolId, setActivePoolId] = useState<string | null>(null);
   const [boardOpen, setBoardOpen] = useState(false);
   const [workflowRunId, setWorkflowRunId] = useState<string | null>(null);
@@ -114,7 +130,13 @@ export default function WorkZWorkspace({
   worktreeRef.current = worktree;
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(text: string, att: ChatAttachment | null) => Promise<void>>(async () => {});
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 2800);
+  }, []);
 
   const {
     pendingCards,
@@ -147,6 +169,7 @@ export default function WorkZWorkspace({
     getSettings()
       .then((s) => {
         setLlmProviders(s.llm_providers ?? []);
+        setAppSettings(s);
         const label = s.model?.trim() ? `${s.provider}/${s.model}` : s.provider || "default";
         setDefaultModelLabel(label);
       })
@@ -164,7 +187,17 @@ export default function WorkZWorkspace({
         setActiveTeam((cur) => (cur && !list.some((tm) => tm.id === cur) ? "" : cur));
       })
       .catch(() => setTeams([]));
+    listAgents()
+      .then((list) => {
+        setAgents(list);
+        setActiveAgentId((cur) => (cur && !list.some((a) => a.id === cur) ? "" : cur));
+      })
+      .catch(() => setAgents([]));
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("agentz-workz-agent", activeAgentId);
+  }, [activeAgentId]);
 
   // Reset pool binding when the team selection changes.
   useEffect(() => {
@@ -447,6 +480,9 @@ export default function WorkZWorkspace({
         chatMode: "agent",
         modelId: modelId || null,
         taskKey,
+        // Single-agent mode: run as the chosen persona. Team mode uses the
+        // coordinator path, so no per-agent persona is applied there.
+        agentId: activeTeam ? null : activeAgentId || null,
       });
       // Bind the (possibly newly created) session id to this run.
       taskKeyBySessionRef.current.set(res.session_id, taskKey);
@@ -614,17 +650,120 @@ export default function WorkZWorkspace({
     }
   };
 
+  // Set the (single) attachment, guarding images behind a vision-capable model
+  // so we never silently drop an image the model can't read. Returns false when
+  // rejected (caller may show its own feedback).
+  const acceptAttachment = useCallback(
+    (att: ChatAttachment, preview: string | null): boolean => {
+      if (att.media_type.startsWith("image/")) {
+        if (!appSettings || !visionCapable(appSettings, modelId, llmProviders)) {
+          showToast(t("chat.visionRequired"));
+          return false;
+        }
+      }
+      if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
+      setAttachment(att);
+      setAttachmentPreview(preview);
+      return true;
+    },
+    [appSettings, modelId, llmProviders, attachmentPreview, showToast, t],
+  );
+
   const handleAttach = useCallback(async () => {
     try {
       const picked = await pickChatAttachment();
       if (!picked) return;
-      if (attachmentPreview?.startsWith("blob:")) URL.revokeObjectURL(attachmentPreview);
-      setAttachment(picked.attachment);
-      setAttachmentPreview(picked.preview);
+      acceptAttachment(picked.attachment, picked.preview);
     } catch (e) {
       setError(String(e));
     }
-  }, [attachmentPreview]);
+  }, [acceptAttachment]);
+
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (!item.type.startsWith("image/")) continue;
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        try {
+          const dataUrl = await blobToDataUrl(file);
+          const data = dataUrlToBase64(dataUrl);
+          acceptAttachment(
+            {
+              media_type: file.type || "image/png",
+              data,
+              filename: file.name || "paste.png",
+              path: null,
+            },
+            dataUrl,
+          );
+        } catch (err) {
+          setError(String(err));
+        }
+        return;
+      }
+    },
+    [acceptAttachment],
+  );
+
+  // OS file drag-and-drop → attach the dropped file (image goes to vision when
+  // the model supports it; other types are passed by path). Tauri captures
+  // native file drops at the webview level, so we subscribe to that stream and
+  // only react when the pointer is over this panel (mirrors the IDE chat).
+  const applyDroppedPaths = useCallback(
+    async (paths: string[]) => {
+      const first = paths.find((p) => p.trim());
+      if (!first) return;
+      try {
+        const built = await attachmentFromPath(first);
+        if (acceptAttachment(built.attachment, built.preview)) {
+          taRef.current?.focus();
+        }
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [acceptAttachment],
+  );
+
+  useEffect(() => {
+    const pointInPanel = (x: number, y: number) => {
+      const el = panelRef.current;
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const cx = x / dpr;
+      const cy = y / dpr;
+      return cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom;
+    };
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        const p = event.payload;
+        if (p.type === "over") {
+          setDragOver(pointInPanel(p.position.x, p.position.y));
+        } else if (p.type === "drop") {
+          const over = pointInPanel(p.position.x, p.position.y);
+          setDragOver(false);
+          if (over && p.paths.length > 0) void applyDroppedPaths(p.paths);
+        } else {
+          setDragOver(false);
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [applyDroppedPaths]);
 
   const modelOptions = useMemo((): ComposerMenuOption[] => {
     const opts: ComposerMenuOption[] = [
@@ -647,10 +786,20 @@ export default function WorkZWorkspace({
   }, []);
 
   const canSend = Boolean(projectDir && (goal.trim() || attachment));
+  const selectedTeam = useMemo(
+    () => teams.find((tm) => tm.id === activeTeam),
+    [teams, activeTeam],
+  );
   const artifacts = useMemo(() => collectArtifacts(steps, changes), [steps, changes]);
 
   return (
-    <div className="agentz-agent">
+    <div className="agentz-agent" ref={panelRef}>
+      {dragOver && (
+        <div className="agentz-workz-dropzone">
+          <span>{t("chat.dropToAttach")}</span>
+        </div>
+      )}
+      {toast && <div className="agentz-workz-toast">{toast}</div>}
       <aside className="agentz-workz-sidebar">
         <div className="agentz-workz-sidebar-head">
           <span>{t("agent.tasks")}</span>
@@ -784,74 +933,105 @@ export default function WorkZWorkspace({
         />
 
         <div className="agentz-workz-isolate-bar">
-          <label
-            className="agentz-workz-isolate-toggle"
-            title={t("agent.isolateHint")}
-          >
-            <input
-              type="checkbox"
-              checked={isolate}
-              disabled={busy}
-              onChange={(e) => setIsolate(e.target.checked)}
-            />
-            <span>{isolate ? t("agent.isolateOn") : t("agent.isolateOff")}</span>
-          </label>
-          {teams.length > 0 && (
-            <label className="agentz-workz-team-select" title={t("agent.teamHint")}>
-              <span>{t("agent.team")}</span>
-              <select
-                value={activeTeam}
+          <div className="agentz-workz-bar-left">
+            <label className="agentz-workz-isolate-toggle" title={t("agent.isolateHint")}>
+              <input
+                type="checkbox"
+                checked={isolate}
                 disabled={busy}
-                onChange={(e) => setActiveTeam(e.target.value)}
-              >
-                <option value="">{t("agent.teamNone")}</option>
-                {teams.map((tm) => (
-                  <option key={tm.id} value={tm.id}>
-                    {tm.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => setIsolate(e.target.checked)}
+              />
+              <span>{isolate ? t("agent.isolateOn") : t("agent.isolateOff")}</span>
             </label>
-          )}
-          {activePoolId && (
-            <button
-              type="button"
-              className="agentz-workz-review-btn"
-              onClick={() => setBoardOpen(true)}
-            >
-              {t("collab.openBoard")}
-            </button>
-          )}
-          {workflowRunId && (
-            <button
-              type="button"
-              className="agentz-workz-review-btn"
-              onClick={() => setWorkflowOpen(true)}
-            >
-              {t("workflow.designer")}
-              {workflowStatus ? ` · ${t(`workflow.status.${workflowStatus}`)}` : ""}
-            </button>
-          )}
-          {hasWorkflowTeam && (
-            <button
-              type="button"
-              className="agentz-workz-review-btn"
-              onClick={() => setRunsOpen(true)}
-            >
-              {t("workflow.openHistory")}
-            </button>
-          )}
-          {worktree && (
-            <button
-              type="button"
-              className="agentz-workz-review-btn"
-              onClick={() => setReviewTask(worktree)}
-              disabled={busy}
-              title={worktree.branch}
-            >
-              {t("agent.review")}
-            </button>
-          )}
+
+            {teams.length > 0 && (
+              <label
+                className="agentz-workz-pill-select"
+                title={
+                  activeTeam
+                    ? selectedTeam?.mode === "workflow"
+                      ? t("agent.teamHintWorkflow")
+                      : t("agent.teamHintSwarm")
+                    : t("agent.teamHint")
+                }
+              >
+                <span className="agentz-workz-pill-label">{t("agent.team")}</span>
+                <select
+                  value={activeTeam}
+                  disabled={busy}
+                  onChange={(e) => setActiveTeam(e.target.value)}
+                >
+                  <option value="">{t("agent.teamNone")}</option>
+                  {teams.map((tm) => (
+                    <option key={tm.id} value={tm.id}>
+                      {tm.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {!activeTeam && agents.length > 0 && (
+              <label className="agentz-workz-pill-select" title={t("agent.agentHint")}>
+                <span className="agentz-workz-pill-label">{t("agent.agentLabel")}</span>
+                <select
+                  value={activeAgentId}
+                  disabled={busy}
+                  onChange={(e) => setActiveAgentId(e.target.value)}
+                >
+                  <option value="">{t("agent.agentGeneric")}</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.icon ? `${a.icon} ` : ""}
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <div className="agentz-workz-bar-right">
+            {activePoolId && (
+              <button
+                type="button"
+                className="agentz-workz-review-btn"
+                onClick={() => setBoardOpen(true)}
+              >
+                {t("collab.openBoard")}
+              </button>
+            )}
+            {workflowRunId && (
+              <button
+                type="button"
+                className="agentz-workz-review-btn"
+                onClick={() => setWorkflowOpen(true)}
+              >
+                {t("workflow.designer")}
+                {workflowStatus ? ` · ${t(`workflow.status.${workflowStatus}`)}` : ""}
+              </button>
+            )}
+            {hasWorkflowTeam && (
+              <button
+                type="button"
+                className="agentz-workz-review-btn"
+                onClick={() => setRunsOpen(true)}
+              >
+                {t("workflow.openHistory")}
+              </button>
+            )}
+            {worktree && (
+              <button
+                type="button"
+                className="agentz-workz-review-btn"
+                onClick={() => setReviewTask(worktree)}
+                disabled={busy}
+                title={worktree.branch}
+              >
+                {t("agent.review")}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className={`agentz-workz-changes${changesOpen ? " expanded" : ""}`}>
@@ -918,6 +1098,7 @@ export default function WorkZWorkspace({
           inputDisabled={!projectDir}
           textareaRef={taRef}
           onKeyDown={onKeyDown}
+          onPaste={(e) => void handlePaste(e)}
           modelId={modelId}
           modelOptions={modelOptions}
           onModelChange={setModelId}

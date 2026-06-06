@@ -648,6 +648,11 @@ fn build_tool_registry(
         }));
         registry.register(Box::new(crate::tools::codebase_search::CodebaseSearchTool));
         registry.register(Box::new(crate::tools::web_fetch::WebFetchTool));
+        if let Ok(config_dir) = crate::commands::data_scope::resolve_global_config_dir(&app) {
+            registry.register(Box::new(crate::tools::api_connector::ApiConnectorTool {
+                config_dir,
+            }));
+        }
         // SubAgent delegation (M7): only the main agent gets `delegate`; the
         // sub-agent's own (plan-mode) registry omits it to prevent recursion.
         if chat_mode != "plan" {
@@ -1331,6 +1336,25 @@ pub async fn run_agentz_turn(
         crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
     if !connector_configs.is_empty() {
         piscis_kernel::tools::register_mcp_tools(&mut registry, &connector_configs).await;
+    }
+    // A selected agent can additionally bind its own connectors (even if they
+    // are globally disabled). Register any that the global pass didn't cover.
+    if let Some(agent) = agent.as_ref() {
+        if !agent.connectors.is_empty() {
+            let already: std::collections::HashSet<String> =
+                connector_configs.iter().map(|c| c.name.clone()).collect();
+            let agent_connectors: Vec<piscis_kernel::store::settings::McpServerConfig> =
+                crate::commands::connectors::resolve_named_connector_mcp_configs(
+                    &config_dir,
+                    &agent.connectors,
+                )
+                .into_iter()
+                .filter(|c| !already.contains(&c.name))
+                .collect();
+            if !agent_connectors.is_empty() {
+                piscis_kernel::tools::register_mcp_tools(&mut registry, &agent_connectors).await;
+            }
+        }
     }
     let default_timeout = Duration::from_secs(600);
 

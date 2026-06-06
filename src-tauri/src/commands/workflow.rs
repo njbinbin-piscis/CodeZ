@@ -132,6 +132,12 @@ pub struct WorkflowEdge {
     pub to: String,
     #[serde(default)]
     pub label: Option<String>,
+    /// React Flow source handle id (editor layout only).
+    #[serde(default)]
+    pub source_handle: Option<String>,
+    /// React Flow target handle id (editor layout only).
+    #[serde(default)]
+    pub target_handle: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

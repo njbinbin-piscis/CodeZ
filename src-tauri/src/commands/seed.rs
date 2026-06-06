@@ -93,6 +93,7 @@ fn agent(
         skills: Vec::new(),
         tools: Vec::new(),
         mcp_servers: Vec::new(),
+        connectors: Vec::new(),
         llm_provider_id: None,
         max_iterations: 0,
         task_timeout_secs: 0,

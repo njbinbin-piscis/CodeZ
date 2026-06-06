@@ -38,7 +38,7 @@ pub struct TeamManifest {
     #[serde(default = "default_workflow")]
     pub workflow_hint: String,
     /// Deterministic execution graph. Used by `workflow` mode.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_workflow_lenient")]
     pub workflow: Option<crate::commands::workflow::WorkflowGraph>,
     #[serde(default)]
     pub task_timeout_secs: u32,
@@ -46,6 +46,24 @@ pub struct TeamManifest {
 
 fn default_workflow() -> String {
     "waves".to_string()
+}
+
+/// Tolerate legacy `team.json` where `workflow` was a hint string (e.g.
+/// `"sequential"`) instead of a graph object. Anything that isn't a valid
+/// `WorkflowGraph` object (string, null, malformed) loads as `None` so old
+/// installed teams keep working instead of failing to load.
+fn deserialize_workflow_lenient<'de, D>(
+    de: D,
+) -> Result<Option<crate::commands::workflow::WorkflowGraph>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(de)?;
+    if value.is_object() {
+        Ok(serde_json::from_value(value).ok())
+    } else {
+        Ok(None)
+    }
 }
 
 fn default_mode() -> String {

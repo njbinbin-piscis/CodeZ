@@ -156,6 +156,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
   const [llmEditIdx, setLlmEditIdx] = useState<number | null>(null);
   const [llmEditForm, setLlmEditForm] = useState<LlmProviderConfig>(EMPTY_LLM_PROVIDER);
   const [llmShowKey, setLlmShowKey] = useState(false);
+  const [widePanel, setWidePanel] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,7 +245,10 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
 
   const panel = (
     <div className="agentz-settings-overlay" onClick={onClose}>
-      <div className="agentz-settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`agentz-settings-panel${widePanel && tab === "studio" ? " agentz-settings-panel--wide" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="agentz-settings-header">
           <span>{t("settings.titleHub")}</span>
           <button type="button" onClick={onClose} title={t("common.close")}>
@@ -271,7 +275,10 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
               role="tab"
               aria-selected={tab === key}
               className={`agentz-settings-tab ${tab === key ? "active" : ""}`}
-              onClick={() => setTab(key)}
+              onClick={() => {
+                setTab(key);
+                if (key !== "studio") setWidePanel(false);
+              }}
             >
               {label}
             </button>
@@ -285,7 +292,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
         )}
         {tab === "studio" && (
           <div className="agentz-settings-body">
-            <StudioTab />
+            <StudioTab onWideLayout={setWidePanel} />
           </div>
         )}
         {tab === "assistants" && (

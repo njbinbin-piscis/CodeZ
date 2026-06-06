@@ -1,14 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   Background,
-  Controls,
+  ConnectionLineType,
   MarkerType,
   addEdge,
-  applyNodeChanges,
+  reconnectEdge,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
   type NodeChange,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { useTranslation } from "react-i18next";
@@ -19,7 +24,12 @@ import type {
   WorkflowNode,
   WorkflowNodeKind,
 } from "../../../services/tauri/workflow";
+import WfNode, { type WfNodeData } from "./WfNode";
+import WfControls from "./WfControls";
+import WfConnectionLine from "./WfConnectionLine";
 import "./WorkflowDesigner.css";
+
+const nodeTypes = { wf: WfNode };
 
 const KIND_META: Record<WorkflowNodeKind, { color: string; glyph: string }> = {
   start: { color: "#4ecdc4", glyph: "▶" },
@@ -42,7 +52,6 @@ function freshId(kind: string): string {
   return `${kind}-${Date.now().toString(36)}-${idCounter}`;
 }
 
-/** Color an edge by its routing role so branch/loop topology reads at a glance. */
 function edgeColor(label: string | null | undefined): string {
   const l = (label ?? "").trim().toLowerCase();
   if (!l || l === "default") return "#6b6b80";
@@ -50,10 +59,7 @@ function edgeColor(label: string | null | undefined): string {
   return "#f7b84e";
 }
 
-/**
- * Assign x/y by a layered BFS from the entry node so a fresh or tangled graph
- * snaps into a readable left-to-right pipeline. Unreachable nodes trail behind.
- */
+/** Top-to-bottom layers; siblings left-to-right within each layer. */
 function autoLayout(graph: WorkflowGraph): WorkflowNode[] {
   const adj = new Map<string, string[]>();
   for (const e of graph.edges) {
@@ -84,14 +90,36 @@ function autoLayout(graph: WorkflowGraph): WorkflowNode[] {
     }
     const row = rowCursor.get(d) ?? 0;
     rowCursor.set(d, row + 1);
-    return { ...n, x: 80 + d * 230, y: 60 + row * 130 };
+    return { ...n, x: 80 + row * 220, y: 60 + d * 140 };
   });
 }
 
-/**
- * Recompute the runner's routing fields (branch cases/default_to, loop body_to)
- * from the canvas edges, so edges are the single source of truth for routing.
- */
+function defaultPosition(i: number): { x: number; y: number } {
+  const cols = 3;
+  return { x: 80 + (i % cols) * 220, y: 60 + Math.floor(i / cols) * 140 };
+}
+
+function pickEdgeHandles(
+  fromId: string,
+  toId: string,
+  positions: Map<string, { x: number; y: number }>,
+): { sourceHandle: string; targetHandle: string } {
+  const from = positions.get(fromId);
+  const to = positions.get(toId);
+  if (!from || !to) return { sourceHandle: "bottom", targetHandle: "top" };
+
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dy) >= Math.abs(dx)) {
+    return dy >= 0
+      ? { sourceHandle: "bottom", targetHandle: "top" }
+      : { sourceHandle: "top-out", targetHandle: "bottom-in" };
+  }
+  return dx >= 0
+    ? { sourceHandle: "right", targetHandle: "left" }
+    : { sourceHandle: "left-out", targetHandle: "right-in" };
+}
+
 function deriveRouting(nodes: WorkflowNode[], edges: WorkflowGraph["edges"]): WorkflowNode[] {
   return nodes.map((n) => {
     const out = edges.filter((e) => e.from === n.id);
@@ -112,102 +140,219 @@ function deriveRouting(nodes: WorkflowNode[], edges: WorkflowGraph["edges"]): Wo
   });
 }
 
-export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
+function graphToRfNodes(graph: WorkflowGraph, selectedNode: string | null): Node<WfNodeData>[] {
+  return graph.nodes.map((n, i) => {
+    const meta = KIND_META[n.type];
+    const fallback = defaultPosition(i);
+    return {
+      id: n.id,
+      type: "wf",
+      position: { x: n.x ?? fallback.x, y: n.y ?? fallback.y },
+      data: {
+        glyph: meta.glyph,
+        color: meta.color,
+        title: n.label || n.id,
+        sub: n.type === "agent" && n.agent_id ? `@${n.agent_id}` : undefined,
+        kind: n.type,
+      },
+      selected: selectedNode === n.id,
+      draggable: true,
+      connectable: true,
+    };
+  });
+}
+
+function edgeHandles(
+  e: WorkflowGraph["edges"][number],
+  positions: Map<string, { x: number; y: number }>,
+): { sourceHandle: string; targetHandle: string } {
+  if (e.source_handle && e.target_handle) {
+    return { sourceHandle: e.source_handle, targetHandle: e.target_handle };
+  }
+  return pickEdgeHandles(e.from, e.to, positions);
+}
+
+function graphToRfEdges(
+  graph: WorkflowGraph,
+  selectedEdge: string | null,
+  positions: Map<string, { x: number; y: number }>,
+): Edge[] {
+  return graph.edges.map((e, i) => {
+    const key = `${e.from}->${e.to}`;
+    const selected = selectedEdge === key;
+    const color = selected ? "#7c6af7" : edgeColor(e.label);
+    const handles = edgeHandles(e, positions);
+    return {
+      id: `e-${i}-${e.from}-${e.to}`,
+      source: e.from,
+      target: e.to,
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
+      type: "smoothstep",
+      label: e.label || undefined,
+      animated: true,
+      reconnectable: true,
+      markerEnd: { type: MarkerType.ArrowClosed, color },
+      labelBgPadding: [4, 2] as [number, number],
+      labelBgBorderRadius: 4,
+      labelBgStyle: { fill: "var(--bg-elev, #14141c)", fillOpacity: 0.95 },
+      labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
+      style: { stroke: color, strokeWidth: selected ? 2.5 : 1.5 },
+    };
+  });
+}
+
+function withAutoHandles(
+  edges: WorkflowGraph["edges"],
+  positions: Map<string, { x: number; y: number }>,
+): WorkflowGraph["edges"] {
+  return edges.map((e) => {
+    const h = pickEdgeHandles(e.from, e.to, positions);
+    return { ...e, source_handle: h.sourceHandle, target_handle: h.targetHandle };
+  });
+}
+
+function positionsFromGraph(graph: WorkflowGraph): Map<string, { x: number; y: number }> {
+  return new Map(
+    graph.nodes.map((n, i) => {
+      const fallback = defaultPosition(i);
+      return [n.id, { x: n.x ?? fallback.x, y: n.y ?? fallback.y }];
+    }),
+  );
+}
+
+function positionsFromNodes(nodes: Node[]): Map<string, { x: number; y: number }> {
+  return new Map(nodes.map((n) => [n.id, n.position]));
+}
+
+function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
   const { t } = useTranslation();
+  const { fitView } = useReactFlow();
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const draggingRef = useRef(false);
+  const graphRevRef = useRef(0);
 
-  const rfNodes: Node[] = useMemo(
-    () =>
-      graph.nodes.map((n, i) => {
-        const meta = KIND_META[n.type];
-        return {
-          id: n.id,
-          position: { x: n.x ?? 120 + (i % 4) * 180, y: n.y ?? 80 + Math.floor(i / 4) * 120 },
-          data: {
-            label: (
-              <div className="wf-node-inner">
-                <span className="wf-node-badge" style={{ background: meta.color }}>
-                  {meta.glyph}
-                </span>
-                <span className="wf-node-title">{n.label || n.id}</span>
-                {n.type === "agent" && n.agent_id && (
-                  <span className="wf-node-sub">@{n.agent_id}</span>
-                )}
-              </div>
-            ),
-          },
-          style: { borderColor: selectedNode === n.id ? meta.color : undefined },
-          className: `wf-rf-node wf-kind-${n.type}`,
-        } as Node;
-      }),
-    [graph.nodes, selectedNode],
-  );
+  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node<WfNodeData>[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
 
-  const rfEdges: Edge[] = useMemo(
-    () =>
-      graph.edges.map((e, i) => {
-        const selected = selectedEdge === `${e.from}->${e.to}`;
-        const color = selected ? "#7c6af7" : edgeColor(e.label);
-        return {
-          id: `e-${i}-${e.from}-${e.to}`,
-          source: e.from,
-          target: e.to,
-          label: e.label || undefined,
-          animated: true,
-          markerEnd: { type: MarkerType.ArrowClosed, color },
-          labelBgPadding: [4, 2] as [number, number],
-          labelBgBorderRadius: 4,
-          labelBgStyle: { fill: "#1a1a24", fillOpacity: 0.9 },
-          labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
-          style: { stroke: color, strokeWidth: selected ? 2.5 : 1.5 },
-        };
-      }),
-    [graph.edges, selectedEdge],
-  );
+  // Re-sync canvas from graph when the graph changes externally (toolbar, inspector,
+  // auto-layout) — but NOT while the user is dragging a node (that caused disappear).
+  useEffect(() => {
+    if (draggingRef.current) return;
+    const pos = positionsFromGraph(graph);
+    setNodes(graphToRfNodes(graph, selectedNode));
+    setEdges(graphToRfEdges(graph, selectedEdge, pos));
+    graphRevRef.current += 1;
+  }, [graph, selectedNode, selectedEdge, setNodes, setEdges]);
 
   const commit = useCallback(
-    (nodes: WorkflowNode[], edges: WorkflowGraph["edges"]) => {
-      onChange({ ...graph, nodes: deriveRouting(nodes, edges), edges });
+    (nodesIn: WorkflowNode[], edgesIn: WorkflowGraph["edges"]) => {
+      onChange({ ...graph, nodes: deriveRouting(nodesIn, edgesIn), edges: edgesIn });
     },
     [graph, onChange],
   );
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      // Apply position changes back into the graph.
-      const positioned = applyNodeChanges(changes, rfNodes);
-      const posMap = new Map(positioned.map((n) => [n.id, n.position]));
-      const nodes = graph.nodes.map((n) => {
-        const p = posMap.get(n.id);
+  const commitPositions = useCallback(
+    (rfNodes: Node[]) => {
+      const pos = positionsFromNodes(rfNodes);
+      const nodesIn = graph.nodes.map((n) => {
+        const p = pos.get(n.id);
         return p ? { ...n, x: p.x, y: p.y } : n;
       });
-      // Honor node removals (but never the start node).
-      const removed = changes
+      commit(nodesIn, graph.edges);
+    },
+    [graph.nodes, graph.edges, commit],
+  );
+
+  const onNodesChangeWrapped = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes);
+      const removes = changes
         .filter((c) => c.type === "remove")
         .map((c) => (c as { id: string }).id)
         .filter((id) => id !== graph.entry);
-      const keptNodes = nodes.filter((n) => !removed.includes(n.id));
-      const keptEdges = graph.edges.filter(
-        (e) => !removed.includes(e.from) && !removed.includes(e.to),
-      );
-      commit(keptNodes, keptEdges);
+      if (removes.length > 0) {
+        const keptNodes = graph.nodes.filter((n) => !removes.includes(n.id));
+        const keptEdges = graph.edges.filter(
+          (e) => !removes.includes(e.from) && !removes.includes(e.to),
+        );
+        commit(keptNodes, keptEdges);
+        setSelectedNode(null);
+      }
     },
-    [graph, rfNodes, commit],
+    [graph.entry, graph.nodes, graph.edges, commit, onNodesChange],
+  );
+
+  const onEdgesChangeWrapped = useCallback(
+    (changes: EdgeChange[]) => {
+      onEdgesChange(changes);
+    },
+    [onEdgesChange],
   );
 
   const onConnect = useCallback(
     (conn: Connection) => {
-      if (!conn.source || !conn.target) return;
-      const next = addEdge(conn, rfEdges);
-      const edges = next.map((e) => ({
-        from: e.source,
-        to: e.target,
-        label: typeof e.label === "string" ? e.label : null,
-      }));
-      commit(graph.nodes, edges);
+      if (!conn.source || !conn.target || conn.source === conn.target) return;
+      const pos = positionsFromGraph(graph);
+      const handles = pickEdgeHandles(conn.source, conn.target, pos);
+      const edgeConn: Connection = {
+        ...conn,
+        sourceHandle: conn.sourceHandle ?? handles.sourceHandle,
+        targetHandle: conn.targetHandle ?? handles.targetHandle,
+      };
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...edgeConn,
+            type: "smoothstep",
+            animated: true,
+            reconnectable: true,
+          },
+          eds,
+        ),
+      );
+      const exists = graph.edges.some((e) => e.from === conn.source && e.to === conn.target);
+      if (exists) return;
+      const edgesIn = [
+        ...graph.edges,
+        {
+          from: conn.source,
+          to: conn.target,
+          label: null,
+          source_handle: edgeConn.sourceHandle ?? null,
+          target_handle: edgeConn.targetHandle ?? null,
+        },
+      ];
+      commit(graph.nodes, edgesIn);
     },
-    [graph.nodes, rfEdges, commit],
+    [graph, commit, setEdges],
+  );
+
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      if (!newConnection.source || !newConnection.target) return;
+      const nextHandles = {
+        source_handle: newConnection.sourceHandle ?? oldEdge.sourceHandle ?? null,
+        target_handle: newConnection.targetHandle ?? oldEdge.targetHandle ?? null,
+      };
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+      const edgesIn = graph.edges.map((e) =>
+        e.from === oldEdge.source && e.to === oldEdge.target
+          ? {
+              ...e,
+              from: newConnection.source!,
+              to: newConnection.target!,
+              ...nextHandles,
+            }
+          : e,
+      );
+      commit(graph.nodes, edgesIn);
+      setSelectedEdge(`${newConnection.source}->${newConnection.target}`);
+    },
+    [graph.nodes, graph.edges, commit, setEdges],
   );
 
   const addNode = useCallback(
@@ -277,6 +422,21 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
     [graph.entry, graph.nodes, graph.edges, commit],
   );
 
+  const runAutoLayout = useCallback(() => {
+    const laid = autoLayout(graph);
+    const pos = new Map(
+      laid.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]),
+    );
+    onChange({
+      ...graph,
+      nodes: laid,
+      edges: withAutoHandles(graph.edges, pos),
+    });
+    requestAnimationFrame(() => {
+      void fitView({ padding: 0.2, duration: 250 });
+    });
+  }, [graph, onChange, fitView]);
+
   const active = graph.nodes.find((n) => n.id === selectedNode) ?? null;
 
   return (
@@ -288,11 +448,7 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
             {KIND_META[k].glyph} {t(`workflow.kind.${k}`)}
           </button>
         ))}
-        <button
-          type="button"
-          className="wf-toolbar-layout"
-          onClick={() => onChange({ ...graph, nodes: autoLayout(graph) })}
-        >
+        <button type="button" className="wf-toolbar-layout" onClick={runAutoLayout}>
           ⊞ {t("workflow.autoLayout")}
         </button>
       </div>
@@ -300,10 +456,18 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
       <div className="wf-canvas-wrap">
         <div className="wf-canvas">
           <ReactFlow
-            nodes={rfNodes}
-            edges={rfEdges}
-            onNodesChange={onNodesChange}
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChangeWrapped}
+            onEdgesChange={onEdgesChangeWrapped}
             onConnect={onConnect}
+            onReconnect={onReconnect}
+            edgesUpdatable
+            connectionRadius={32}
+            reconnectRadius={24}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            connectionLineComponent={WfConnectionLine}
             onNodeClick={(_, n) => {
               setSelectedNode(n.id);
               setSelectedEdge(null);
@@ -312,11 +476,35 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
               setSelectedEdge(`${e.source}->${e.target}`);
               setSelectedNode(null);
             }}
+            onNodeDragStart={() => {
+              draggingRef.current = true;
+            }}
+            onNodeDragStop={() => {
+              draggingRef.current = false;
+              commitPositions(nodesRef.current);
+            }}
+            onPaneClick={() => {
+              setSelectedNode(null);
+              setSelectedEdge(null);
+            }}
             fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.15}
+            maxZoom={2}
+            panOnDrag={[1, 2]}
+            panOnScroll
+            selectionOnDrag
+            selectionKeyCode={null}
+            nodesDraggable
+            nodesConnectable
+            elementsSelectable
+            elevateNodesOnSelect
+            elevateEdgesOnSelect
+            defaultEdgeOptions={{ interactionWidth: 20 }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background />
-            <Controls />
+            <Background gap={18} size={1} />
+            <WfControls />
           </ReactFlow>
         </div>
 
@@ -326,8 +514,9 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
           )}
 
           {selectedEdge && (
-            <div className="wf-inspector-body">
+            <div className="wf-inspector-body agentz-settings-field">
               <h4>{t("workflow.edge")}</h4>
+              <p className="agentz-settings-hint">{t("workflow.edgeReconnectHint")}</p>
               <p className="agentz-settings-hint">{t("workflow.edgeLabelHint")}</p>
               <input
                 value={graph.edges.find((e) => `${e.from}->${e.to}` === selectedEdge)?.label ?? ""}
@@ -345,78 +534,93 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
               <h4>
                 {KIND_META[active.type].glyph} {t(`workflow.kind.${active.type}`)}
               </h4>
-              <label>{t("workflow.nodeLabel")}</label>
-              <input
-                value={active.label ?? ""}
-                onChange={(e) => updateNode(active.id, { label: e.target.value })}
-              />
+
+              <div className="agentz-settings-field">
+                <label>{t("workflow.nodeLabel")}</label>
+                <input
+                  value={active.label ?? ""}
+                  onChange={(e) => updateNode(active.id, { label: e.target.value })}
+                />
+              </div>
 
               {active.type === "agent" && (
                 <>
-                  <label>{t("workflow.agent")}</label>
-                  <select
-                    value={active.agent_id ?? ""}
-                    onChange={(e) => updateNode(active.id, { agent_id: e.target.value })}
-                  >
-                    <option value="">—</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.icon} {a.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label>{t("workflow.promptTemplate")}</label>
-                  <textarea
-                    rows={5}
-                    value={active.prompt_template ?? ""}
-                    placeholder="{{goal}}"
-                    onChange={(e) => updateNode(active.id, { prompt_template: e.target.value })}
-                  />
-                  <label>{t("workflow.outputKey")}</label>
-                  <input
-                    value={active.output_key ?? ""}
-                    onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
-                  />
-                  <label>{t("workflow.maxRetries")}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={active.max_retries ?? 0}
-                    onChange={(e) =>
-                      updateNode(active.id, { max_retries: Math.max(0, Number(e.target.value) || 0) })
-                    }
-                  />
-                  <label>{t("workflow.onError")}</label>
-                  <select
-                    value={active.on_error ?? "fail"}
-                    onChange={(e) => updateNode(active.id, { on_error: e.target.value })}
-                  >
-                    <option value="fail">{t("workflow.onErrorFail")}</option>
-                    <option value="skip">{t("workflow.onErrorSkip")}</option>
-                  </select>
-                  <p className="agentz-settings-hint">{t("workflow.onErrorHint")}</p>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.agent")}</label>
+                    <select
+                      value={active.agent_id ?? ""}
+                      onChange={(e) => updateNode(active.id, { agent_id: e.target.value })}
+                    >
+                      <option value="">—</option>
+                      {agents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.icon} {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.promptTemplate")}</label>
+                    <textarea
+                      rows={5}
+                      value={active.prompt_template ?? ""}
+                      placeholder="{{goal}}"
+                      onChange={(e) => updateNode(active.id, { prompt_template: e.target.value })}
+                    />
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.outputKey")}</label>
+                    <input
+                      value={active.output_key ?? ""}
+                      onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
+                    />
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.maxRetries")}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={active.max_retries ?? 0}
+                      onChange={(e) =>
+                        updateNode(active.id, { max_retries: Math.max(0, Number(e.target.value) || 0) })
+                      }
+                    />
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.onError")}</label>
+                    <select
+                      value={active.on_error ?? "fail"}
+                      onChange={(e) => updateNode(active.id, { on_error: e.target.value })}
+                    >
+                      <option value="fail">{t("workflow.onErrorFail")}</option>
+                      <option value="skip">{t("workflow.onErrorSkip")}</option>
+                    </select>
+                    <p className="agentz-settings-hint">{t("workflow.onErrorHint")}</p>
+                  </div>
                 </>
               )}
 
               {active.type === "branch" && (
                 <>
-                  <label>{t("workflow.evaluator")}</label>
-                  <select
-                    value={active.evaluator?.kind ?? "expr"}
-                    onChange={(e) =>
-                      updateNode(active.id, {
-                        evaluator:
-                          e.target.value === "llm"
-                            ? { kind: "llm", classifier_prompt: "", labels: [] }
-                            : { kind: "expr", expr: "" },
-                      })
-                    }
-                  >
-                    <option value="expr">{t("workflow.evalExpr")}</option>
-                    <option value="llm">{t("workflow.evalLlm")}</option>
-                  </select>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.evaluator")}</label>
+                    <select
+                      value={active.evaluator?.kind ?? "expr"}
+                      onChange={(e) =>
+                        updateNode(active.id, {
+                          evaluator:
+                            e.target.value === "llm"
+                              ? { kind: "llm", classifier_prompt: "", labels: [] }
+                              : { kind: "expr", expr: "" },
+                        })
+                      }
+                    >
+                      <option value="expr">{t("workflow.evalExpr")}</option>
+                      <option value="llm">{t("workflow.evalLlm")}</option>
+                    </select>
+                  </div>
                   {active.evaluator?.kind === "expr" && (
-                    <>
+                    <div className="agentz-settings-field">
                       <label>{t("workflow.expr")}</label>
                       <input
                         value={active.evaluator.expr}
@@ -428,43 +632,47 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
                         }
                       />
                       <p className="agentz-settings-hint">{t("workflow.exprHint")}</p>
-                    </>
+                    </div>
                   )}
                   {active.evaluator?.kind === "llm" && (
                     <>
-                      <label>{t("workflow.classifierPrompt")}</label>
-                      <textarea
-                        rows={3}
-                        value={active.evaluator.classifier_prompt}
-                        onChange={(e) =>
-                          updateNode(active.id, {
-                            evaluator: {
-                              ...(active.evaluator as { kind: "llm"; labels: string[] }),
-                              kind: "llm",
-                              classifier_prompt: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                      <label>{t("workflow.labels")}</label>
-                      <input
-                        value={(active.evaluator.labels ?? []).join(", ")}
-                        placeholder="approved, changes_requested"
-                        onChange={(e) =>
-                          updateNode(active.id, {
-                            evaluator: {
-                              kind: "llm",
-                              classifier_prompt:
-                                (active.evaluator as { classifier_prompt?: string })
-                                  .classifier_prompt ?? "",
-                              labels: e.target.value
-                                .split(",")
-                                .map((s) => s.trim())
-                                .filter(Boolean),
-                            },
-                          })
-                        }
-                      />
+                      <div className="agentz-settings-field">
+                        <label>{t("workflow.classifierPrompt")}</label>
+                        <textarea
+                          rows={3}
+                          value={active.evaluator.classifier_prompt}
+                          onChange={(e) =>
+                            updateNode(active.id, {
+                              evaluator: {
+                                ...(active.evaluator as { kind: "llm"; labels: string[] }),
+                                kind: "llm",
+                                classifier_prompt: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="agentz-settings-field">
+                        <label>{t("workflow.labels")}</label>
+                        <input
+                          value={(active.evaluator.labels ?? []).join(", ")}
+                          placeholder="approved, changes_requested"
+                          onChange={(e) =>
+                            updateNode(active.id, {
+                              evaluator: {
+                                kind: "llm",
+                                classifier_prompt:
+                                  (active.evaluator as { classifier_prompt?: string })
+                                    .classifier_prompt ?? "",
+                                labels: e.target.value
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              },
+                            })
+                          }
+                        />
+                      </div>
                     </>
                   )}
                   <p className="agentz-settings-hint">{t("workflow.branchEdgeHint")}</p>
@@ -473,50 +681,58 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
 
               {active.type === "loop" && (
                 <>
-                  <label>{t("workflow.maxIterations")}</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={active.guard?.max_iterations ?? 3}
-                    onChange={(e) =>
-                      updateNode(active.id, {
-                        guard: {
-                          max_iterations: Number(e.target.value) || 1,
-                          exit_when: active.guard?.exit_when ?? null,
-                        },
-                      })
-                    }
-                  />
-                  <label>{t("workflow.exitWhen")}</label>
-                  <input
-                    value={active.guard?.exit_when ?? ""}
-                    placeholder="review contains approved"
-                    onChange={(e) =>
-                      updateNode(active.id, {
-                        guard: {
-                          max_iterations: active.guard?.max_iterations ?? 3,
-                          exit_when: e.target.value || null,
-                        },
-                      })
-                    }
-                  />
-                  <p className="agentz-settings-hint">{t("workflow.loopEdgeHint")}</p>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.maxIterations")}</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={active.guard?.max_iterations ?? 3}
+                      onChange={(e) =>
+                        updateNode(active.id, {
+                          guard: {
+                            max_iterations: Number(e.target.value) || 1,
+                            exit_when: active.guard?.exit_when ?? null,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.exitWhen")}</label>
+                    <input
+                      value={active.guard?.exit_when ?? ""}
+                      placeholder="review contains approved"
+                      onChange={(e) =>
+                        updateNode(active.id, {
+                          guard: {
+                            max_iterations: active.guard?.max_iterations ?? 3,
+                            exit_when: e.target.value || null,
+                          },
+                        })
+                      }
+                    />
+                    <p className="agentz-settings-hint">{t("workflow.loopEdgeHint")}</p>
+                  </div>
                 </>
               )}
 
               {active.type === "human" && (
                 <>
-                  <label>{t("workflow.humanPrompt")}</label>
-                  <textarea
-                    rows={3}
-                    value={active.prompt ?? ""}
-                    onChange={(e) => updateNode(active.id, { prompt: e.target.value })}
-                  />
-                  <label>{t("workflow.outputKey")}</label>
-                  <input
-                    value={active.output_key ?? ""}
-                    onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
-                  />
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.humanPrompt")}</label>
+                    <textarea
+                      rows={3}
+                      value={active.prompt ?? ""}
+                      onChange={(e) => updateNode(active.id, { prompt: e.target.value })}
+                    />
+                  </div>
+                  <div className="agentz-settings-field">
+                    <label>{t("workflow.outputKey")}</label>
+                    <input
+                      value={active.output_key ?? ""}
+                      onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
+                    />
+                  </div>
                 </>
               )}
 
@@ -530,5 +746,13 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WorkflowDesigner(props: Props) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowDesignerInner {...props} />
+    </ReactFlowProvider>
   );
 }

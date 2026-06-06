@@ -54,6 +54,10 @@ export interface WorkflowEdge {
   from: string;
   to: string;
   label?: string | null;
+  /** Persisted React Flow source handle id (manual connect / reconnect). */
+  source_handle?: string | null;
+  /** Persisted React Flow target handle id (manual connect / reconnect). */
+  target_handle?: string | null;
 }
 
 export interface WorkflowGraph {

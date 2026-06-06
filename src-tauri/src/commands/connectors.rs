@@ -118,6 +118,19 @@ pub struct ConnectorManifest {
     /// Whether this connector is active (its tools are registered into agents).
     #[serde(default)]
     pub enabled: bool,
+    /// HTTP method for `kind: api` connectors (GET / POST / PUT).
+    #[serde(default = "default_api_method")]
+    pub api_method: String,
+    /// When the agent should call this API (usage scenario).
+    #[serde(default)]
+    pub use_case: String,
+    /// Parameter documentation or JSON-schema hint for the agent.
+    #[serde(default)]
+    pub parameters: String,
+}
+
+fn default_api_method() -> String {
+    "POST".into()
 }
 
 fn default_kind() -> String {
@@ -152,6 +165,24 @@ pub struct ConnectorInfo {
     /// True when every required secret field has a stored credential (or the
     /// connector needs no auth).
     pub authorized: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_case: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<String>,
+}
+
+/// Resolved API connector ready for the `api_connector` agent tool.
+#[derive(Debug, Clone)]
+pub struct ApiConnectorEntry {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub method: String,
+    pub use_case: String,
+    pub parameters: String,
+    pub api_key: String,
 }
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
@@ -236,11 +267,159 @@ fn list_manifest_dirs(dir: &Path) -> Vec<PathBuf> {
     dirs
 }
 
+fn connector_info_from(manifest: &ConnectorManifest, creds: &HashMap<String, String>) -> ConnectorInfo {
+    let api_extra = manifest.kind == "api";
+    ConnectorInfo {
+        authorized: is_authorized(manifest, creds),
+        id: manifest.id.clone(),
+        name: manifest.name.clone(),
+        icon: manifest.icon.clone(),
+        color: manifest.color.clone(),
+        category: manifest.category.clone(),
+        description: manifest.description.clone(),
+        kind: manifest.kind.clone(),
+        transport: manifest.transport.clone(),
+        auth_method: manifest.auth.method.clone(),
+        fields: manifest.auth.fields.clone(),
+        enabled: manifest.enabled,
+        url: api_extra.then(|| manifest.url.clone()).filter(|u| !u.is_empty()),
+        use_case: api_extra
+            .then(|| manifest.use_case.clone())
+            .filter(|u| !u.is_empty()),
+        parameters: api_extra
+            .then(|| manifest.parameters.clone())
+            .filter(|p| !p.is_empty()),
+    }
+}
+
+/// List enabled + authorized `kind: api` connectors for the agent tool.
+pub fn list_api_connectors(config_dir: &Path) -> Vec<ApiConnectorEntry> {
+    let dir = config_dir.join("connectors");
+    let mut out = Vec::new();
+    for mdir in list_manifest_dirs(&dir) {
+        let manifest = match ConnectorManifest::load(&mdir.join("connector.json")) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!("skip connector at {}: {}", mdir.display(), e);
+                continue;
+            }
+        };
+        if manifest.kind != "api" || !manifest.enabled {
+            continue;
+        }
+        let creds = load_credentials(&dir, &manifest.id);
+        if !is_authorized(&manifest, &creds) || manifest.url.trim().is_empty() {
+            continue;
+        }
+        let api_key = creds.get("api_key").cloned().unwrap_or_default();
+        out.push(ApiConnectorEntry {
+            id: manifest.id.clone(),
+            name: manifest.name.clone(),
+            url: manifest.url.clone(),
+            method: if manifest.api_method.trim().is_empty() {
+                "POST".into()
+            } else {
+                manifest.api_method.clone()
+            },
+            use_case: manifest.use_case.clone(),
+            parameters: manifest.parameters.clone(),
+            api_key,
+        });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Call an enabled API connector. `body` is sent as JSON for POST/PUT.
+pub async fn call_api_connector(
+    config_dir: &Path,
+    connector_id: &str,
+    body: Option<serde_json::Value>,
+) -> Result<String, String> {
+    let entry = list_api_connectors(config_dir)
+        .into_iter()
+        .find(|c| c.id == connector_id)
+        .ok_or_else(|| format!("API connector '{connector_id}' not found or not enabled"))?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let method = entry.method.to_uppercase();
+    let mut req = match method.as_str() {
+        "GET" => client.get(&entry.url),
+        "PUT" => client.put(&entry.url),
+        "PATCH" => client.patch(&entry.url),
+        "DELETE" => client.delete(&entry.url),
+        _ => client.post(&entry.url),
+    };
+    req = req
+        .header("User-Agent", "AgentZ/1.0")
+        .header("Accept", "application/json, text/plain, */*");
+    if !entry.api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", entry.api_key));
+    }
+    if method != "GET" && method != "DELETE" {
+        req = req.json(&body.unwrap_or(serde_json::json!({})));
+    }
+
+    let resp = req.send().await.map_err(|e| format!("request failed: {e}"))?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| format!("read body: {e}"))?;
+    if !status.is_success() {
+        return Err(format!("HTTP {status}: {text}"));
+    }
+    Ok(text)
+}
+
 // ─── Public resolver (used by chat turn + IM loop) ──────────────────────────
 
 /// Resolve every enabled + authorized connector into a kernel MCP config so the
 /// caller can register their tools alongside regular MCP servers. `config_dir`
 /// is the global config directory (`{config}`).
+/// Turn one authorized `kind: mcp` connector manifest into a kernel MCP config.
+/// Returns `None` for non-MCP or unauthorized connectors.
+fn connector_to_mcp_config(dir: &Path, manifest: &ConnectorManifest) -> Option<McpServerConfig> {
+    if manifest.kind != "mcp" {
+        return None;
+    }
+    let creds = load_credentials(dir, &manifest.id);
+    if !is_authorized(manifest, &creds) {
+        return None;
+    }
+    let env: HashMap<String, String> = manifest
+        .env
+        .iter()
+        .map(|(k, v)| (k.clone(), resolve_placeholders(v, &manifest.id, &creds)))
+        .collect();
+    let mut headers: HashMap<String, String> = manifest
+        .headers
+        .iter()
+        .map(|(k, v)| (k.clone(), resolve_placeholders(v, &manifest.id, &creds)))
+        .collect();
+    // For OAuth2 connectors, auto-inject the stored access token as a Bearer
+    // header unless the manifest declares its own Authorization header.
+    if manifest.auth.method == "oauth2"
+        && !headers.keys().any(|k| k.eq_ignore_ascii_case("authorization"))
+    {
+        if let Some(token) = creds.get("access_token").filter(|v| !v.is_empty()) {
+            headers.insert("Authorization".into(), format!("Bearer {token}"));
+        }
+    }
+    let url = resolve_placeholders(&manifest.url, &manifest.id, &creds);
+    Some(McpServerConfig {
+        name: manifest.id.clone(),
+        transport: manifest.transport.clone(),
+        command: manifest.command.clone(),
+        args: manifest.args.clone(),
+        url,
+        env,
+        headers,
+        enabled: true,
+    })
+}
+
 pub fn resolve_connector_mcp_configs(config_dir: &Path) -> Vec<McpServerConfig> {
     let dir = config_dir.join("connectors");
     let mut out = Vec::new();
@@ -252,43 +431,41 @@ pub fn resolve_connector_mcp_configs(config_dir: &Path) -> Vec<McpServerConfig> 
                 continue;
             }
         };
-        if !manifest.enabled || manifest.kind != "mcp" {
+        if !manifest.enabled {
             continue;
         }
-        let creds = load_credentials(&dir, &manifest.id);
-        if !is_authorized(&manifest, &creds) {
+        if let Some(cfg) = connector_to_mcp_config(&dir, &manifest) {
+            out.push(cfg);
+        }
+    }
+    out
+}
+
+/// Resolve specific connectors by id into MCP configs, regardless of their
+/// global `enabled` flag (an agent explicitly opted into them). Authorization
+/// is still required. Used to bind an agent's own connectors for its turn.
+pub fn resolve_named_connector_mcp_configs(
+    config_dir: &Path,
+    ids: &[String],
+) -> Vec<McpServerConfig> {
+    let wanted: std::collections::HashSet<&str> =
+        ids.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    if wanted.is_empty() {
+        return Vec::new();
+    }
+    let dir = config_dir.join("connectors");
+    let mut out = Vec::new();
+    for mdir in list_manifest_dirs(&dir) {
+        let manifest = match ConnectorManifest::load(&mdir.join("connector.json")) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if !wanted.contains(manifest.id.as_str()) {
             continue;
         }
-        let env: HashMap<String, String> = manifest
-            .env
-            .iter()
-            .map(|(k, v)| (k.clone(), resolve_placeholders(v, &manifest.id, &creds)))
-            .collect();
-        let mut headers: HashMap<String, String> = manifest
-            .headers
-            .iter()
-            .map(|(k, v)| (k.clone(), resolve_placeholders(v, &manifest.id, &creds)))
-            .collect();
-        // For OAuth2 connectors, auto-inject the stored access token as a Bearer
-        // header unless the manifest declares its own Authorization header.
-        if manifest.auth.method == "oauth2"
-            && !headers.keys().any(|k| k.eq_ignore_ascii_case("authorization"))
-        {
-            if let Some(token) = creds.get("access_token").filter(|v| !v.is_empty()) {
-                headers.insert("Authorization".into(), format!("Bearer {token}"));
-            }
+        if let Some(cfg) = connector_to_mcp_config(&dir, &manifest) {
+            out.push(cfg);
         }
-        let url = resolve_placeholders(&manifest.url, &manifest.id, &creds);
-        out.push(McpServerConfig {
-            name: manifest.id.clone(),
-            transport: manifest.transport.clone(),
-            command: manifest.command.clone(),
-            args: manifest.args.clone(),
-            url,
-            env,
-            headers,
-            enabled: true,
-        });
     }
     out
 }
@@ -308,20 +485,7 @@ pub async fn connectors_list(app: AppHandle) -> Result<Vec<ConnectorInfo>, Strin
             }
         };
         let creds = load_credentials(&dir, &manifest.id);
-        infos.push(ConnectorInfo {
-            authorized: is_authorized(&manifest, &creds),
-            id: manifest.id,
-            name: manifest.name,
-            icon: manifest.icon,
-            color: manifest.color,
-            category: manifest.category,
-            description: manifest.description,
-            kind: manifest.kind,
-            transport: manifest.transport,
-            auth_method: manifest.auth.method,
-            fields: manifest.auth.fields,
-            enabled: manifest.enabled,
-        });
+        infos.push(connector_info_from(&manifest, &creds));
     }
     infos.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(infos)
@@ -375,20 +539,106 @@ pub async fn connectors_install(app: AppHandle, source: String) -> Result<Connec
 
     info!("Installed connector '{}'", manifest.id);
     let creds = load_credentials(&dir, &manifest.id);
-    Ok(ConnectorInfo {
-        authorized: is_authorized(&manifest, &creds),
-        id: manifest.id,
-        name: manifest.name,
-        icon: manifest.icon,
-        color: manifest.color,
-        category: manifest.category,
-        description: manifest.description,
-        kind: manifest.kind,
-        transport: manifest.transport,
-        auth_method: manifest.auth.method,
-        fields: manifest.auth.fields,
-        enabled: manifest.enabled,
-    })
+    Ok(connector_info_from(&manifest, &creds))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateApiConnectorRequest {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub api_key: String,
+    #[serde(default)]
+    pub use_case: String,
+    #[serde(default)]
+    pub parameters: String,
+    #[serde(default = "default_api_method")]
+    pub method: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// Create an inline HTTP API connector (video / ASR / TTS / OCR / custom).
+#[tauri::command]
+pub async fn connectors_create_api(
+    app: AppHandle,
+    req: CreateApiConnectorRequest,
+) -> Result<ConnectorInfo, String> {
+    let dir = connectors_dir(&app)?;
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let id = safe_id(req.id.trim());
+    if id.is_empty() {
+        return Err("connector id is required".into());
+    }
+    if req.url.trim().is_empty() {
+        return Err("API URL is required".into());
+    }
+    if req.api_key.trim().is_empty() {
+        return Err("API key is required".into());
+    }
+
+    let manifest = ConnectorManifest {
+        id: id.clone(),
+        name: req.name.trim().to_string(),
+        icon: if req.icon.trim().is_empty() {
+            "🔌".into()
+        } else {
+            req.icon.trim().to_string()
+        },
+        color: String::new(),
+        category: if req.category.trim().is_empty() {
+            "api".into()
+        } else {
+            req.category.trim().to_string()
+        },
+        description: req.description.trim().to_string(),
+        kind: "api".into(),
+        transport: "http".into(),
+        command: String::new(),
+        args: Vec::new(),
+        url: req.url.trim().to_string(),
+        env: HashMap::new(),
+        headers: HashMap::new(),
+        auth: ConnectorAuth {
+            method: "api_key".into(),
+            fields: vec![ConnectorAuthField {
+                key: "api_key".into(),
+                label: "API Key".into(),
+                secret: true,
+                placeholder: String::new(),
+            }],
+            oauth: None,
+        },
+        enabled: false,
+        api_method: req.method.trim().to_uppercase(),
+        use_case: req.use_case.trim().to_string(),
+        parameters: req.parameters.trim().to_string(),
+    };
+
+    let target = dir.join(&id);
+    tokio::fs::create_dir_all(&target)
+        .await
+        .map_err(|e| e.to_string())?;
+    let pretty = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+    tokio::fs::write(target.join("connector.json"), pretty)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let creds = HashMap::from([("api_key".into(), req.api_key.trim().to_string())]);
+    let cred_text = serde_json::to_string_pretty(&creds).map_err(|e| e.to_string())?;
+    tokio::fs::write(credentials_path(&dir, &id), cred_text)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    info!("Created API connector '{}'", id);
+    Ok(connector_info_from(&manifest, &creds))
 }
 
 #[tauri::command]

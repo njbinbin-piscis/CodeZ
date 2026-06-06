@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import TagMultiSelect from "../../../components/TagMultiSelect";
 import {
   listAgents,
   getAgent,
   saveAgent,
   uninstallAgent,
+  listBuiltinTools,
   type AgentInfo,
   type AgentManifest,
+  type BuiltinToolInfo,
 } from "../../../services/tauri/agents";
 import {
   listTeams,
@@ -17,6 +20,7 @@ import {
   type TeamManifest,
 } from "../../../services/tauri/teams";
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
+import { listConnectors, type ConnectorInfo } from "../../../services/tauri/connectors";
 import { getSettings, type SettingsResponse } from "../../../services/tauri/settings";
 import { emptyGraph, validateGraph } from "../../../services/tauri/workflow";
 import WorkflowDesigner from "./WorkflowDesigner";
@@ -36,6 +40,7 @@ const EMPTY_AGENT: AgentManifest = {
   skills: [],
   tools: [],
   mcp_servers: [],
+  connectors: [],
   llm_provider_id: null,
   max_iterations: 0,
   task_timeout_secs: 0,
@@ -55,12 +60,19 @@ const EMPTY_TEAM: TeamManifest = {
 
 const ORG_SPEC_TEMPLATE = `# Project Goal\n\n<what this team is trying to accomplish>\n\n# Roles\n\n- <agent>: <responsibility>\n\n# Collaboration Rules\n\n- Coordinate through the shared todo board.\n- Hand off work with clear, self-contained briefs.\n\n# Integration Model\n\n- <how work is merged / reviewed>\n`;
 
-export default function StudioTab() {
+interface StudioTabProps {
+  /** Notify parent to widen the settings panel (workflow designer needs ~80vw). */
+  onWideLayout?: (wide: boolean) => void;
+}
+
+export default function StudioTab({ onWideLayout }: StudioTabProps) {
   const { t } = useTranslation();
   const [sub, setSub] = useState<"agents" | "teams">("agents");
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [skills, setSkills] = useState<InstalledSkill[]>([]);
+  const [builtinTools, setBuiltinTools] = useState<BuiltinToolInfo[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorInfo[]>([]);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,15 +82,19 @@ export default function StudioTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [a, tm, sk, st] = await Promise.all([
+      const [a, tm, sk, bt, cn, st] = await Promise.all([
         listAgents(),
         listTeams(),
         listInstalledSkills(),
+        listBuiltinTools(),
+        listConnectors(),
         getSettings(),
       ]);
       setAgents(a);
       setTeams(tm);
       setSkills(sk);
+      setBuiltinTools(bt);
+      setConnectors(cn);
       setSettings(st);
     } catch (e) {
       setError(String(e));
@@ -89,11 +105,56 @@ export default function StudioTab() {
     void refresh();
   }, [refresh]);
 
+  const workflowEditing =
+    sub === "teams" && teamForm != null && (teamForm.mode ?? "swarm") === "workflow";
+
+  useEffect(() => {
+    onWideLayout?.(workflowEditing);
+    return () => onWideLayout?.(false);
+  }, [workflowEditing, onWideLayout]);
+
   const mcpNames = useMemo(
     () => (settings?.mcp_servers ?? []).map((s) => s.name).filter(Boolean),
     [settings],
   );
   const providers = settings?.llm_providers ?? [];
+
+  const skillOptions = useMemo(
+    () =>
+      skills.map((s) => ({
+        value: s.slug,
+        label: s.name || s.slug,
+        hint: s.description || s.slug,
+      })),
+    [skills],
+  );
+
+  const toolOptions = useMemo(
+    () =>
+      builtinTools.map((tool) => ({
+        value: tool.id,
+        label: tool.label,
+        hint: `${tool.group} · ${tool.hint}`,
+      })),
+    [builtinTools],
+  );
+
+  const mcpOptions = useMemo(
+    () => mcpNames.map((name) => ({ value: name, label: name })),
+    [mcpNames],
+  );
+
+  const connectorOptions = useMemo(
+    () =>
+      connectors.map((c) => ({
+        value: c.id,
+        label: `${c.icon ? `${c.icon} ` : ""}${c.name}`,
+        hint: [c.category, c.authorized ? undefined : t("studio.connectorUnauthorized"), c.description]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    [connectors, t],
+  );
 
   // ── Agent editing ────────────────────────────────────────────────────────
   const editAgent = useCallback(async (id: string) => {
@@ -254,7 +315,7 @@ export default function StudioTab() {
       )}
 
       {sub === "agents" && agentForm && (
-        <div className="agentz-studio-form">
+        <div className="agentz-studio-form agentz-studio-form--full">
           <div className="agentz-studio-grid">
             <div className="agentz-settings-field">
               <label>{t("studio.fieldId")}</label>
@@ -296,6 +357,9 @@ export default function StudioTab() {
                   </option>
                 ))}
               </select>
+              {providers.length === 0 && (
+                <p className="agentz-settings-hint">{t("studio.modelProvidersHint")}</p>
+              )}
             </div>
           </div>
 
@@ -326,7 +390,8 @@ export default function StudioTab() {
           <div className="agentz-settings-field">
             <label>{t("studio.fieldSystemPrompt")}</label>
             <textarea
-              rows={6}
+              className="agentz-settings-textarea-lg"
+              rows={8}
               value={agentForm.system_prompt ?? ""}
               onChange={(e) => setAgentForm({ ...agentForm, system_prompt: e.target.value })}
               placeholder={t("studio.systemPromptPlaceholder")}
@@ -335,59 +400,51 @@ export default function StudioTab() {
 
           <div className="agentz-settings-field">
             <label>{t("studio.fieldSkills")}</label>
-            <div className="agentz-studio-checks">
-              {skills.length === 0 && <span className="agentz-settings-hint">{t("chat.skillsEmpty")}</span>}
-              {skills.map((s) => (
-                <label key={s.slug} className="agentz-studio-check">
-                  <input
-                    type="checkbox"
-                    checked={(agentForm.skills ?? []).includes(s.slug)}
-                    onChange={() =>
-                      setAgentForm({ ...agentForm, skills: toggleInList(agentForm.skills ?? [], s.slug) })
-                    }
-                  />
-                  {s.name}
-                </label>
-              ))}
-            </div>
+            <TagMultiSelect
+              values={agentForm.skills ?? []}
+              options={skillOptions}
+              onChange={(skills) => setAgentForm({ ...agentForm, skills })}
+              placeholder={t("studio.skillsSearchPlaceholder")}
+              emptyText={skills.length === 0 ? t("chat.skillsEmpty") : t("tagMultiSelect.noMatch")}
+            />
+            <p className="agentz-settings-hint">{t("studio.skillsPickerHint")}</p>
           </div>
 
           {mcpNames.length > 0 && (
             <div className="agentz-settings-field">
               <label>{t("studio.fieldMcp")}</label>
-              <div className="agentz-studio-checks">
-                {mcpNames.map((name) => (
-                  <label key={name} className="agentz-studio-check">
-                    <input
-                      type="checkbox"
-                      checked={(agentForm.mcp_servers ?? []).includes(name)}
-                      onChange={() =>
-                        setAgentForm({
-                          ...agentForm,
-                          mcp_servers: toggleInList(agentForm.mcp_servers ?? [], name),
-                        })
-                      }
-                    />
-                    {name}
-                  </label>
-                ))}
-              </div>
+              <TagMultiSelect
+                values={agentForm.mcp_servers ?? []}
+                options={mcpOptions}
+                onChange={(mcp_servers) => setAgentForm({ ...agentForm, mcp_servers })}
+                placeholder={t("studio.mcpSearchPlaceholder")}
+              />
             </div>
           )}
 
           <div className="agentz-settings-field">
             <label>{t("studio.fieldTools")}</label>
-            <input
-              value={(agentForm.tools ?? []).join(", ")}
-              onChange={(e) =>
-                setAgentForm({
-                  ...agentForm,
-                  tools: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                })
-              }
-              placeholder="shell, code_run, web_fetch"
+            <TagMultiSelect
+              values={agentForm.tools ?? []}
+              options={toolOptions}
+              onChange={(tools) => setAgentForm({ ...agentForm, tools })}
+              placeholder={t("studio.toolsSearchPlaceholder")}
             />
             <p className="agentz-settings-hint">{t("studio.toolsHint")}</p>
+          </div>
+
+          <div className="agentz-settings-field">
+            <label>{t("studio.fieldConnectors")}</label>
+            <TagMultiSelect
+              values={agentForm.connectors ?? []}
+              options={connectorOptions}
+              onChange={(connectors) => setAgentForm({ ...agentForm, connectors })}
+              placeholder={t("studio.connectorsSearchPlaceholder")}
+              emptyText={
+                connectors.length === 0 ? t("studio.connectorsEmpty") : t("tagMultiSelect.noMatch")
+              }
+            />
+            <p className="agentz-settings-hint">{t("studio.connectorsHint")}</p>
           </div>
 
           <div className="agentz-studio-form-actions">
@@ -441,7 +498,9 @@ export default function StudioTab() {
       )}
 
       {sub === "teams" && teamForm && (
-        <div className="agentz-studio-form">
+        <div
+          className={`agentz-studio-form ${(teamForm.mode ?? "swarm") === "workflow" ? "agentz-studio-form--full" : ""}`}
+        >
           <div className="agentz-studio-grid">
             <div className="agentz-settings-field">
               <label>{t("studio.fieldId")}</label>
@@ -527,6 +586,7 @@ export default function StudioTab() {
               <div className="agentz-settings-field">
                 <label>{t("studio.fieldOrgSpec")}</label>
                 <textarea
+                  className="agentz-settings-textarea-lg"
                   rows={12}
                   value={teamForm.org_spec ?? ""}
                   onChange={(e) => setTeamForm({ ...teamForm, org_spec: e.target.value })}

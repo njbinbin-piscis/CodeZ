@@ -222,6 +222,9 @@ async fn build_koi_registry(
         register_mcp_tools(&mut registry, &mcp_servers).await;
     }
     if let Ok(config_dir) = resolve_global_config_dir(app) {
+        registry.register(Box::new(crate::tools::api_connector::ApiConnectorTool {
+            config_dir: config_dir.clone(),
+        }));
         let connector_configs =
             crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
         if !connector_configs.is_empty() {

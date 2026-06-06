@@ -44,6 +44,10 @@ pub struct AgentManifest {
     /// MCP server names (from settings) to bind even if globally disabled.
     #[serde(default)]
     pub mcp_servers: Vec<String>,
+    /// Connector ids this agent additionally binds (registered even if the
+    /// connector is globally disabled, as long as it is authorized).
+    #[serde(default)]
+    pub connectors: Vec<String>,
     /// Optional LLM provider id (from settings.llm_providers) to run as.
     #[serde(default)]
     pub llm_provider_id: Option<String>,
@@ -77,6 +81,7 @@ pub struct AgentInfo {
     pub skills: Vec<String>,
     pub tools: Vec<String>,
     pub mcp_servers: Vec<String>,
+    pub connectors: Vec<String>,
     pub llm_provider_id: Option<String>,
     pub koi_id: Option<String>,
 }
@@ -93,6 +98,7 @@ impl From<AgentManifest> for AgentInfo {
             skills: m.skills,
             tools: m.tools,
             mcp_servers: m.mcp_servers,
+            connectors: m.connectors,
             llm_provider_id: m.llm_provider_id,
             koi_id: m.koi_id,
         }
@@ -334,6 +340,64 @@ pub async fn agents_sync(app: AppHandle, project_dir: String) -> Result<usize, S
     let count = manifests.iter().filter(|m| m.koi_id.is_some()).count();
     persist_synced_koi_ids(&config_dir, &manifests);
     Ok(count)
+}
+
+/// One builtin tool the agent allowlist can reference.
+#[derive(Debug, Clone, Serialize)]
+pub struct BuiltinToolInfo {
+    pub id: String,
+    pub label: String,
+    pub hint: String,
+    pub group: String,
+}
+
+fn builtin_tool_catalog() -> Vec<BuiltinToolInfo> {
+    const ROWS: &[(&str, &str, &str)] = &[
+        ("file_read", "Read file contents", "files"),
+        ("file_write", "Create or overwrite files", "files"),
+        ("file_edit", "Apply structured edits to files", "files"),
+        ("file_diff", "Show diffs between file versions", "files"),
+        ("file_list", "List directory entries", "files"),
+        ("file_search", "Search files by name/content", "files"),
+        ("code_run", "Run code snippets in a sandbox", "exec"),
+        ("shell", "Execute shell commands", "exec"),
+        ("process_control", "List or stop OS processes", "exec"),
+        ("web_search", "Search the web for links", "network"),
+        ("web_fetch", "Fetch and read a URL as text", "network"),
+        ("email", "Send email", "network"),
+        ("ssh", "Run commands over SSH", "network"),
+        ("memory_store", "Persist notes to agent memory", "memory"),
+        ("recall_tool_result", "Recall a prior tool output", "memory"),
+        ("vision_context", "Attach image context for vision models", "media"),
+        ("pdf", "Extract text from PDF files", "media"),
+        ("plan_todo", "Manage plan-mode todo list", "plan"),
+        ("pool_org", "Organize swarm pool todos and members", "pool"),
+        ("pool_chat", "Post messages to swarm pool board", "pool"),
+        ("lsp", "LSP diagnostics, hover, definitions", "ide"),
+        ("read_lints", "Read linter diagnostics for a file", "ide"),
+        ("codebase_search", "Semantic search across the repo", "ide"),
+        ("browser", "Automate the built-in browser panel", "ide"),
+        ("terminal_read", "Read IDE terminal output", "ide"),
+        ("delegate", "Spawn a read-only research sub-agent", "agent"),
+        ("chat_ui", "Render interactive UI cards in chat", "ui"),
+        ("chat_ui_patch", "Patch interactive UI card state", "ui"),
+        ("chat_ui_listen", "Listen for UI card user actions", "ui"),
+        ("api_connector", "Call configured HTTP API connectors", "connectors"),
+    ];
+    ROWS.iter()
+        .map(|(id, hint, group)| BuiltinToolInfo {
+            id: (*id).into(),
+            label: (*id).into(),
+            hint: (*hint).into(),
+            group: (*group).into(),
+        })
+        .collect()
+}
+
+/// Return the catalog of builtin tools agents may whitelist.
+#[tauri::command]
+pub fn agents_list_builtin_tools() -> Vec<BuiltinToolInfo> {
+    builtin_tool_catalog()
 }
 
 #[cfg(test)]
