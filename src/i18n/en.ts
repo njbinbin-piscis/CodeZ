@@ -69,6 +69,8 @@ const en = {
     edgeLabelPlaceholder: "Label (e.g. approved / body)",
     edgeLabelLabel: "Edge label",
     removeEdge: "Remove edge",
+    removeNode: "Remove node",
+    issues: "Fix these workflow issues before saving:",
     kind: {
       start: "Start",
       end: "End",

@@ -364,6 +364,7 @@ pub async fn workflow_list_runs(app: AppHandle) -> Result<Vec<WorkflowRun>, Stri
 #[tauri::command]
 pub async fn workflow_cancel(app: AppHandle, run_id: String) -> Result<(), String> {
     crate::runtime::workflow::request_cancel(&run_id);
+    crate::runtime::workflow::cancel_active_turn(&run_id).await;
     if let Ok(mut run) = load_run(&app, &run_id) {
         if run.status == "running" || run.status == "waiting_human" {
             run.status = "cancelled".to_string();

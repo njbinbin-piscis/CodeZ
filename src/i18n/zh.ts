@@ -69,6 +69,8 @@ const zh = {
     edgeLabelPlaceholder: "标签（如 approved / body）",
     edgeLabelLabel: "连线标签",
     removeEdge: "删除连线",
+    removeNode: "删除节点",
+    issues: "工作流存在问题，需修复后才能保存：",
     kind: {
       start: "开始",
       end: "结束",

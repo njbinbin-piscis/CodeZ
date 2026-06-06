@@ -18,7 +18,7 @@ import {
 } from "../../../services/tauri/teams";
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 import { getSettings, type SettingsResponse } from "../../../services/tauri/settings";
-import { emptyGraph } from "../../../services/tauri/workflow";
+import { emptyGraph, validateGraph } from "../../../services/tauri/workflow";
 import WorkflowDesigner from "./WorkflowDesigner";
 import "./StudioTab.css";
 
@@ -521,6 +521,19 @@ export default function StudioTab() {
           ) : (
             <div className="agentz-settings-field">
               <label>{t("workflow.designer")}</label>
+              {(() => {
+                const issues = validateGraph(teamForm.workflow ?? emptyGraph());
+                return issues.length > 0 ? (
+                  <div className="agentz-wf-issues">
+                    <strong>{t("workflow.issues")}</strong>
+                    <ul>
+                      {issues.map((iss, i) => (
+                        <li key={i}>{iss}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null;
+              })()}
               <WorkflowDesigner
                 graph={teamForm.workflow ?? emptyGraph()}
                 agents={agents}
@@ -533,7 +546,12 @@ export default function StudioTab() {
             <button
               type="button"
               className="agentz-settings-save"
-              disabled={!teamForm.id.trim() || (teamForm.members ?? []).length === 0}
+              disabled={
+                !teamForm.id.trim() ||
+                ((teamForm.mode ?? "swarm") === "swarm"
+                  ? (teamForm.members ?? []).length === 0
+                  : validateGraph(teamForm.workflow ?? emptyGraph()).length > 0)
+              }
               onClick={() => void submitTeam()}
             >
               {t("common.save")}

@@ -113,12 +113,65 @@ export function emptyGraph(): WorkflowGraph {
   return {
     entry: "start",
     nodes: [
-      { id: "start", type: "start", label: "开始", x: 80, y: 200 },
-      { id: "end", type: "end", label: "结束", x: 700, y: 200 },
+      { id: "start", type: "start", label: "开始", x: 60, y: 180 },
+      {
+        id: "step-1",
+        type: "agent",
+        label: "步骤 1",
+        prompt_template: "{{goal}}",
+        output_key: "step-1",
+        x: 320,
+        y: 180,
+      },
+      { id: "end", type: "end", label: "结束", x: 620, y: 180 },
     ],
-    edges: [],
+    edges: [
+      { from: "start", to: "step-1", label: null },
+      { from: "step-1", to: "end", label: null },
+    ],
     max_total_steps: 100,
   };
+}
+
+/**
+ * Validate a workflow graph for the issues the runner can hit. Returns
+ * human-readable problem strings (empty = valid). Mirrors the backend
+ * `WorkflowGraph::validate` plus reachability / routing checks.
+ */
+export function validateGraph(graph: WorkflowGraph): string[] {
+  const issues: string[] = [];
+  const ids = new Set(graph.nodes.map((n) => n.id));
+  const label = (id: string) => graph.nodes.find((n) => n.id === id)?.label || id;
+
+  if (!graph.entry || !ids.has(graph.entry)) {
+    issues.push("缺少入口节点（start）");
+  }
+  for (const e of graph.edges) {
+    if (!ids.has(e.from) || !ids.has(e.to)) {
+      issues.push(`连线 ${e.from} → ${e.to} 指向不存在的节点`);
+    }
+  }
+  for (const n of graph.nodes) {
+    const out = graph.edges.filter((e) => e.from === n.id);
+    if (n.type === "agent") {
+      if (!n.agent_id || !n.agent_id.trim()) issues.push(`「${label(n.id)}」未选择执行智能体`);
+      if (out.length === 0) issues.push(`「${label(n.id)}」没有后继连线`);
+    }
+    if (n.type === "branch") {
+      if (!n.evaluator) issues.push(`分支「${label(n.id)}」未配置判定方式`);
+      if (out.length === 0) issues.push(`分支「${label(n.id)}」没有任何分支连线`);
+    }
+    if (n.type === "loop") {
+      const hasBody = out.some((e) => (e.label ?? "").trim().toLowerCase() === "body");
+      const hasExit = out.some((e) => (e.label ?? "").trim().toLowerCase() !== "body");
+      if (!hasBody) issues.push(`循环「${label(n.id)}」缺少标记为 body 的循环体连线`);
+      if (!hasExit) issues.push(`循环「${label(n.id)}」缺少退出连线`);
+    }
+    if ((n.type === "start" || n.type === "human") && out.length === 0) {
+      issues.push(`「${label(n.id)}」没有后继连线`);
+    }
+  }
+  return issues;
 }
 
 export function startWorkflow(

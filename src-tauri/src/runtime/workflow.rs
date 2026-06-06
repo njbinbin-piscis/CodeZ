@@ -11,14 +11,14 @@
 //! lock across an agent turn (the turn re-acquires it), and it persists run
 //! state + emits an `agentz:workflow-event` after every node.
 
-use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
-use piscis_core::host::{KoiTurnExit, KoiTurnRequest, SubagentRuntime};
+use piscis_core::host::{KoiTurnExit, KoiTurnHandle, KoiTurnRequest, SubagentRuntime};
 
 use crate::commands::agents::safe_id;
 use crate::commands::data_scope::open_project_kernel_state;
@@ -34,9 +34,39 @@ fn cancel_registry() -> &'static Mutex<HashSet<String>> {
     REG.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+/// The Koi turn currently in flight for a run, so `workflow_cancel` can abort it
+/// mid-turn instead of only between nodes.
+type ActiveTurn = (Arc<DesktopInProcessSubagentRuntime>, KoiTurnHandle);
+
+fn active_turns() -> &'static Mutex<HashMap<String, ActiveTurn>> {
+    static REG: OnceLock<Mutex<HashMap<String, ActiveTurn>>> = OnceLock::new();
+    REG.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_active(run_id: &str, turn: ActiveTurn) {
+    if let Ok(mut map) = active_turns().lock() {
+        map.insert(run_id.to_string(), turn);
+    }
+}
+
+fn unregister_active(run_id: &str) {
+    if let Ok(mut map) = active_turns().lock() {
+        map.remove(run_id);
+    }
+}
+
 pub fn request_cancel(run_id: &str) {
     if let Ok(mut set) = cancel_registry().lock() {
         set.insert(run_id.to_string());
+    }
+}
+
+/// Cancel the in-flight Koi turn for a run (if any). Pairs with
+/// [`request_cancel`] so a cancel aborts both the current step and the loop.
+pub async fn cancel_active_turn(run_id: &str) {
+    let active = active_turns().lock().ok().and_then(|m| m.get(run_id).cloned());
+    if let Some((runtime, handle)) = active {
+        let _ = runtime.cancel_koi_turn(&handle).await;
     }
 }
 
@@ -75,6 +105,8 @@ fn now() -> String {
 }
 
 async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
+    // One runtime instance per run so an in-flight turn can be cancelled.
+    let runtime = Arc::new(DesktopInProcessSubagentRuntime::new(app.clone()));
     loop {
         let mut run = load_run(&app, run_id)?;
         if run.status != "running" {
@@ -130,14 +162,35 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                 return Ok(());
             }
             "agent" => {
-                let summary = run_agent_node(&app, &mut run, &node).await?;
+                let summary = match run_agent_node(&app, &runtime, &mut run, &node).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if is_cancelled(run_id) {
+                            clear_cancel(run_id);
+                            run.status = "cancelled".to_string();
+                            finish(&app, &mut run, "cancelled", Some(&cursor))?;
+                            return Ok(());
+                        }
+                        return Err(e);
+                    }
+                };
                 run.cursor = run.graph.next_of(&cursor);
                 record(&mut run, &node, Some(summary.clone()), None);
                 save_run(&app, &run)?;
                 emit(&app, &run, "node", Some(&cursor), Some(&summary));
             }
             "branch" => {
-                let label = evaluate_branch(&app, &mut run, &node).await?;
+                let label = match evaluate_branch(&app, &runtime, &mut run, &node).await {
+                    Ok(l) => l,
+                    Err(e) => {
+                        if is_cancelled(run_id) {
+                            clear_cancel(run_id);
+                            finish(&app, &mut run, "cancelled", Some(&cursor))?;
+                            return Ok(());
+                        }
+                        return Err(e);
+                    }
+                };
                 let target = node
                     .cases
                     .iter()
@@ -252,6 +305,7 @@ fn emit(app: &AppHandle, run: &WorkflowRun, kind: &str, node_id: Option<&str>, s
 /// the output into the blackboard, and post the result to the pool transcript.
 async fn run_agent_node(
     app: &AppHandle,
+    runtime: &Arc<DesktopInProcessSubagentRuntime>,
     run: &mut WorkflowRun,
     node: &crate::commands::workflow::WorkflowNode,
 ) -> Result<String, String> {
@@ -290,15 +344,14 @@ async fn run_agent_node(
         extra_system_context: Some(extra_context),
     };
 
-    let runtime = DesktopInProcessSubagentRuntime::new(app.clone());
     let handle = runtime
         .spawn_koi_turn(request)
         .await
         .map_err(|e| e.to_string())?;
-    let outcome = runtime
-        .wait_koi_turn(&handle)
-        .await
-        .map_err(|e| e.to_string())?;
+    register_active(&run.run_id, (runtime.clone(), handle.clone()));
+    let wait = runtime.wait_koi_turn(&handle).await;
+    unregister_active(&run.run_id);
+    let outcome = wait.map_err(|e| e.to_string())?;
 
     if outcome.exit_kind != KoiTurnExit::Completed {
         let err = outcome
@@ -336,6 +389,7 @@ async fn run_agent_node(
 /// Decide a branch label: either an LLM judge turn or a blackboard expression.
 async fn evaluate_branch(
     app: &AppHandle,
+    runtime: &Arc<DesktopInProcessSubagentRuntime>,
     run: &mut WorkflowRun,
     node: &crate::commands::workflow::WorkflowNode,
 ) -> Result<String, String> {
@@ -397,15 +451,14 @@ async fn evaluate_branch(
                 extra_tool_profile: Vec::new(),
                 extra_system_context: Some(extra_context),
             };
-            let runtime = DesktopInProcessSubagentRuntime::new(app.clone());
             let handle = runtime
                 .spawn_koi_turn(request)
                 .await
                 .map_err(|e| e.to_string())?;
-            let outcome = runtime
-                .wait_koi_turn(&handle)
-                .await
-                .map_err(|e| e.to_string())?;
+            register_active(&run.run_id, (runtime.clone(), handle.clone()));
+            let wait = runtime.wait_koi_turn(&handle).await;
+            unregister_active(&run.run_id);
+            let outcome = wait.map_err(|e| e.to_string())?;
             let text = outcome.response_text.to_lowercase();
             // Pick the first declared label that appears in the response.
             let chosen = labels

@@ -211,6 +211,18 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
     [graph.nodes, graph.edges, commit],
   );
 
+  const removeNode = useCallback(
+    (id: string) => {
+      if (id === graph.entry) return;
+      commit(
+        graph.nodes.filter((n) => n.id !== id),
+        graph.edges.filter((e) => e.from !== id && e.to !== id),
+      );
+      setSelectedNode(null);
+    },
+    [graph.entry, graph.nodes, graph.edges, commit],
+  );
+
   const active = graph.nodes.find((n) => n.id === selectedNode) ?? null;
 
   return (
@@ -427,6 +439,12 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
                     onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
                   />
                 </>
+              )}
+
+              {active.type !== "start" && (
+                <button type="button" className="danger" onClick={() => removeNode(active.id)}>
+                  {t("workflow.removeNode")}
+                </button>
               )}
             </div>
           )}
