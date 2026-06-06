@@ -121,6 +121,19 @@
   color: var(--text-dim, #9a9ab0);
 }
 
+.agentz-wfrun-live {
+  border: 1px solid var(--border, #2a2a38);
+  border-left: 2px solid #f7b84e;
+  border-radius: 6px;
+  background: var(--bg-elev, #14141c);
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text, #e8e8f0);
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 .agentz-wfrun-history {
   display: flex;
   flex-direction: column;

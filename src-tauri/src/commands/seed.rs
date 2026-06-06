@@ -18,9 +18,59 @@ use tracing::{info, warn};
 use crate::commands::agents::{safe_id, AgentManifest};
 use crate::commands::data_scope::resolve_global_config_dir;
 use crate::commands::teams::TeamManifest;
+use crate::commands::workflow::WorkflowGraph;
 
 /// Bump when the built-in pack contents change to re-run the (non-destructive) seed.
-const SEED_SENTINEL: &str = ".layered-seed-v1";
+const SEED_SENTINEL: &str = ".layered-seed-v2";
+
+/// A demonstrable workflow team: coder ⇄ reviewer review loop that exits once
+/// the reviewer's output contains "approved" (capped at 3 iterations).
+fn code_review_workflow() -> Option<WorkflowGraph> {
+    serde_json::from_value(serde_json::json!({
+        "entry": "start",
+        "max_total_steps": 40,
+        "nodes": [
+            { "id": "start", "type": "start", "label": "开始", "x": 60, "y": 200 },
+            {
+                "id": "review-loop",
+                "type": "loop",
+                "label": "评审循环",
+                "x": 280,
+                "y": 200,
+                "guard": { "max_iterations": 3, "exit_when": "review contains approved" }
+            },
+            {
+                "id": "code",
+                "type": "agent",
+                "label": "编码",
+                "agent_id": "coder",
+                "output_key": "code",
+                "x": 520,
+                "y": 100,
+                "prompt_template": "实现下面的任务。如果有上一轮评审意见，请逐条修复。\n\n任务：{{goal}}\n\n上一轮代码：\n{{code}}\n\n上一轮评审意见：\n{{review}}"
+            },
+            {
+                "id": "review",
+                "type": "agent",
+                "label": "评审",
+                "agent_id": "reviewer",
+                "output_key": "review",
+                "x": 520,
+                "y": 300,
+                "prompt_template": "评审下面的实现是否正确、是否满足任务要求。若可以接受，请在回复中明确包含单词 approved；否则列出必须修改的问题清单。\n\n任务：{{goal}}\n\n实现：\n{{code}}"
+            },
+            { "id": "end", "type": "end", "label": "结束", "x": 760, "y": 200 }
+        ],
+        "edges": [
+            { "from": "start", "to": "review-loop" },
+            { "from": "review-loop", "to": "code", "label": "body" },
+            { "from": "review-loop", "to": "end" },
+            { "from": "code", "to": "review" },
+            { "from": "review", "to": "review-loop" }
+        ]
+    }))
+    .ok()
+}
 
 /// Build an agent manifest with sensible defaults for the seed set.
 fn agent(
@@ -158,6 +208,17 @@ fn builtin_teams() -> Vec<TeamManifest> {
             workflow: None,
             task_timeout_secs: 0,
         },
+        TeamManifest {
+            id: "code-review-loop".to_string(),
+            name: "代码评审循环 Code Review Loop".to_string(),
+            description: "工作流示例：编码 → 评审 → 不通过则回炉重写，最多 3 轮。".to_string(),
+            mode: "workflow".to_string(),
+            org_spec: String::new(),
+            members: vec!["coder".to_string(), "reviewer".to_string()],
+            workflow_hint: "review".to_string(),
+            workflow: code_review_workflow(),
+            task_timeout_secs: 0,
+        },
     ]
 }
 
@@ -216,5 +277,24 @@ pub fn seed_builtin_packs(app: &AppHandle) {
         warn!("seed: cannot write sentinel: {}", e);
     } else {
         info!("seed: installed built-in agent/team packs");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_workflow_team_is_valid() {
+        let graph = code_review_workflow().expect("workflow JSON deserializes");
+        graph.validate().expect("built-in workflow graph is valid");
+        // Loop body + exit edges and agent ids are present.
+        assert_eq!(graph.entry, "start");
+        assert!(graph.nodes.iter().any(|n| n.kind == "loop"));
+        assert!(graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == "agent")
+            .all(|n| n.agent_id.as_deref().map(|s| !s.is_empty()).unwrap_or(false)));
     }
 }

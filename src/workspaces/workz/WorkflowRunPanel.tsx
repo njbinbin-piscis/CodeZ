@@ -7,6 +7,7 @@ import {
   subscribeWorkflowEvents,
   type WorkflowRun,
 } from "../../services/tauri/workflow";
+import { onChatEvent, type AgentEvent, type ChatEventEnvelope } from "../../services/tauri/chat";
 import "./WorkflowRunPanel.css";
 
 interface Props {
@@ -32,6 +33,7 @@ export default function WorkflowRunPanel({ runId, onClose }: Props) {
   const { t } = useTranslation();
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [humanValue, setHumanValue] = useState("");
+  const [liveText, setLiveText] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -54,6 +56,25 @@ export default function WorkflowRunPanel({ runId, onClose }: Props) {
     });
     return () => unlisten?.();
   }, [runId, refresh]);
+
+  // Stream each agent node's tokens (Koi turns stream over the shared chat
+  // channel keyed by `{run_id}::{node_id}`).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const prefix = `${runId}::`;
+    onChatEvent((env: ChatEventEnvelope) => {
+      if (!env.sessionId || !env.sessionId.startsWith(prefix)) return;
+      if (env.channel !== "agent_event") return;
+      const nodeId = env.sessionId.slice(prefix.length).replace(/::judge$/, "");
+      const evt = env.payload as AgentEvent;
+      if (evt.type === "text_delta") {
+        setLiveText((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? "") + evt.delta }));
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [runId]);
 
   const submitHuman = useCallback(async () => {
     if (!run?.cursor) return;
@@ -123,6 +144,13 @@ export default function WorkflowRunPanel({ runId, onClose }: Props) {
                 </div>
               ))}
             </div>
+
+            {run?.status === "running" && run.cursor && liveText[run.cursor] && (
+              <>
+                <h4>{t("workflow.liveOutput")}</h4>
+                <div className="agentz-wfrun-live">{liveText[run.cursor]}</div>
+              </>
+            )}
 
             <h4>{t("workflow.steps")}</h4>
             <div className="agentz-wfrun-history">

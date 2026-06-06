@@ -87,6 +87,7 @@ const en = {
     waitingHuman: "Waiting for input",
     submitHuman: "Submit & continue",
     cancel: "Cancel run",
+    liveOutput: "Current step output (live)",
   },
 
   collab: {

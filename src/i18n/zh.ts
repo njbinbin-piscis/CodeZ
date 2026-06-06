@@ -87,6 +87,7 @@ const zh = {
     waitingHuman: "等待人工输入",
     submitHuman: "提交并继续",
     cancel: "取消运行",
+    liveOutput: "当前步骤输出（实时）",
   },
 
   collab: {
