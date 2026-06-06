@@ -17,6 +17,7 @@ pub mod ext_host;
 pub mod ide;
 pub mod interactive;
 pub mod journal;
+pub mod marketplace;
 pub mod platform;
 pub mod pool;
 pub mod repo_wiki;

@@ -179,6 +179,10 @@ pub fn run() {
             commands::pool::pool_kois,
             commands::pool::pool_set_status,
             commands::pool::pool_delete,
+            // Marketplace (Phase 4): unified multi-source discovery + install
+            commands::marketplace::marketplace_search,
+            commands::marketplace::marketplace_install,
+            commands::marketplace::marketplace_uninstall,
             // User tools (executable plugin manifests in {config}/user-tools)
             commands::user_tools::user_tools_list,
             commands::user_tools::user_tools_install,

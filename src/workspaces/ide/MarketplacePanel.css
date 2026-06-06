@@ -1,0 +1,238 @@
+.codez-market-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.codez-market {
+  width: min(860px, 100%);
+  max-height: min(86vh, 800px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.codez-market-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.codez-market-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.codez-market-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.codez-market-cats {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px 0;
+  flex-wrap: wrap;
+}
+
+.codez-market-cat {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-dim, #9a9ab0);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.codez-market-cat.active {
+  color: var(--text, #e8e8f0);
+  border-color: var(--border, #2a2a38);
+  border-bottom-color: transparent;
+  background: var(--bg, #0e0e14);
+}
+
+.codez-market-search {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.codez-market-search input {
+  flex: 1;
+  background: var(--bg, #0e0e14);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  color: inherit;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.codez-market-search button {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.codez-market-search button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.codez-market-error,
+.codez-market-notice {
+  margin: 0 16px 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.codez-market-error {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.codez-market-notice {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+}
+
+.codez-market-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.codez-market-empty {
+  grid-column: 1 / -1;
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 13px;
+}
+
+.codez-market-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 10px;
+  background: var(--bg, #0e0e14);
+}
+
+.codez-market-card-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.codez-market-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.codez-market-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.codez-market-ver,
+.codez-market-stars {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.codez-market-card-meta {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.codez-market-src,
+.codez-market-tag {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(124, 106, 247, 0.16);
+  color: var(--text-dim, #b0b0c0);
+}
+
+.codez-market-auth {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.codez-market-auth.ok {
+  background: rgba(74, 222, 128, 0.14);
+  color: #4ade80;
+}
+
+.codez-market-auth.no {
+  background: rgba(248, 113, 113, 0.14);
+  color: #f87171;
+}
+
+.codez-market-desc {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.codez-market-card-actions {
+  flex-shrink: 0;
+}
+
+.codez-market-card-actions button {
+  background: transparent;
+  border: 1px solid var(--accent, #7c6af7);
+  color: var(--accent, #7c6af7);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.codez-market-card-actions button.danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+
+.codez-market-card-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

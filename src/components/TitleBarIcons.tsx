@@ -42,6 +42,19 @@ export function FolderIcon(props: IconProps) {
   );
 }
 
+/** Marketplace / store (storefront). */
+export function StoreIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path
+        d="M3 9l1.5-4.5A1 1 0 0 1 5.45 4h13.1a1 1 0 0 1 .95.5L21 9M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9h18"
+        strokeLinejoin="round"
+      />
+      <path d="M3 9a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0" />
+    </SvgIcon>
+  );
+}
+
 /** Settings / preferences (gear). */
 export function SettingsIcon(props: IconProps) {
   return (

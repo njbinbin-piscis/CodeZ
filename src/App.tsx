@@ -25,9 +25,11 @@ import {
   FolderIcon,
   MoonIcon,
   SettingsIcon,
+  StoreIcon,
   SunIcon,
   WikiIcon,
 } from "./components/TitleBarIcons";
+import MarketplacePanel from "./workspaces/ide/MarketplacePanel";
 import "./App.css";
 
 type Mode = "ide" | "agent";
@@ -63,6 +65,7 @@ export default function App() {
   } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
   const [wikiBusy, setWikiBusy] = useState(false);
   const [ideWikiOpenPath, setIdeWikiOpenPath] = useState<{ path: string; nonce: number } | null>(
@@ -295,6 +298,15 @@ export default function App() {
           <button
             type="button"
             className="codez-titlebar-icon"
+            onClick={() => setMarketOpen(true)}
+            title={t("market.title")}
+            aria-label={t("market.title")}
+          >
+            <StoreIcon />
+          </button>
+          <button
+            type="button"
+            className="codez-titlebar-icon"
             onClick={() => setSettingsOpen(true)}
             title={t("app.settingsTitle")}
             aria-label={t("app.settingsTitle")}
@@ -371,6 +383,7 @@ export default function App() {
       {settingsOpen && (
         <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
       )}
+      {marketOpen && <MarketplacePanel onClose={() => setMarketOpen(false)} />}
     </div>
   );
 }
