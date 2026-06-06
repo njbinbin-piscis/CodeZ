@@ -88,6 +88,13 @@ const en = {
     submitHuman: "Submit & continue",
     cancel: "Cancel run",
     liveOutput: "Current step output (live)",
+    status: {
+      running: "Running",
+      waiting_human: "Waiting",
+      completed: "Completed",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    },
   },
 
   collab: {

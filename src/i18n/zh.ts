@@ -88,6 +88,13 @@ const zh = {
     submitHuman: "提交并继续",
     cancel: "取消运行",
     liveOutput: "当前步骤输出（实时）",
+    status: {
+      running: "运行中",
+      waiting_human: "等待输入",
+      completed: "已完成",
+      failed: "失败",
+      cancelled: "已取消",
+    },
   },
 
   collab: {

@@ -34,7 +34,11 @@ import AgentFilePreview from "./AgentFilePreview";
 import CollabBoard from "./CollabBoard";
 import WorkflowRunPanel from "./WorkflowRunPanel";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
-import { startWorkflow } from "../../services/tauri/workflow";
+import {
+  startWorkflow,
+  subscribeWorkflowEvents,
+  type WorkflowStatus,
+} from "../../services/tauri/workflow";
 import {
   collectArtifacts,
   type AgentStep,
@@ -94,6 +98,7 @@ export default function WorkZWorkspace({
   const [boardOpen, setBoardOpen] = useState(false);
   const [workflowRunId, setWorkflowRunId] = useState<string | null>(null);
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const activePoolRef = useRef<string | null>(null);
   activePoolRef.current = activePoolId;
 
@@ -162,6 +167,18 @@ export default function WorkZWorkspace({
   useEffect(() => {
     setActivePoolId(null);
   }, [activeTeam, projectDir]);
+
+  // Track the active workflow run's status so the reopen button reflects it.
+  useEffect(() => {
+    if (!workflowRunId) return;
+    let unlisten: (() => void) | undefined;
+    subscribeWorkflowEvents((e) => {
+      if (e.runId === workflowRunId) setWorkflowStatus(e.status);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [workflowRunId]);
 
   useEffect(() => {
     localStorage.setItem("agentz-workz-isolate", isolate ? "1" : "0");
@@ -466,6 +483,7 @@ export default function WorkZWorkspace({
     if (activeTeam && teamInfo?.mode === "workflow") {
       setGoal("");
       setError(null);
+      setWorkflowStatus("running");
       startWorkflow(projectDir, activeTeam, text)
         .then((started) => {
           setWorkflowRunId(started.run_id);
@@ -797,7 +815,8 @@ export default function WorkZWorkspace({
               className="agentz-workz-review-btn"
               onClick={() => setWorkflowOpen(true)}
             >
-              {t("workflow.running")}
+              {t("workflow.designer")}
+              {workflowStatus ? ` · ${t(`workflow.status.${workflowStatus}`)}` : ""}
             </button>
           )}
           {worktree && (

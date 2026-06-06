@@ -160,8 +160,21 @@ export default function StudioTab() {
     if (!teamForm) return;
     setError(null);
     try {
+      // Workflow teams derive their member set from the agents used in the
+      // graph, so the membership checkboxes are swarm-only.
+      const members =
+        (teamForm.mode ?? "swarm") === "workflow"
+          ? Array.from(
+              new Set(
+                (teamForm.workflow?.nodes ?? [])
+                  .filter((n) => n.type === "agent" && n.agent_id)
+                  .map((n) => n.agent_id as string),
+              ),
+            )
+          : teamForm.members;
       await saveTeam({
         ...teamForm,
+        members,
         id: teamForm.id.trim(),
         name: teamForm.name.trim() || teamForm.id.trim(),
       });
@@ -475,24 +488,26 @@ export default function StudioTab() {
             />
           </div>
 
-          <div className="agentz-settings-field">
-            <label>{t("studio.fieldMembers")}</label>
-            <div className="agentz-studio-checks">
-              {agents.length === 0 && <span className="agentz-settings-hint">{t("studio.noAgents")}</span>}
-              {agents.map((a) => (
-                <label key={a.id} className="agentz-studio-check">
-                  <input
-                    type="checkbox"
-                    checked={(teamForm.members ?? []).includes(a.id)}
-                    onChange={() =>
-                      setTeamForm({ ...teamForm, members: toggleInList(teamForm.members ?? [], a.id) })
-                    }
-                  />
-                  {a.icon} {a.name}
-                </label>
-              ))}
+          {(teamForm.mode ?? "swarm") === "swarm" && (
+            <div className="agentz-settings-field">
+              <label>{t("studio.fieldMembers")}</label>
+              <div className="agentz-studio-checks">
+                {agents.length === 0 && <span className="agentz-settings-hint">{t("studio.noAgents")}</span>}
+                {agents.map((a) => (
+                  <label key={a.id} className="agentz-studio-check">
+                    <input
+                      type="checkbox"
+                      checked={(teamForm.members ?? []).includes(a.id)}
+                      onChange={() =>
+                        setTeamForm({ ...teamForm, members: toggleInList(teamForm.members ?? [], a.id) })
+                      }
+                    />
+                    {a.icon} {a.name}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {(teamForm.mode ?? "swarm") === "swarm" ? (
             <>
