@@ -88,6 +88,10 @@ const en = {
     submitHuman: "Submit & continue",
     cancel: "Cancel run",
     liveOutput: "Current step output (live)",
+    history: "Workflow run history",
+    showAllTeams: "Show all teams",
+    noRuns: "No runs yet",
+    openHistory: "History",
     status: {
       running: "Running",
       waiting_human: "Waiting",

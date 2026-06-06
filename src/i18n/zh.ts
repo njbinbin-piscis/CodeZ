@@ -88,6 +88,10 @@ const zh = {
     submitHuman: "提交并继续",
     cancel: "取消运行",
     liveOutput: "当前步骤输出（实时）",
+    history: "工作流运行历史",
+    showAllTeams: "显示全部团队",
+    noRuns: "暂无运行记录",
+    openHistory: "历史",
     status: {
       running: "运行中",
       waiting_human: "等待输入",

@@ -33,6 +33,7 @@ import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
 import CollabBoard from "./CollabBoard";
 import WorkflowRunPanel from "./WorkflowRunPanel";
+import WorkflowRunsList from "./WorkflowRunsList";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
 import {
   startWorkflow,
@@ -99,6 +100,8 @@ export default function WorkZWorkspace({
   const [workflowRunId, setWorkflowRunId] = useState<string | null>(null);
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
+  const [runsOpen, setRunsOpen] = useState(false);
+  const hasWorkflowTeam = useMemo(() => teams.some((tm) => tm.mode === "workflow"), [teams]);
   const activePoolRef = useRef<string | null>(null);
   activePoolRef.current = activePoolId;
 
@@ -819,6 +822,15 @@ export default function WorkZWorkspace({
               {workflowStatus ? ` · ${t(`workflow.status.${workflowStatus}`)}` : ""}
             </button>
           )}
+          {hasWorkflowTeam && (
+            <button
+              type="button"
+              className="agentz-workz-review-btn"
+              onClick={() => setRunsOpen(true)}
+            >
+              {t("workflow.openHistory")}
+            </button>
+          )}
           {worktree && (
             <button
               type="button"
@@ -918,6 +930,18 @@ export default function WorkZWorkspace({
       )}
       {workflowOpen && workflowRunId && (
         <WorkflowRunPanel runId={workflowRunId} onClose={() => setWorkflowOpen(false)} />
+      )}
+      {runsOpen && (
+        <WorkflowRunsList
+          teamId={activeTeam || null}
+          onSelect={(id) => {
+            setWorkflowRunId(id);
+            setWorkflowStatus(null);
+            setWorkflowOpen(true);
+            setRunsOpen(false);
+          }}
+          onClose={() => setRunsOpen(false)}
+        />
       )}
       {reviewTask && projectDir && (
         <AgentTaskReview
