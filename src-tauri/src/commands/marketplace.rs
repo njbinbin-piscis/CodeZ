@@ -226,7 +226,11 @@ async fn list_teams(app: AppHandle) -> Result<Vec<MarketItem>, String> {
             it.name = tm.name;
             it.description = tm.description;
             it.icon = "👥".into();
-            it.tag = tm.workflow;
+            it.tag = if tm.mode == "workflow" {
+                "workflow".to_string()
+            } else {
+                tm.workflow_hint
+            };
             it
         })
         .collect())

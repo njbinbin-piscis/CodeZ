@@ -7,3 +7,4 @@
 //! out to member Koi without leaving the desktop process.
 
 pub mod koi;
+pub mod workflow;

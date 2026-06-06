@@ -28,3 +28,4 @@ pub mod settings;
 pub mod user_tools;
 pub mod vsix;
 pub mod workbench;
+pub mod workflow;

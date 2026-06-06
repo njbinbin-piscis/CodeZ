@@ -1,0 +1,217 @@
+.agentz-wfrun-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.agentz-wfrun {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 92vw);
+  height: min(680px, 88vh);
+  background: var(--bg, #0e0e14);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.agentz-wfrun-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-wfrun-status {
+  margin-left: 10px;
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-wfrun-status.completed {
+  color: #4ecdc4;
+}
+
+.agentz-wfrun-status.failed {
+  color: #fc5c65;
+}
+
+.agentz-wfrun-status.running {
+  color: #f7b84e;
+}
+
+.agentz-wfrun-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.agentz-wfrun-head-actions button {
+  border: 1px solid var(--border, #3a3a4a);
+  background: transparent;
+  color: var(--text, #e8e8f0);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.agentz-wfrun-error {
+  padding: 8px 16px;
+  background: rgba(252, 92, 101, 0.12);
+  color: #fc5c65;
+  font-size: 12px;
+}
+
+.agentz-wfrun-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.agentz-wfrun-col h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agentz-wfrun-col h4:not(:first-child) {
+  margin-top: 16px;
+}
+
+.agentz-wfrun-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agentz-wfrun-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg-elev, #14141c);
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.agentz-wfrun-node.visited {
+  opacity: 1;
+}
+
+.agentz-wfrun-node.active {
+  border-color: #f7b84e;
+  box-shadow: 0 0 0 1px rgba(247, 184, 78, 0.5);
+  opacity: 1;
+}
+
+.agentz-wfrun-node-agent {
+  font-size: 10px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-wfrun-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agentz-wfrun-hrow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-wfrun-hnode {
+  font-weight: 600;
+}
+
+.agentz-wfrun-hlabel {
+  color: #f7b84e;
+}
+
+.agentz-wfrun-hsummary {
+  color: var(--text-dim, #9a9ab0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentz-wfrun-bb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agentz-wfrun-bb-item {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg-elev, #14141c);
+  overflow: hidden;
+}
+
+.agentz-wfrun-bb-key {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7c6af7;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-wfrun-bb-val {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text, #e8e8f0);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.agentz-wfrun-human {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border, #2a2a38);
+  background: rgba(124, 106, 247, 0.06);
+}
+
+.agentz-wfrun-human-prompt {
+  font-size: 12px;
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-wfrun-human textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid var(--border, #3a3a4a);
+  background: var(--bg, #0e0e16);
+  color: var(--text, #e8e8f0);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.agentz-wfrun-human button {
+  align-self: flex-end;
+  border: 1px solid var(--accent, #7c6af7);
+  background: rgba(124, 106, 247, 0.16);
+  color: var(--text, #e8e8f0);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}

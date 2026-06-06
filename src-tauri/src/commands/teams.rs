@@ -23,15 +23,23 @@ pub struct TeamManifest {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// Execution model: `swarm` (pool coordinator + org_spec) or `workflow`
+    /// (deterministic graph, no coordinator).
+    #[serde(default = "default_mode")]
+    pub mode: String,
     /// Organization contract injected into the Pool (roles, rules, integration).
+    /// Used by `swarm` mode.
     #[serde(default)]
     pub org_spec: String,
     /// Member agent ids (slugs). Resolved to koi ids on pool creation.
     #[serde(default)]
     pub members: Vec<String>,
-    /// Collaboration workflow hint: `waves` | `sequential` | `review`.
+    /// Swarm collaboration hint: `waves` | `sequential` | `review`.
     #[serde(default = "default_workflow")]
-    pub workflow: String,
+    pub workflow_hint: String,
+    /// Deterministic execution graph. Used by `workflow` mode.
+    #[serde(default)]
+    pub workflow: Option<crate::commands::workflow::WorkflowGraph>,
     #[serde(default)]
     pub task_timeout_secs: u32,
 }
@@ -40,10 +48,19 @@ fn default_workflow() -> String {
     "waves".to_string()
 }
 
+fn default_mode() -> String {
+    "swarm".to_string()
+}
+
 impl TeamManifest {
     fn load(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
         serde_json::from_str(&text).map_err(|e| format!("invalid team.json: {e}"))
+    }
+
+    /// Load a team manifest by id from the global config dir.
+    pub fn load_by_id(app: &AppHandle, id: &str) -> Result<Self, String> {
+        Self::load(&teams_dir(app)?.join(safe_id(id)).join("team.json"))
     }
 }
 
@@ -52,7 +69,8 @@ pub struct TeamInfo {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub workflow: String,
+    pub mode: String,
+    pub workflow_hint: String,
     pub members: Vec<String>,
 }
 
@@ -62,7 +80,8 @@ impl From<TeamManifest> for TeamInfo {
             id: m.id,
             name: m.name,
             description: m.description,
-            workflow: m.workflow,
+            mode: m.mode,
+            workflow_hint: m.workflow_hint,
             members: m.members,
         }
     }
@@ -131,8 +150,11 @@ pub async fn teams_save(app: AppHandle, manifest: TeamManifest) -> Result<TeamIn
     if manifest.name.trim().is_empty() {
         manifest.name = manifest.id.clone();
     }
-    if manifest.workflow.trim().is_empty() {
-        manifest.workflow = default_workflow();
+    if manifest.workflow_hint.trim().is_empty() {
+        manifest.workflow_hint = default_workflow();
+    }
+    if manifest.mode.trim().is_empty() {
+        manifest.mode = default_mode();
     }
     write_manifest(&dir, &manifest)?;
     info!("Saved team '{}'", manifest.id);

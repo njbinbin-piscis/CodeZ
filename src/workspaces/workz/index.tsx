@@ -32,7 +32,9 @@ import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
 import CollabBoard from "./CollabBoard";
+import WorkflowRunPanel from "./WorkflowRunPanel";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
+import { startWorkflow } from "../../services/tauri/workflow";
 import {
   collectArtifacts,
   type AgentStep,
@@ -90,6 +92,8 @@ export default function WorkZWorkspace({
   const [activeTeam, setActiveTeam] = useState<string>("");
   const [activePoolId, setActivePoolId] = useState<string | null>(null);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [workflowRunId, setWorkflowRunId] = useState<string | null>(null);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
   const activePoolRef = useRef<string | null>(null);
   activePoolRef.current = activePoolId;
 
@@ -457,11 +461,24 @@ export default function WorkZWorkspace({
       setError(t("agent.noProject"));
       return;
     }
+    // Workflow teams run a deterministic graph (no chat turn / coordinator).
+    const teamInfo = teams.find((tm) => tm.id === activeTeam);
+    if (activeTeam && teamInfo?.mode === "workflow") {
+      setGoal("");
+      setError(null);
+      startWorkflow(projectDir, activeTeam, text)
+        .then((started) => {
+          setWorkflowRunId(started.run_id);
+          setWorkflowOpen(true);
+        })
+        .catch((e) => setError(String(e)));
+      return;
+    }
     const pendingAttachment = attachment;
     setGoal("");
     clearAttachment();
     void runRef.current(text, pendingAttachment);
-  }, [goal, attachment, busy, projectDir, clearAttachment, t]);
+  }, [goal, attachment, busy, projectDir, clearAttachment, t, teams, activeTeam]);
 
   const newTask = useCallback(() => {
     if (!projectDir) return;
@@ -774,6 +791,15 @@ export default function WorkZWorkspace({
               {t("collab.openBoard")}
             </button>
           )}
+          {workflowRunId && (
+            <button
+              type="button"
+              className="agentz-workz-review-btn"
+              onClick={() => setWorkflowOpen(true)}
+            >
+              {t("workflow.running")}
+            </button>
+          )}
           {worktree && (
             <button
               type="button"
@@ -870,6 +896,9 @@ export default function WorkZWorkspace({
           poolId={activePoolId}
           onClose={() => setBoardOpen(false)}
         />
+      )}
+      {workflowOpen && workflowRunId && (
+        <WorkflowRunPanel runId={workflowRunId} onClose={() => setWorkflowOpen(false)} />
       )}
       {reviewTask && projectDir && (
         <AgentTaskReview

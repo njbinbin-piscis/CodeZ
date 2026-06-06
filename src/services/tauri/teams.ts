@@ -4,11 +4,16 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 
+import type { WorkflowGraph } from "./workflow";
+
+export type TeamMode = "swarm" | "workflow";
+
 export interface TeamInfo {
   id: string;
   name: string;
   description: string;
-  workflow: string;
+  mode: TeamMode;
+  workflow_hint: string;
   members: string[];
 }
 
@@ -16,9 +21,13 @@ export interface TeamManifest {
   id: string;
   name: string;
   description?: string;
+  mode?: TeamMode;
   org_spec?: string;
   members?: string[];
-  workflow?: string;
+  /** Swarm collaboration hint: waves | sequential | review. */
+  workflow_hint?: string;
+  /** Deterministic execution graph (workflow mode). */
+  workflow?: WorkflowGraph | null;
   task_timeout_secs?: number;
 }
 

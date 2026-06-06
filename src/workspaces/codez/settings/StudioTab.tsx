@@ -18,6 +18,8 @@ import {
 } from "../../../services/tauri/teams";
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 import { getSettings, type SettingsResponse } from "../../../services/tauri/settings";
+import { emptyGraph } from "../../../services/tauri/workflow";
+import WorkflowDesigner from "./WorkflowDesigner";
 import "./StudioTab.css";
 
 const ICON_CHOICES = ["🐙", "🦑", "🐬", "🦈", "🐳", "🐟", "🦞", "🤖", "📊", "🎨", "💻", "🔬", "📝", "🛡️", "🧠", "⚡", "🔧", "🎯", "🏗️"];
@@ -43,9 +45,11 @@ const EMPTY_TEAM: TeamManifest = {
   id: "",
   name: "",
   description: "",
+  mode: "swarm",
   org_spec: "",
   members: [],
-  workflow: "waves",
+  workflow_hint: "waves",
+  workflow: null,
   task_timeout_secs: 0,
 };
 
@@ -406,7 +410,8 @@ export default function StudioTab() {
               <div className="agentz-studio-card-body">
                 <strong>{tm.name}</strong>
                 <span className="agentz-studio-card-meta">
-                  {tm.workflow} · {tm.members.length} {t("studio.members")}
+                  {tm.mode === "workflow" ? t("workflow.modeWorkflow") : t("workflow.modeSwarm")} ·{" "}
+                  {tm.members.length} {t("studio.members")}
                 </span>
               </div>
               <div className="agentz-studio-card-actions">
@@ -442,16 +447,22 @@ export default function StudioTab() {
               />
             </div>
             <div className="agentz-settings-field">
-              <label>{t("studio.fieldWorkflow")}</label>
+              <label>{t("workflow.fieldMode")}</label>
               <select
-                value={teamForm.workflow ?? "waves"}
-                onChange={(e) => setTeamForm({ ...teamForm, workflow: e.target.value })}
+                value={teamForm.mode ?? "swarm"}
+                onChange={(e) =>
+                  setTeamForm({
+                    ...teamForm,
+                    mode: e.target.value as "swarm" | "workflow",
+                    workflow:
+                      e.target.value === "workflow"
+                        ? teamForm.workflow ?? emptyGraph()
+                        : teamForm.workflow,
+                  })
+                }
               >
-                {WORKFLOWS.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
+                <option value="swarm">{t("workflow.modeSwarm")}</option>
+                <option value="workflow">{t("workflow.modeWorkflow")}</option>
               </select>
             </div>
           </div>
@@ -483,14 +494,40 @@ export default function StudioTab() {
             </div>
           </div>
 
-          <div className="agentz-settings-field">
-            <label>{t("studio.fieldOrgSpec")}</label>
-            <textarea
-              rows={12}
-              value={teamForm.org_spec ?? ""}
-              onChange={(e) => setTeamForm({ ...teamForm, org_spec: e.target.value })}
-            />
-          </div>
+          {(teamForm.mode ?? "swarm") === "swarm" ? (
+            <>
+              <div className="agentz-settings-field">
+                <label>{t("studio.fieldWorkflow")}</label>
+                <select
+                  value={teamForm.workflow_hint ?? "waves"}
+                  onChange={(e) => setTeamForm({ ...teamForm, workflow_hint: e.target.value })}
+                >
+                  {WORKFLOWS.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="agentz-settings-field">
+                <label>{t("studio.fieldOrgSpec")}</label>
+                <textarea
+                  rows={12}
+                  value={teamForm.org_spec ?? ""}
+                  onChange={(e) => setTeamForm({ ...teamForm, org_spec: e.target.value })}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="agentz-settings-field">
+              <label>{t("workflow.designer")}</label>
+              <WorkflowDesigner
+                graph={teamForm.workflow ?? emptyGraph()}
+                agents={agents}
+                onChange={(g) => setTeamForm({ ...teamForm, workflow: g })}
+              />
+            </div>
+          )}
 
           <div className="agentz-studio-form-actions">
             <button

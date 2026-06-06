@@ -172,6 +172,12 @@ pub fn run() {
             commands::teams::teams_install,
             commands::teams::teams_uninstall,
             commands::teams::teams_create_pool,
+            // Workflow teams (no-coordinator deterministic graph)
+            commands::workflow::workflow_start,
+            commands::workflow::workflow_get_run,
+            commands::workflow::workflow_list_runs,
+            commands::workflow::workflow_cancel,
+            commands::workflow::workflow_resume_human,
             // Pool (Phase 3): team collaboration board reads + lifecycle
             commands::pool::pool_list,
             commands::pool::pool_get,
