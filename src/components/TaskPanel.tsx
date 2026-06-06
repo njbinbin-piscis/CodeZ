@@ -58,17 +58,17 @@ function planStatusLabel(t: ReturnType<typeof useTranslation>["t"], status: stri
 export function PlanPanel({ items }: { items: PlanTodoItem[] }) {
   const { t } = useTranslation();
   return (
-    <div className="codez-plan-panel-inner">
+    <div className="agentz-plan-panel-inner">
       {items.map((item, index) => (
-        <div key={item.id} className={`codez-plan-item plan-${item.status}`}>
-          <div className="codez-plan-item-left">
-            <span className="codez-plan-item-index">{index + 1}</span>
-            <span className="codez-plan-item-content">{item.content}</span>
+        <div key={item.id} className={`agentz-plan-item plan-${item.status}`}>
+          <div className="agentz-plan-item-left">
+            <span className="agentz-plan-item-index">{index + 1}</span>
+            <span className="agentz-plan-item-content">{item.content}</span>
           </div>
-          <div className="codez-plan-item-right">
-            <span className="codez-plan-item-id">{item.id}</span>
-            <span className={`codez-plan-item-status plan-status-${item.status}`}>
-              {item.status === "in_progress" && <span className="codez-step-spinner" />}
+          <div className="agentz-plan-item-right">
+            <span className="agentz-plan-item-id">{item.id}</span>
+            <span className={`agentz-plan-item-status plan-status-${item.status}`}>
+              {item.status === "in_progress" && <span className="agentz-step-spinner" />}
               {planStatusLabel(t, item.status)}
             </span>
           </div>
@@ -93,42 +93,42 @@ export function ToolStepCard({
   const statusClass = !step.completed ? "step-running" : step.isError ? "step-error" : "step-ok";
 
   return (
-    <div className={`codez-tool-step-card ${statusClass}`}>
-      <button type="button" className="codez-tool-step-header" onClick={onToggle} aria-expanded={step.expanded}>
-        <span className="codez-tool-step-icon">{toolIcon(step.name)}</span>
-        <span className="codez-tool-step-name">{step.name}</span>
-        <span className="codez-tool-step-summary">{toolSummary(step.name, step.input)}</span>
-        <span className={`codez-tool-step-status ${statusClass}`}>
+    <div className={`agentz-tool-step-card ${statusClass}`}>
+      <button type="button" className="agentz-tool-step-header" onClick={onToggle} aria-expanded={step.expanded}>
+        <span className="agentz-tool-step-icon">{toolIcon(step.name)}</span>
+        <span className="agentz-tool-step-name">{step.name}</span>
+        <span className="agentz-tool-step-summary">{toolSummary(step.name, step.input)}</span>
+        <span className={`agentz-tool-step-status ${statusClass}`}>
           {!step.completed ? (
-            <span className="codez-step-spinner" aria-label="running" />
+            <span className="agentz-step-spinner" aria-label="running" />
           ) : step.isError ? (
             "✕"
           ) : (
             "✓"
           )}
         </span>
-        <span className="codez-tool-step-chevron">{step.expanded ? "▲" : "▼"}</span>
+        <span className="agentz-tool-step-chevron">{step.expanded ? "▲" : "▼"}</span>
       </button>
       {step.expanded && (
-        <div className="codez-tool-step-body">
-          <div className="codez-tool-step-section">
-            <span className="codez-tool-step-section-label">{t("chat.toolStepInput")}</span>
-            <pre className="codez-tool-step-pre">
+        <div className="agentz-tool-step-body">
+          <div className="agentz-tool-step-section">
+            <span className="agentz-tool-step-section-label">{t("chat.toolStepInput")}</span>
+            <pre className="agentz-tool-step-pre">
               {typeof step.input === "string" ? step.input : JSON.stringify(step.input, null, 2)}
             </pre>
           </div>
           {step.completed && (
-            <div className="codez-tool-step-section">
-              <span className={`codez-tool-step-section-label ${step.isError ? "label-error" : ""}`}>
+            <div className="agentz-tool-step-section">
+              <span className={`agentz-tool-step-section-label ${step.isError ? "label-error" : ""}`}>
                 {step.isError ? t("chat.toolStepError") : t("chat.toolStepOutput")}
               </span>
-              <pre className={`codez-tool-step-pre ${step.isError ? "pre-error" : ""}`}>
+              <pre className={`agentz-tool-step-pre ${step.isError ? "pre-error" : ""}`}>
                 {showFull || !truncated ? result : `${result.slice(0, maxResultLen)}…`}
               </pre>
               {truncated && (
                 <button
                   type="button"
-                  className="codez-tool-step-show-more"
+                  className="agentz-tool-step-show-more"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowFull((v) => !v);
@@ -174,56 +174,56 @@ export default function TaskPanel({
   if (planItems.length === 0 && toolSteps.length === 0) return null;
 
   return (
-    <div className={`codez-task-panel${className ? ` ${className}` : ""}`}>
+    <div className={`agentz-task-panel${className ? ` ${className}` : ""}`}>
       <button
         type="button"
-        className="codez-task-panel-header"
+        className="agentz-task-panel-header"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
       >
-        <div className="codez-task-panel-title">
-          <span className="codez-task-panel-label">{t("chat.taskPanel")}</span>
+        <div className="agentz-task-panel-title">
+          <span className="agentz-task-panel-label">{t("chat.taskPanel")}</span>
           {planItems.length > 0 && (
-            <span className="codez-task-badge">
+            <span className="agentz-task-badge">
               Todo · {busy ? t("chat.planWorking", { count: planItems.length }) : planItems.length}
             </span>
           )}
           {toolSteps.length > 0 && (
-            <span className="codez-task-badge">
+            <span className="agentz-task-badge">
               Tools · {busy ? t("chat.agentWorking") : t("chat.agentSteps", { count: toolSteps.length })}
             </span>
           )}
         </div>
-        <span className="codez-task-chevron">{open ? "▲" : "▼"}</span>
+        <span className="agentz-task-chevron">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="codez-task-panel-body">
-          <div className="codez-task-tabs" role="tablist">
+        <div className="agentz-task-panel-body">
+          <div className="agentz-task-tabs" role="tablist">
             <button
               type="button"
               role="tab"
-              className={`codez-task-tab ${tab === "todo" ? "active" : ""}`}
+              className={`agentz-task-tab ${tab === "todo" ? "active" : ""}`}
               onClick={() => onTabChange("todo")}
               disabled={planItems.length === 0}
             >
               Todo
-              {planItems.length > 0 && <span className="codez-task-tab-count">{planItems.length}</span>}
+              {planItems.length > 0 && <span className="agentz-task-tab-count">{planItems.length}</span>}
             </button>
             <button
               type="button"
               role="tab"
-              className={`codez-task-tab ${tab === "tools" ? "active" : ""}`}
+              className={`agentz-task-tab ${tab === "tools" ? "active" : ""}`}
               onClick={() => onTabChange("tools")}
               disabled={toolSteps.length === 0}
             >
               Tools
-              {toolSteps.length > 0 && <span className="codez-task-tab-count">{toolSteps.length}</span>}
+              {toolSteps.length > 0 && <span className="agentz-task-tab-count">{toolSteps.length}</span>}
             </button>
           </div>
-          <div className="codez-task-panel-content">
+          <div className="agentz-task-panel-content">
             {tab === "todo" && planItems.length > 0 && <PlanPanel items={planItems} />}
             {tab === "tools" && toolSteps.length > 0 && (
-              <div className="codez-tool-steps-scroll">
+              <div className="agentz-tool-steps-scroll">
                 {toolSteps.map((step) => (
                   <ToolStepCard key={step.id} step={step} onToggle={() => onToggleToolStep(step.id)} />
                 ))}

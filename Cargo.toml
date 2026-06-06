@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/codez-host", "src-tauri"]
+members = ["crates/agentz-host", "src-tauri"]
 resolver = "2"
 
 [workspace.lints.rust]
@@ -19,7 +19,7 @@ serde_json = "1"
 anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 
-# Shared agent runtime — pin rev across openpiscis, CodeZ, agent-workbench (v0.8.38).
+# Shared agent runtime — pin rev across openpiscis, AgentZ, agent-workbench (v0.8.38).
 piscis-core = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-core", rev = "v0.8.42" }
 piscis-kernel = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-kernel", rev = "v0.8.42" }
 

@@ -1,6 +1,6 @@
 //! IM gateway commands (Phase 0A "assistants").
 //!
-//! Ports openpiscis' `commands/chat/gateway.rs` to the CodeZ host. CodeZ keeps
+//! Ports openpiscis' `commands/chat/gateway.rs` to the AgentZ host. AgentZ keeps
 //! no shared in-memory `Settings`, so IM credentials are read from / written to
 //! the global `config.json` on demand. The `GatewayManager` lives in
 //! [`AppState`]; the inbound consumer loop ([`spawn_inbound_consumer`]) drives a
@@ -39,8 +39,8 @@ use crate::gateway::{
 use crate::state::AppState;
 
 /// Tauri event emitted when an IM-backed session receives a message / reply.
-pub const IM_SESSION_UPDATED_EVENT: &str = "codez:im-session-updated";
-pub const GATEWAY_CHANNELS_UPDATED_EVENT: &str = "codez:gateway-channels-updated";
+pub const IM_SESSION_UPDATED_EVENT: &str = "agentz:im-session-updated";
+pub const GATEWAY_CHANNELS_UPDATED_EVENT: &str = "agentz:gateway-channels-updated";
 
 // ─── Settings helpers ──────────────────────────────────────────────────────
 
@@ -507,7 +507,7 @@ fn generate_qr_data_url(content: &str) -> Result<String, String> {
 
 // ─── Inbound consumer loop ───────────────────────────────────────────────────
 
-/// Bridges the kernel `EventSink` to CodeZ Tauri chat events (so IM-driven
+/// Bridges the kernel `EventSink` to AgentZ Tauri chat events (so IM-driven
 /// turns stream into the same channel the chat UI listens on).
 struct GatewayEventSink {
     app: AppHandle,

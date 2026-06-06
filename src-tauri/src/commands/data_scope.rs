@@ -1,4 +1,4 @@
-//! Project-local chat storage — sessions live in `{project}/.codez/piscis.db`.
+//! Project-local chat storage — sessions live in `{project}/.agentz/piscis.db`.
 //! LLM settings (`config.json`) always load from the global config dir.
 
 use std::path::{Path, PathBuf};
@@ -13,15 +13,15 @@ use piscis_kernel::headless::KernelState;
 use piscis_kernel::store::db::Database;
 use piscis_kernel::store::settings::Settings;
 
-/// Project-local directory for CodeZ session data.
-pub const PROJECT_DATA_DIR: &str = ".codez";
+/// Project-local directory for AgentZ session data.
+pub const PROJECT_DATA_DIR: &str = ".agentz";
 
 /// Session source tag written into `piscis.db` (shared by IDE + Agent).
-pub const SESSION_SOURCE: &str = "codez";
+pub const SESSION_SOURCE: &str = "agentz";
 
 /// Global directory holding `config.json`.
 pub fn resolve_global_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    if let Ok(dir) = std::env::var("CODEZ_CONFIG_DIR") {
+    if let Ok(dir) = std::env::var("AGENTZ_CONFIG_DIR") {
         let dir = dir.trim();
         if !dir.is_empty() {
             return Ok(PathBuf::from(dir));
@@ -32,7 +32,7 @@ pub fn resolve_global_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("could not resolve app data dir: {e}"))
 }
 
-/// `{project}/.codez`
+/// `{project}/.agentz`
 pub fn resolve_project_data_dir(project_dir: &str) -> Result<PathBuf, String> {
     let trimmed = project_dir.trim();
     if trimmed.is_empty() {

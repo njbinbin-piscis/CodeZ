@@ -1,4 +1,4 @@
-//! CodeZ-specific agent turn runner — extends the headless kernel path with
+//! AgentZ-specific agent turn runner — extends the headless kernel path with
 //! runtime model override, vision attachment injection, and plan-mode tooling.
 
 use std::collections::HashMap;
@@ -1108,7 +1108,7 @@ fn parse_skill_frontmatter(content: &str, fallback: &str) -> SkillMeta {
     }
 }
 
-/// Read project rules from `{workspace}/.codez/rules/` (preferred) or
+/// Read project rules from `{workspace}/.agentz/rules/` (preferred) or
 /// `{workspace}/.cursor/rules/` (compat). Concatenates `*.md` / `*.mdc` into a
 /// "## Project rules" block injected as a system constraint.
 fn project_rules_context(workspace_root: &str) -> Option<String> {
@@ -1117,7 +1117,7 @@ fn project_rules_context(workspace_root: &str) -> Option<String> {
         return None;
     }
     let candidates = [
-        root.join(".codez").join("rules"),
+        root.join(".agentz").join("rules"),
         root.join(".cursor").join("rules"),
     ];
     let mut blocks = Vec::new();
@@ -1153,26 +1153,26 @@ fn project_rules_context(workspace_root: &str) -> Option<String> {
     Some(format!("## Project rules\n{}", blocks.join("\n\n")))
 }
 
-/// When `.codez/REPO_WIKI.md` exists, tell the agent where to read architecture context.
+/// When `.agentz/REPO_WIKI.md` exists, tell the agent where to read architecture context.
 fn repo_wiki_context(workspace_root: &str) -> Option<String> {
     let root = std::path::Path::new(workspace_root.trim());
     if workspace_root.trim().is_empty() {
         return None;
     }
-    let wiki = root.join(".codez").join("REPO_WIKI.md");
+    let wiki = root.join(".agentz").join("REPO_WIKI.md");
     if !wiki.is_file() {
         return None;
     }
     Some(
         "## Repository wiki\n\
-         A generated module/architecture overview is available at `.codez/REPO_WIKI.md`. \
+         A generated module/architecture overview is available at `.agentz/REPO_WIKI.md`. \
          Read it with `file_read` when you need repo structure, module layout, or onboarding context \
          (especially after the user generates or refreshes the Repo Wiki)."
             .to_string(),
     )
 }
 
-pub async fn run_codez_turn(
+pub async fn run_agentz_turn(
     app: tauri::AppHandle,
     mut request: HeadlessCliRequest,
     kernel: KernelState,
@@ -1192,7 +1192,7 @@ pub async fn run_codez_turn(
     agent_id: Option<String>,
 ) -> Result<HeadlessCliResponse> {
     if !matches!(request.mode, HeadlessCliMode::Piscis) {
-        return Err(anyhow!("CodeZ chat only supports mode=piscis"));
+        return Err(anyhow!("AgentZ chat only supports mode=piscis"));
     }
 
     let (db, settings) = kernel;
@@ -1365,7 +1365,7 @@ pub async fn run_codez_turn(
     let session_id = match request.session_id.clone().filter(|s| !s.is_empty()) {
         Some(id) => {
             let title = request.session_title.as_deref().unwrap_or(&id);
-            let source = request.channel.as_deref().unwrap_or("codez");
+            let source = request.channel.as_deref().unwrap_or("agentz");
             let db = db.lock().await;
             db.ensure_fixed_session(&id, title, source)
                 .context("failed to ensure requested session")?
@@ -1374,7 +1374,7 @@ pub async fn run_codez_turn(
         None => {
             let title = request.session_title.as_deref();
             let db = db.lock().await;
-            db.create_session_with_source(title, "codez")
+            db.create_session_with_source(title, "agentz")
                 .context("failed to create session")?
                 .id
         }

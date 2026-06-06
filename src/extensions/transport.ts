@@ -1,6 +1,6 @@
 // Renderer transport: brokers RPC frames to the Node extension host through the
 // Tauri host. Outbound frames go via the `ext_host_send` command; inbound
-// frames arrive on the `codez:ext-host` event channel.
+// frames arrive on the `agentz:ext-host` event channel.
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -21,7 +21,7 @@ export class TauriExtHostTransport implements ITransport {
   }
 
   async connect(): Promise<void> {
-    this.unlisten = await listen<ExtHostEvent>("codez:ext-host", (event) => {
+    this.unlisten = await listen<ExtHostEvent>("agentz:ext-host", (event) => {
       const { channel, data } = event.payload;
       if (channel === "message") {
         try {

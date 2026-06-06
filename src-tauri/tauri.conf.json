@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CodeZ",
-  "mainBinaryName": "codez-desktop",
+  "productName": "AgentZ",
+  "mainBinaryName": "agentz-desktop",
   "version": "0.2.0",
-  "identifier": "com.codez.desktop",
+  "identifier": "com.agentz.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5273",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "CodeZ",
+        "title": "AgentZ",
         "width": 1280,
         "height": 820,
         "minWidth": 860,
@@ -41,8 +41,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "CodeZ — Cursor-like AI IDE",
-    "longDescription": "CodeZ is a Cursor-like AI IDE with an editor-centric IDE mode and a task-centric Agent mode, built on the shared piscis-engine kernel.",
+    "shortDescription": "AgentZ — Cursor-like AI IDE",
+    "longDescription": "AgentZ is a Cursor-like AI IDE with an editor-centric IDE mode and a task-centric Agent mode, built on the shared piscis-engine kernel.",
     "linux": {
       "deb": {
         "depends": [

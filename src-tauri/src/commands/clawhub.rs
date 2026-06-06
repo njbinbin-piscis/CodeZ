@@ -165,7 +165,7 @@ pub async fn clawhub_search(
     let limit = limit.unwrap_or(20).min(50);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("CodeZ-Desktop/1.0")
+        .user_agent("AgentZ-Desktop/1.0")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -260,7 +260,7 @@ pub async fn clawhub_install(
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("CodeZ-Desktop/1.0")
+        .user_agent("AgentZ-Desktop/1.0")
         .build()
         .map_err(|e| e.to_string())?;
 

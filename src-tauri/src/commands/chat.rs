@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use piscis_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
 
-use crate::commands::chat_turn::run_codez_turn;
+use crate::commands::chat_turn::run_agentz_turn;
 use crate::commands::data_scope::{open_project_kernel_state, require_project_dir, SESSION_SOURCE};
 use crate::state::AppState;
 
@@ -18,7 +18,7 @@ use crate::state::AppState;
 pub(crate) use crate::commands::data_scope::resolve_global_config_dir as resolve_config_dir;
 
 /// Tauri event channel that carries every streamed kernel event to the UI.
-pub const CHAT_EVENT: &str = "codez:chat-event";
+pub const CHAT_EVENT: &str = "agentz:chat-event";
 
 /// Attachment sent from the frontend with a chat message.
 #[derive(Debug, Clone, Deserialize)]
@@ -60,7 +60,7 @@ pub struct ChatResult {
     pub turn_id: Option<String>,
 }
 
-/// Run one agent turn. Streams `AgentEvent`s via `codez:chat-event`.
+/// Run one agent turn. Streams `AgentEvent`s via `agentz:chat-event`.
 #[tauri::command]
 pub async fn chat_send(
     app: AppHandle,
@@ -130,12 +130,12 @@ pub async fn chat_send(
         workspace: Some(agent_workspace.clone()),
         mode: HeadlessCliMode::Piscis,
         session_id,
-        session_title: Some("CodeZ chat".to_string()),
+        session_title: Some("AgentZ chat".to_string()),
         channel: Some(SESSION_SOURCE.to_string()),
         ..Default::default()
     };
 
-    let result = run_codez_turn(
+    let result = run_agentz_turn(
         app.clone(),
         request,
         kernel,

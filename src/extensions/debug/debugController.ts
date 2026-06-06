@@ -45,7 +45,7 @@ class DebugController {
   private client: DapClient | undefined;
 
   constructor() {
-    window.addEventListener("codez-debug-start", (e) => {
+    window.addEventListener("agentz-debug-start", (e) => {
       void this.start((e as CustomEvent).detail as DebugConfig);
     });
   }
@@ -71,7 +71,7 @@ class DebugController {
     try {
       await this.client.connect(adapter.command, adapter.args, config.cwd);
       await this.client.request("initialize", {
-        clientID: "codez",
+        clientID: "agentz",
         adapterID: config.type,
         linesStartAt1: true,
         columnsStartAt1: true,

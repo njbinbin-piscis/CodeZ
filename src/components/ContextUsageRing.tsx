@@ -55,7 +55,7 @@ export default function ContextUsageRing({ usage }: { usage: ContextUsageSnapsho
   ].join("\n");
 
   return (
-    <span className="codez-context-ring" title={tooltip} aria-label={tooltip}>
+    <span className="agentz-context-ring" title={tooltip} aria-label={tooltip}>
       <svg width="18" height="18" viewBox="0 0 18 18">
         <circle cx="9" cy="9" r={r} fill="none" stroke="var(--border, #333)" strokeWidth="2.5" />
         <circle
@@ -70,7 +70,7 @@ export default function ContextUsageRing({ usage }: { usage: ContextUsageSnapsho
           transform="rotate(-90 9 9)"
         />
       </svg>
-      <span className="codez-context-ring-label">{budgetPct}%</span>
+      <span className="agentz-context-ring-label">{budgetPct}%</span>
     </span>
   );
 }

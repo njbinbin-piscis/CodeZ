@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate CodeZ app icons — purple rounded square with white Z."""
+"""Generate AgentZ app icons — purple rounded square with white Z."""
 
 from __future__ import annotations
 

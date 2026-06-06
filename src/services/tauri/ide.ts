@@ -14,7 +14,7 @@ import type {
   GitFileStatus,
   DiffResult,
   BranchInfo,
-} from "../../workspaces/ide/types";
+} from "../../workspaces/codez/types";
 
 // ─── File operations ─────────────────────────────────────────────────────
 

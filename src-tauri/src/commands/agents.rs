@@ -277,7 +277,7 @@ pub async fn agents_install(app: AppHandle, source: String) -> Result<AgentInfo,
             .map_err(|e| e.to_string())?;
         client
             .get(&source)
-            .header("User-Agent", "CodeZ-Desktop/1.0")
+            .header("User-Agent", "AgentZ-Desktop/1.0")
             .send()
             .await
             .map_err(|e| format!("Download error: {e}"))?
@@ -334,4 +334,58 @@ pub async fn agents_sync(app: AppHandle, project_dir: String) -> Result<usize, S
     let count = manifests.iter().filter(|m| m.koi_id.is_some()).count();
     persist_synced_koi_ids(&config_dir, &manifests);
     Ok(count)
+}
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+    use piscis_kernel::store::db::Database;
+    use std::path::PathBuf;
+
+    #[test]
+    fn smoke_sync_seeded_agents_to_kois() {
+        let home = std::env::var("HOME").expect("HOME");
+        let config = PathBuf::from(home).join(".local/share/com.agentz.desktop");
+        if !config.join("agents/architect/agent.json").exists() {
+            eprintln!("skip: run app once to seed agents first");
+            return;
+        }
+
+        let tmp = std::env::temp_dir().join(format!("agentz-smoke-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let db_dir = tmp.join(".agentz");
+        std::fs::create_dir_all(&db_dir).expect("mkdir");
+        let db = Database::open(&db_dir.join("piscis.db")).expect("open db");
+
+        let synced = sync_agents_to_kois(&db, &config);
+        assert_eq!(synced.len(), 5, "expected 5 seeded agents");
+        for agent in &synced {
+            assert!(agent.koi_id.is_some(), "missing koi_id for {}", agent.id);
+        }
+
+        let pool_members: Vec<String> = ["architect", "coder", "reviewer"]
+            .iter()
+            .map(|slug| {
+                db.find_koi_by_name(slug)
+                    .expect("find koi")
+                    .expect("koi exists")
+                    .id
+            })
+            .collect();
+        assert_eq!(pool_members.len(), 3);
+
+        let project_dir = tmp.to_string_lossy().into_owned();
+        let pool = db
+            .create_pool_session_with_dir("Smoke Fullstack Squad", Some(&project_dir), 0)
+            .expect("create pool");
+        db.update_pool_org_spec(&pool.id, "# smoke org_spec")
+            .expect("org_spec");
+        for koi_id in &pool_members {
+            db.add_pool_member(&pool.id, koi_id).expect("add member");
+        }
+        assert_eq!(
+            db.list_pool_members(&pool.id).expect("members").len(),
+            3
+        );
+    }
 }

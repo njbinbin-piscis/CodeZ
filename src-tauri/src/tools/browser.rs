@@ -91,7 +91,7 @@ impl Tool for BrowserTool {
                     let dir = self
                         .shots_dir
                         .clone()
-                        .unwrap_or_else(|| std::env::temp_dir().join("codez-browser-shots"));
+                        .unwrap_or_else(|| std::env::temp_dir().join("agentz-browser-shots"));
                     if let Err(e) = std::fs::create_dir_all(&dir) {
                         return Ok(ToolResult::err(format!("create shots dir failed: {e}")));
                     }

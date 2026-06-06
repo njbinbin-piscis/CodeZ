@@ -1,0 +1,584 @@
+.agentz-settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.agentz-settings-panel {
+  position: relative;
+  z-index: 10001;
+  width: min(720px, 100%);
+  min-height: 320px;
+  max-height: min(85vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.agentz-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-settings-header button {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.agentz-settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.agentz-settings-section {
+  margin-bottom: 20px;
+}
+
+.agentz-settings-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-settings-field {
+  margin-bottom: 14px;
+}
+
+.agentz-settings-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim, #9a9ab0);
+  margin-bottom: 6px;
+}
+
+.agentz-settings-field input,
+.agentz-settings-field select {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.agentz-settings-field input:focus,
+.agentz-settings-field select:focus {
+  outline: none;
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-settings-hint {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.5;
+}
+
+.agentz-settings-hint code {
+  font-size: 11px;
+  background: var(--bg-elev-2, #1b1b26);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.agentz-settings-key-row {
+  position: relative;
+}
+
+.agentz-settings-key-row input {
+  padding-right: 72px;
+}
+
+.agentz-settings-key-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.agentz-settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.agentz-settings-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.agentz-settings-status-dot.ok {
+  background: #4ade80;
+}
+
+.agentz-settings-status-dot.missing {
+  background: #f87171;
+}
+
+.agentz-settings-config-path {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  word-break: break-all;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.agentz-settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-settings-checkbox input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.agentz-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-settings-save {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agentz-settings-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.agentz-settings-cancel {
+  background: transparent;
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agentz-settings-error {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  color: #f87171;
+  font-size: 12.5px;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 6px;
+}
+
+.agentz-settings-loading {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 13px;
+}
+
+.agentz-llm-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agentz-llm-provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg, #0e0e14);
+}
+
+.agentz-llm-provider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agentz-llm-provider-meta {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-llm-provider-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.agentz-llm-provider-actions button {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border, #2a2a38);
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+}
+
+.agentz-llm-provider-actions button.danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+
+.agentz-llm-provider-form {
+  padding: 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg, #0e0e14);
+  margin-bottom: 12px;
+}
+
+.agentz-llm-provider-form h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.agentz-llm-provider-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.agentz-llm-span-2 {
+  grid-column: 1 / -1;
+}
+
+.agentz-llm-provider-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agentz-llm-add {
+  background: transparent;
+  border: 1px dashed var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.agentz-llm-add:hover {
+  color: var(--text, #e8e8f0);
+  border-color: var(--accent, #7c6af7);
+}
+
+/* ── MCP servers ───────────────────────────────────────────────────────── */
+.agentz-mcp-server {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.agentz-mcp-server-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.agentz-mcp-name {
+  flex: 1;
+  min-width: 120px;
+}
+
+.agentz-mcp-server-head .danger {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #cf222e;
+  color: #f87171;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+.agentz-settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.agentz-settings-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim, #9a9ab0);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agentz-settings-tab:hover {
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-settings-tab.active {
+  color: var(--text, #e8e8f0);
+  border-bottom-color: var(--accent, #7c6af7);
+}
+
+.agentz-settings-tabpanel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Workbench lists (skills / rules) ──────────────────────────────────── */
+.agentz-wb-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 12.5px;
+  border: 1px dashed var(--border, #2a2a38);
+  border-radius: 8px;
+}
+
+.agentz-wb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agentz-wb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg, #0e0e14);
+}
+
+.agentz-wb-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.agentz-wb-meta {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-wb-desc {
+  font-size: 11.5px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.4;
+}
+
+.agentz-wb-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.agentz-wb-actions button {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border, #2a2a38);
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+}
+
+.agentz-wb-actions button:hover:not(:disabled) {
+  color: var(--text, #e8e8f0);
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-wb-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.agentz-wb-actions button.danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+
+.agentz-wb-search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agentz-wb-search input {
+  flex: 1;
+  box-sizing: border-box;
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.agentz-wb-search button {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Rules / Hooks editors ─────────────────────────────────────────────── */
+.agentz-wb-editor,
+.agentz-wb-hook {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--bg, #0e0e14);
+}
+
+.agentz-wb-editor textarea,
+.agentz-wb-hook textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  resize: vertical;
+}
+
+.agentz-wb-editor-actions,
+.agentz-wb-hook-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.agentz-wb-hook-actions button {
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border, #2a2a38);
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+}
+
+.agentz-wb-hook-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.agentz-wb-hook-head .danger {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #cf222e;
+  color: #f87171;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agentz-wb-hook-output {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-elev-2, #1b1b26);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 6px;
+  font-size: 11.5px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-dim, #c8c8d8);
+}
+
+.agentz-wb-hook-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.agentz-ext-remove {
+  margin-left: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.agentz-ext-remove:hover {
+  color: #f87171;
+}

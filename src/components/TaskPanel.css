@@ -1,4 +1,4 @@
-@keyframes codez-spin {
+@keyframes agentz-spin {
   to {
     transform: rotate(360deg);
   }
@@ -6,7 +6,7 @@
 
 /* ── Task panel (Todo / Tools) ───────────────────────────────────────── */
 
-.codez-task-panel {
+.agentz-task-panel {
   margin: 10px 12px 0;
   border: 1px solid var(--border, #2a2a38);
   border-radius: 10px;
@@ -15,11 +15,11 @@
   flex-shrink: 0;
 }
 
-.codez-task-panel.codez-agent-task-panel {
+.agentz-task-panel.agentz-workz-task-panel {
   margin: 0 16px 10px;
 }
 
-.codez-task-panel-header {
+.agentz-task-panel-header {
   width: 100%;
   display: flex;
   align-items: center;
@@ -33,14 +33,14 @@
   text-align: left;
 }
 
-.codez-task-panel-title {
+.agentz-task-panel-title {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.codez-task-panel-label {
+.agentz-task-panel-label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -48,7 +48,7 @@
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-task-badge {
+.agentz-task-badge {
   font-size: 10px;
   padding: 2px 7px;
   border-radius: 999px;
@@ -56,18 +56,18 @@
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-task-chevron {
+.agentz-task-chevron {
   font-size: 9px;
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-task-tabs {
+.agentz-task-tabs {
   display: flex;
   gap: 6px;
   padding: 8px 10px 0;
 }
 
-.codez-task-tab {
+.agentz-task-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -82,39 +82,39 @@
   cursor: pointer;
 }
 
-.codez-task-tab.active {
+.agentz-task-tab.active {
   background: var(--bg-elev-2, #1b1b26);
   color: var(--text, #e8e8f0);
 }
 
-.codez-task-tab:disabled {
+.agentz-task-tab:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.codez-task-tab-count {
+.agentz-task-tab-count {
   font-size: 10px;
   padding: 0 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
 }
 
-.codez-task-panel-content {
+.agentz-task-panel-content {
   max-height: 240px;
   overflow-y: auto;
 }
 
-.codez-tool-steps-scroll {
+.agentz-tool-steps-scroll {
   display: flex;
   flex-direction: column;
 }
 
-.codez-plan-panel-inner {
+.agentz-plan-panel-inner {
   display: flex;
   flex-direction: column;
 }
 
-.codez-plan-item {
+.agentz-plan-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -123,23 +123,23 @@
   border-bottom: 1px solid var(--border, #2a2a38);
 }
 
-.codez-plan-item:last-child {
+.agentz-plan-item:last-child {
   border-bottom: none;
 }
 
-.codez-plan-item-left,
-.codez-plan-item-right {
+.agentz-plan-item-left,
+.agentz-plan-item-right {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.codez-plan-item-left {
+.agentz-plan-item-left {
   flex: 1;
 }
 
-.codez-plan-item-index {
+.agentz-plan-item-index {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -153,14 +153,14 @@
   flex-shrink: 0;
 }
 
-.codez-plan-item-content {
+.agentz-plan-item-content {
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.codez-plan-item-id {
+.agentz-plan-item-id {
   font-family: monospace;
   font-size: 10px;
   color: var(--text-dim, #9a9ab0);
@@ -169,7 +169,7 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
-.codez-plan-item-status {
+.agentz-plan-item-status {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
@@ -184,15 +184,15 @@
 .plan-status-completed { color: #4ade80; background: rgba(74,222,128,0.12); }
 .plan-status-cancelled { color: #f87171; background: rgba(248,113,113,0.12); }
 
-.codez-tool-step-card {
+.agentz-tool-step-card {
   border-bottom: 1px solid var(--border, #2a2a38);
 }
 
-.codez-tool-step-card:last-child {
+.agentz-tool-step-card:last-child {
   border-bottom: none;
 }
 
-.codez-tool-step-header {
+.agentz-tool-step-header {
   width: 100%;
   display: flex;
   align-items: center;
@@ -205,13 +205,13 @@
   text-align: left;
 }
 
-.codez-tool-step-header:hover {
+.agentz-tool-step-header:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.codez-tool-step-icon { font-size: 13px; flex-shrink: 0; }
-.codez-tool-step-name { font-size: 11px; font-weight: 600; flex-shrink: 0; min-width: 72px; }
-.codez-tool-step-summary {
+.agentz-tool-step-icon { font-size: 13px; flex-shrink: 0; }
+.agentz-tool-step-name { font-size: 11px; font-weight: 600; flex-shrink: 0; min-width: 72px; }
+.agentz-tool-step-summary {
   flex: 1;
   font-size: 10px;
   color: var(--text-dim, #9a9ab0);
@@ -220,45 +220,45 @@
   white-space: nowrap;
   font-family: Consolas, monospace;
 }
-.codez-tool-step-status { width: 16px; text-align: center; flex-shrink: 0; }
-.codez-tool-step-status.step-ok { color: #4ade80; }
-.codez-tool-step-status.step-error { color: #f87171; }
-.codez-tool-step-status.step-running { color: var(--accent, #7c6af7); }
-.codez-tool-step-chevron { font-size: 8px; color: var(--text-dim, #9a9ab0); }
+.agentz-tool-step-status { width: 16px; text-align: center; flex-shrink: 0; }
+.agentz-tool-step-status.step-ok { color: #4ade80; }
+.agentz-tool-step-status.step-error { color: #f87171; }
+.agentz-tool-step-status.step-running { color: var(--accent, #7c6af7); }
+.agentz-tool-step-chevron { font-size: 8px; color: var(--text-dim, #9a9ab0); }
 
-.codez-step-spinner {
+.agentz-step-spinner {
   display: inline-block;
   width: 10px;
   height: 10px;
   border: 2px solid rgba(124, 106, 247, 0.25);
   border-top-color: var(--accent, #7c6af7);
   border-radius: 50%;
-  animation: codez-spin 0.7s linear infinite;
+  animation: agentz-spin 0.7s linear infinite;
 }
 
-.codez-tool-step-body {
+.agentz-tool-step-body {
   padding: 8px 10px 10px;
   border-top: 1px solid var(--border, #2a2a38);
   background: var(--bg, #0e0e14);
 }
 
-.codez-tool-step-section {
+.agentz-tool-step-section {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-bottom: 6px;
 }
 
-.codez-tool-step-section-label {
+.agentz-tool-step-section-label {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-dim, #9a9ab0);
   text-transform: uppercase;
 }
 
-.codez-tool-step-section-label.label-error { color: #f87171; }
+.agentz-tool-step-section-label.label-error { color: #f87171; }
 
-.codez-tool-step-pre {
+.agentz-tool-step-pre {
   margin: 0;
   padding: 8px;
   border-radius: 6px;
@@ -270,9 +270,9 @@
   word-break: break-word;
 }
 
-.codez-tool-step-pre.pre-error { color: #fca5a5; }
+.agentz-tool-step-pre.pre-error { color: #fca5a5; }
 
-.codez-tool-step-show-more {
+.agentz-tool-step-show-more {
   align-self: flex-start;
   border: 0;
   background: transparent;

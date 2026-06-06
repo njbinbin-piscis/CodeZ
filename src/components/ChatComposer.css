@@ -1,13 +1,13 @@
 /* ── Cursor-style chat composer (shared by IDE + Agent) ─────────────── */
 
-.codez-composer-wrap {
+.agentz-composer-wrap {
   padding: 10px 12px 12px;
   border-top: 1px solid var(--border, #2a2a38);
   flex-shrink: 0;
   position: relative;
 }
 
-.codez-mode-notice {
+.agentz-mode-notice {
   margin-bottom: 8px;
   padding: 6px 10px;
   font-size: 11px;
@@ -18,7 +18,7 @@
   line-height: 1.4;
 }
 
-.codez-composer {
+.agentz-composer {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -29,32 +29,32 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.codez-composer:focus-within {
+.agentz-composer:focus-within {
   border-color: rgba(124, 106, 247, 0.45);
   box-shadow: 0 0 0 1px rgba(124, 106, 247, 0.12);
 }
 
-.codez-composer.is-plan {
+.agentz-composer.is-plan {
   border-color: rgba(96, 165, 250, 0.35);
 }
 
-.codez-composer.is-plan:focus-within {
+.agentz-composer.is-plan:focus-within {
   border-color: rgba(96, 165, 250, 0.55);
   box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12);
 }
 
-.codez-composer.is-busy {
+.agentz-composer.is-busy {
   opacity: 0.95;
 }
 
-.codez-composer-chips {
+.agentz-composer-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin: 10px 12px 0;
 }
 
-.codez-composer-chip {
+.agentz-composer-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -68,28 +68,28 @@
   user-select: none;
 }
 
-.codez-composer-chip-browser {
+.agentz-composer-chip-browser {
   border: 1px solid rgba(96, 165, 250, 0.3);
   background: rgba(96, 165, 250, 0.1);
 }
 
-.codez-composer-chip-file {
+.agentz-composer-chip-file {
   border: 1px solid rgba(124, 106, 247, 0.3);
   background: rgba(124, 106, 247, 0.1);
 }
 
-.codez-composer-chip-terminal {
+.agentz-composer-chip-terminal {
   border: 1px solid rgba(52, 211, 153, 0.3);
   background: rgba(52, 211, 153, 0.1);
 }
 
-.codez-composer-chip-image {
+.agentz-composer-chip-image {
   border: 1px solid rgba(251, 191, 36, 0.35);
   background: rgba(251, 191, 36, 0.08);
   padding: 3px 6px 3px 3px;
 }
 
-.codez-composer-chip-thumb {
+.agentz-composer-chip-thumb {
   width: 28px;
   height: 28px;
   object-fit: cover;
@@ -98,19 +98,19 @@
   background: var(--bg-primary);
 }
 
-.codez-composer-chip svg {
+.agentz-composer-chip svg {
   flex-shrink: 0;
   opacity: 0.85;
 }
 
-.codez-composer-chip-label {
+.agentz-composer-chip-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 180px;
 }
 
-.codez-composer-chip-remove {
+.agentz-composer-chip-remove {
   border: none;
   background: transparent;
   color: var(--text-dim, #9a9ab0);
@@ -120,11 +120,11 @@
   line-height: 1;
 }
 
-.codez-composer-chip-remove:hover {
+.agentz-composer-chip-remove:hover {
   color: var(--text-primary, #e8e8f0);
 }
 
-.codez-attachment-preview {
+.agentz-attachment-preview {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -135,19 +135,19 @@
   background: var(--bg, #0e0e14);
 }
 
-.codez-attachment-thumb {
+.agentz-attachment-thumb {
   width: 32px;
   height: 32px;
   object-fit: cover;
   border-radius: 4px;
 }
 
-.codez-attachment-file-icon {
+.agentz-attachment-file-icon {
   font-size: 16px;
   line-height: 1;
 }
 
-.codez-attachment-name {
+.agentz-attachment-name {
   flex: 1;
   font-size: 11px;
   overflow: hidden;
@@ -156,7 +156,7 @@
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-attachment-remove {
+.agentz-attachment-remove {
   background: transparent;
   border: 0;
   color: var(--text-dim, #9a9ab0);
@@ -164,7 +164,7 @@
   font-size: 12px;
 }
 
-.codez-composer-input {
+.agentz-composer-input {
   width: 100%;
   min-height: 44px;
   max-height: 160px;
@@ -180,15 +180,15 @@
   box-sizing: border-box;
 }
 
-.codez-composer-input::placeholder {
+.agentz-composer-input::placeholder {
   color: var(--text-dim, #6b6b80);
 }
 
-.codez-composer-input:disabled {
+.agentz-composer-input:disabled {
   opacity: 0.65;
 }
 
-.codez-composer-footer {
+.agentz-composer-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -196,23 +196,23 @@
   padding: 4px 8px 8px;
 }
 
-.codez-composer-footer-left,
-.codez-composer-footer-right {
+.agentz-composer-footer-left,
+.agentz-composer-footer-right {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
 }
 
-.codez-composer-footer-right {
+.agentz-composer-footer-right {
   flex-shrink: 0;
 }
 
-.codez-composer-menu {
+.agentz-composer-menu {
   position: relative;
 }
 
-.codez-composer-menu-trigger {
+.agentz-composer-menu-trigger {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -225,12 +225,12 @@
   max-width: 180px;
 }
 
-.codez-composer-menu-trigger:disabled {
+.agentz-composer-menu-trigger:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.codez-composer-menu.pill .codez-composer-menu-trigger {
+.agentz-composer-menu.pill .agentz-composer-menu-trigger {
   padding: 4px 8px 4px 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
@@ -238,37 +238,37 @@
   color: var(--text, #e8e8f0);
 }
 
-.codez-composer-menu.pill .codez-composer-menu-trigger:hover:not(:disabled) {
+.agentz-composer-menu.pill .agentz-composer-menu-trigger:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.09);
 }
 
-.codez-composer-menu.text .codez-composer-menu-trigger {
+.agentz-composer-menu.text .agentz-composer-menu-trigger {
   padding: 4px 6px;
   background: transparent;
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-composer-menu.text .codez-composer-menu-trigger:hover:not(:disabled) {
+.agentz-composer-menu.text .agentz-composer-menu-trigger:hover:not(:disabled) {
   color: var(--text, #e8e8f0);
 }
 
-.codez-composer-menu-icon {
+.agentz-composer-menu-icon {
   display: inline-flex;
   opacity: 0.85;
 }
 
-.codez-mode-infinity {
+.agentz-mode-infinity {
   font-size: 14px;
   line-height: 1;
   opacity: 0.9;
 }
 
-.codez-composer-menu-label {
+.agentz-composer-menu-label {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.codez-composer-menu-popup {
+.agentz-composer-menu-popup {
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
@@ -282,7 +282,7 @@
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
-.codez-composer-menu-popup button {
+.agentz-composer-menu-popup button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -298,45 +298,45 @@
   cursor: pointer;
 }
 
-.codez-composer-menu-popup button:hover,
-.codez-composer-menu-popup button.active {
+.agentz-composer-menu-popup button:hover,
+.agentz-composer-menu-popup button.active {
   background: rgba(124, 106, 247, 0.15);
 }
 
-.codez-composer-menu-option-label {
+.agentz-composer-menu-option-label {
   font-weight: 600;
 }
 
-.codez-composer-menu-option-hint {
+.agentz-composer-menu-option-hint {
   font-size: 10px;
   color: var(--text-dim, #9a9ab0);
   line-height: 1.35;
 }
 
-.codez-composer-menu-trigger.has-skills {
+.agentz-composer-menu-trigger.has-skills {
   color: var(--accent, #7c6af7);
 }
 
-.codez-composer-menu-empty {
+.agentz-composer-menu-empty {
   padding: 8px 10px;
   font-size: 12px;
   color: var(--text-dim, #9a9ab0);
 }
 
-.codez-skill-option-head {
+.agentz-skill-option-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.codez-composer-menu-check {
+.agentz-composer-menu-check {
   display: inline-block;
   width: 12px;
   color: var(--accent, #7c6af7);
   font-weight: 700;
 }
 
-.codez-composer-icon-btn {
+.agentz-composer-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -349,27 +349,27 @@
   cursor: pointer;
 }
 
-.codez-composer-icon-btn:hover:not(:disabled) {
+.agentz-composer-icon-btn:hover:not(:disabled) {
   color: var(--text, #e8e8f0);
   background: rgba(255, 255, 255, 0.06);
 }
 
-.codez-composer-icon-btn:disabled {
+.agentz-composer-icon-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.codez-composer-spinner {
+.agentz-composer-spinner {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(124, 106, 247, 0.2);
   border-top-color: var(--accent, #7c6af7);
   border-radius: 50%;
-  animation: codez-composer-spin 0.7s linear infinite;
+  animation: agentz-composer-spin 0.7s linear infinite;
 }
 
-.codez-composer-stop-icon,
-.codez-composer-send-icon {
+.agentz-composer-stop-icon,
+.agentz-composer-send-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -381,35 +381,35 @@
   flex-shrink: 0;
 }
 
-.codez-composer-stop-icon {
+.agentz-composer-stop-icon {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text, #e8e8f0);
 }
 
-.codez-composer-stop-icon:hover {
+.agentz-composer-stop-icon:hover {
   background: rgba(248, 113, 113, 0.15);
   color: #f87171;
 }
 
-.codez-composer-send-icon {
+.agentz-composer-send-icon {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-dim, #6b6b80);
 }
 
-.codez-composer-send-icon.ready {
+.agentz-composer-send-icon.ready {
   background: var(--accent, #7c6af7);
   color: #fff;
 }
 
-.codez-composer-send-icon.ready:hover {
+.agentz-composer-send-icon.ready:hover {
   filter: brightness(1.08);
 }
 
-.codez-composer-send-icon:disabled {
+.agentz-composer-send-icon:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-@keyframes codez-composer-spin {
+@keyframes agentz-composer-spin {
   to { transform: rotate(360deg); }
 }

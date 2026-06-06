@@ -2,8 +2,8 @@
 //!
 //! These power the unified Settings page tabs:
 //! - **Skills**: list / uninstall packages under `{config}/skills/{slug}/`.
-//! - **Rules**: CRUD on `{project}/.codez/rules/*.md` (Cursor-style project rules).
-//! - **Hooks**: read / write `{project}/.codez/hooks.json` and test-run a hook.
+//! - **Rules**: CRUD on `{project}/.agentz/rules/*.md` (Cursor-style project rules).
+//! - **Hooks**: read / write `{project}/.agentz/hooks.json` and test-run a hook.
 
 use std::path::{Path, PathBuf};
 
@@ -129,7 +129,7 @@ pub struct RuleFile {
     pub path: String,
 }
 
-/// `{project}/.codez/rules`
+/// `{project}/.agentz/rules`
 fn rules_dir(project_dir: &str) -> Result<PathBuf, String> {
     let trimmed = project_dir.trim();
     if trimmed.is_empty() {
@@ -139,7 +139,7 @@ fn rules_dir(project_dir: &str) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err(format!("project directory not found: {trimmed}"));
     }
-    Ok(root.join(".codez").join("rules"))
+    Ok(root.join(".agentz").join("rules"))
 }
 
 /// Reject names that escape the rules directory.
@@ -158,7 +158,7 @@ fn rule_is_enabled(name: &str) -> bool {
     lower.ends_with(".md") || lower.ends_with(".mdc")
 }
 
-/// List rule files under `{project}/.codez/rules/`.
+/// List rule files under `{project}/.agentz/rules/`.
 #[tauri::command]
 pub fn rules_list(project_dir: String) -> Result<Vec<RuleFile>, String> {
     let dir = rules_dir(&project_dir)?;
@@ -297,7 +297,7 @@ impl Default for HooksConfig {
     }
 }
 
-/// `{project}/.codez/hooks.json`
+/// `{project}/.agentz/hooks.json`
 fn hooks_path(project_dir: &str) -> Result<PathBuf, String> {
     let trimmed = project_dir.trim();
     if trimmed.is_empty() {
@@ -307,7 +307,7 @@ fn hooks_path(project_dir: &str) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err(format!("project directory not found: {trimmed}"));
     }
-    Ok(root.join(".codez").join("hooks.json"))
+    Ok(root.join(".agentz").join("hooks.json"))
 }
 
 const HOOK_EVENTS: &[&str] = &[
@@ -330,7 +330,7 @@ pub fn hooks_get(project_dir: String) -> Result<HooksConfig, String> {
     serde_json::from_str(&raw).map_err(|e| format!("invalid hooks.json: {e}"))
 }
 
-/// Persist the project hooks config to `{project}/.codez/hooks.json`.
+/// Persist the project hooks config to `{project}/.agentz/hooks.json`.
 #[tauri::command]
 pub fn hooks_save(project_dir: String, config: HooksConfig) -> Result<(), String> {
     for hook in &config.hooks {

@@ -3,7 +3,7 @@
 //! User tools live in `{config}/user-tools/<name>/` and are scanned at the
 //! start of each agent turn (see `chat_turn.rs`) to be registered dynamically
 //! in the tool registry. This module ports openpiscis' `user_tools.rs` to the
-//! CodeZ host, whose settings live in a global `config.json` (loaded on demand)
+//! AgentZ host, whose settings live in a global `config.json` (loaded on demand)
 //! rather than in shared `AppState`.
 
 use std::collections::HashMap;
@@ -112,7 +112,7 @@ pub async fn user_tools_install(app: AppHandle, source: String) -> Result<UserTo
         if source.ends_with(".zip") {
             let bytes = client
                 .get(&source)
-                .header("User-Agent", "CodeZ-Desktop/1.0")
+                .header("User-Agent", "AgentZ-Desktop/1.0")
                 .send()
                 .await
                 .map_err(|e| format!("Download error: {}", e))?
@@ -130,7 +130,7 @@ pub async fn user_tools_install(app: AppHandle, source: String) -> Result<UserTo
         } else {
             let manifest_text = client
                 .get(&source)
-                .header("User-Agent", "CodeZ-Desktop/1.0")
+                .header("User-Agent", "AgentZ-Desktop/1.0")
                 .send()
                 .await
                 .map_err(|e| format!("Download error: {}", e))?

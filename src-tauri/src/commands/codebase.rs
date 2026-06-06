@@ -1,7 +1,7 @@
 //! Codebase semantic-ish index (M5).
 //!
 //! Chunks workspace source files into line windows, stores them in
-//! `{project}/.codez/index.db`, and answers `codebase_search` queries with a
+//! `{project}/.agentz/index.db`, and answers `codebase_search` queries with a
 //! keyword/term-frequency ranking (plus a path-name boost). This gives the
 //! `@codebase` mention and the `codebase_search` agent tool real
 //! whole-repo recall without requiring an embedding-model API key. The schema
@@ -34,7 +34,7 @@ const ALWAYS_IGNORE: &[&str] = &[
     "node_modules",
     "__pycache__",
     ".koi-worktrees",
-    ".codez-worktrees",
+    ".agentz-worktrees",
     "target",
     ".next",
     ".nuxt",
@@ -43,7 +43,7 @@ const ALWAYS_IGNORE: &[&str] = &[
     ".venv",
     "venv",
     ".DS_Store",
-    ".codez",
+    ".agentz",
 ];
 
 const CODE_EXTS: &[&str] = &[
@@ -53,12 +53,12 @@ const CODE_EXTS: &[&str] = &[
 ];
 
 fn index_db_path(root: &Path) -> PathBuf {
-    root.join(".codez").join("index.db")
+    root.join(".agentz").join("index.db")
 }
 
 fn open_index(root: &Path) -> Result<Connection, String> {
-    let dir = root.join(".codez");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create .codez failed: {e}"))?;
+    let dir = root.join(".agentz");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create .agentz failed: {e}"))?;
     let conn = Connection::open(index_db_path(root)).map_err(|e| format!("open index db: {e}"))?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS chunks (

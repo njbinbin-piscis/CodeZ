@@ -1,8 +1,8 @@
 {
-  "name": "codez-extension-host",
+  "name": "agentz-extension-host",
   "version": "0.1.0",
   "private": true,
-  "description": "CodeZ VS Code-compatible extension host (clean-room, Theia-style).",
+  "description": "AgentZ VS Code-compatible extension host (clean-room, Theia-style).",
   "license": "MIT",
   "type": "commonjs",
   "main": "dist/host.js",

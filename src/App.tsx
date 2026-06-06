@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openFolderDialog } from "./services/tauri";
 import { generateRepoWiki } from "./services/tauri/repoWiki";
-import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/ide/Terminal";
+import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/codez/Terminal";
 import { getSettings } from "./services/tauri/settings";
 import { setLanguage } from "./i18n";
 import {
@@ -10,10 +10,10 @@ import {
   toggleAppearanceTheme,
   type AppearanceTheme,
 } from "./theme";
-import IdeWorkspace from "./workspaces/ide";
-import AgentWorkspace from "./workspaces/agent";
-import AssistantPanel from "./workspaces/ide/AssistantPanel";
-import SettingsPanel from "./workspaces/ide/SettingsPanel";
+import CodeZWorkspace from "./workspaces/codez";
+import WorkZWorkspace from "./workspaces/workz";
+import AssistantPanel from "./workspaces/codez/AssistantPanel";
+import SettingsPanel from "./workspaces/codez/SettingsPanel";
 import ZLogo from "./components/ZLogo";
 import { browserClose, type PickedElement } from "./services/tauri/browser";
 import type { ChatAttachment } from "./services/tauri/chat";
@@ -29,10 +29,10 @@ import {
   SunIcon,
   WikiIcon,
 } from "./components/TitleBarIcons";
-import MarketplacePanel from "./workspaces/ide/MarketplacePanel";
+import MarketplacePanel from "./workspaces/codez/MarketplacePanel";
 import "./App.css";
 
-type Mode = "ide" | "agent";
+type Mode = "codez" | "workz";
 
 /** Normalize folder paths before comparing (slashes, trailing slash). */
 function normProjectPath(p: string): string {
@@ -41,11 +41,11 @@ function normProjectPath(p: string): string {
 
 export default function App() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<Mode>("ide");
+  const [mode, setMode] = useState<Mode>("codez");
   const [projectDir, setProjectDir] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("codez-chat-width"));
+    const saved = Number(localStorage.getItem("agentz-chat-width"));
     return Number.isFinite(saved) && saved >= 280 ? Math.min(760, saved) : 380;
   });
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
@@ -166,7 +166,7 @@ export default function App() {
 
   const handleWikiClick = useCallback(async () => {
     if (!projectDir || wikiBusy) return;
-    if (mode === "agent") {
+    if (mode === "workz") {
       setWikiBuildNonce((n) => n + 1);
       return;
     }
@@ -212,20 +212,20 @@ export default function App() {
   );
 
   useEffect(() => {
-    localStorage.setItem("codez-chat-width", String(chatWidth));
+    localStorage.setItem("agentz-chat-width", String(chatWidth));
   }, [chatWidth]);
 
   return (
-    <div className="codez-app">
-      <header className="codez-titlebar">
-        <div className="codez-brand" aria-label="CodeZ">
-          <span className="codez-brand-text">Code</span>
-          <ZLogo size={22} className="codez-brand-z" />
+    <div className="agentz-app">
+      <header className="agentz-titlebar">
+        <div className="agentz-brand" aria-label="AgentZ">
+          <span className="agentz-brand-text">Agent</span>
+          <ZLogo size={22} className="agentz-brand-z" />
         </div>
 
         <button
           type="button"
-          className="codez-titlebar-icon codez-titlebar-folder"
+          className="agentz-titlebar-icon agentz-titlebar-folder"
           onClick={() => void pickFolder()}
           title={projectDir ? t("app.changeFolder") : t("app.openFolder")}
           aria-label={projectDir ? t("app.changeFolder") : t("app.openFolder")}
@@ -233,13 +233,13 @@ export default function App() {
           <FolderIcon />
         </button>
 
-        <span className="codez-project-path" title={projectDir ?? undefined}>
+        <span className="agentz-project-path" title={projectDir ?? undefined}>
           {projectDir ?? t("app.noProjectOpen")}
         </span>
         {projectDir && (
           <button
             type="button"
-            className="codez-titlebar-icon codez-titlebar-close-project"
+            className="agentz-titlebar-icon agentz-titlebar-close-project"
             onClick={() => void closeProject()}
             title={t("app.closeFolder")}
             aria-label={t("app.closeFolder")}
@@ -248,11 +248,11 @@ export default function App() {
           </button>
         )}
 
-        <div className="codez-titlebar-actions">
-          {mode === "ide" && (
+        <div className="agentz-titlebar-actions">
+          {mode === "codez" && (
             <button
               type="button"
-              className={`codez-titlebar-icon ${browserOpen ? "active" : ""}`}
+              className={`agentz-titlebar-icon ${browserOpen ? "active" : ""}`}
               onClick={() => projectDir && setBrowserOpen((v) => !v)}
               disabled={!projectDir}
               title={projectDir ? t("app.browserTitle") : t("app.browserNeedsProject")}
@@ -261,10 +261,10 @@ export default function App() {
               <BrowserIcon />
             </button>
           )}
-          {mode === "ide" && (
+          {mode === "codez" && (
             <button
               type="button"
-              className={`codez-titlebar-icon ${chatOpen ? "active" : ""}`}
+              className={`agentz-titlebar-icon ${chatOpen ? "active" : ""}`}
               onClick={() => setChatOpen((v) => !v)}
               title={t("app.chatTitle")}
               aria-label={t("app.chatTitle")}
@@ -274,7 +274,7 @@ export default function App() {
           )}
           <button
             type="button"
-            className={`codez-titlebar-icon${wikiBusy ? " loading" : ""}`}
+            className={`agentz-titlebar-icon${wikiBusy ? " loading" : ""}`}
             onClick={() => void handleWikiClick()}
             disabled={!projectDir || wikiBusy}
             title={t("agent.repoWikiHint")}
@@ -284,7 +284,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="codez-titlebar-icon"
+            className="agentz-titlebar-icon"
             onClick={handleThemeToggle}
             title={
               appearance === "dark" ? t("app.themeSwitchLight") : t("app.themeSwitchDark")
@@ -297,7 +297,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="codez-titlebar-icon"
+            className="agentz-titlebar-icon"
             onClick={() => setMarketOpen(true)}
             title={t("market.title")}
             aria-label={t("market.title")}
@@ -306,7 +306,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="codez-titlebar-icon"
+            className="agentz-titlebar-icon"
             onClick={() => setSettingsOpen(true)}
             title={t("app.settingsTitle")}
             aria-label={t("app.settingsTitle")}
@@ -315,29 +315,29 @@ export default function App() {
           </button>
         </div>
 
-        <div className="codez-mode-switch">
+        <div className="agentz-mode-switch">
           <button
-            className={mode === "ide" ? "active" : ""}
-            onClick={() => setMode("ide")}
-            title={t("app.modeIdeTitle")}
+            className={mode === "codez" ? "active" : ""}
+            onClick={() => setMode("codez")}
+            title={t("app.modeCodeZTitle")}
           >
-            {t("app.modeIde")}
+            {t("app.modeCodeZ")}
           </button>
           <button
-            className={mode === "agent" ? "active" : ""}
-            onClick={() => setMode("agent")}
-            title={t("app.modeAgentTitle")}
+            className={mode === "workz" ? "active" : ""}
+            onClick={() => setMode("workz")}
+            title={t("app.modeWorkZTitle")}
           >
-            {t("app.modeAgent")}
+            {t("app.modeWorkZ")}
           </button>
         </div>
       </header>
 
-      <main className="codez-main">
-        <div className="codez-pane" hidden={mode !== "ide"}>
-          <div className="codez-ide-split">
-            <div className="codez-ide-main">
-              <IdeWorkspace
+      <main className="agentz-main">
+        <div className="agentz-pane" hidden={mode !== "codez"}>
+          <div className="agentz-ide-split">
+            <div className="agentz-ide-main">
+              <CodeZWorkspace
                 projectDir={projectDir}
                 onOpenFolder={pickFolder}
                 onSendToChat={handleSendToChat}
@@ -351,7 +351,7 @@ export default function App() {
               />
             </div>
             <div
-              className="codez-ide-chat-resize"
+              className="agentz-ide-chat-resize"
               onMouseDown={startChatResize}
               hidden={!chatOpen}
               role="separator"
@@ -359,7 +359,7 @@ export default function App() {
             />
             {/* Kept mounted while in IDE mode so toggling chat visibility never
                 discards the active session — only show/hide. */}
-            <div className="codez-ide-chat" style={{ width: chatWidth }} hidden={!chatOpen}>
+            <div className="agentz-ide-chat" style={{ width: chatWidth }} hidden={!chatOpen}>
               <AssistantPanel
                 projectDir={projectDir}
                 insertRequest={chatInsert}
@@ -370,8 +370,8 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="codez-pane" hidden={mode !== "agent"}>
-          <AgentWorkspace
+        <div className="agentz-pane" hidden={mode !== "workz"}>
+          <WorkZWorkspace
             projectDir={projectDir}
             onOpenFolder={pickFolder}
             wikiBuildNonce={wikiBuildNonce}

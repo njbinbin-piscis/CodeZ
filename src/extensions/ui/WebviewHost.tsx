@@ -4,7 +4,7 @@ import type { WebviewState } from "../extensionUiStore";
 
 /**
  * Hosts an extension webview's HTML inside a sandboxed iframe. Messages flow:
- *   extension -> $postMessage -> "codez-webview-post" event -> iframe
+ *   extension -> $postMessage -> "agentz-webview-post" event -> iframe
  *   iframe -> postMessage -> here -> extensionService.postWebviewMessage
  */
 export default function WebviewHost({ webview }: { webview: WebviewState }) {
@@ -16,7 +16,7 @@ export default function WebviewHost({ webview }: { webview: WebviewState }) {
       if (detail.handle !== webview.handle) return;
       iframeRef.current?.contentWindow?.postMessage(detail.message, "*");
     };
-    window.addEventListener("codez-webview-post", onPost);
+    window.addEventListener("agentz-webview-post", onPost);
 
     const onMessage = (e: MessageEvent) => {
       if (e.source === iframeRef.current?.contentWindow) {
@@ -26,7 +26,7 @@ export default function WebviewHost({ webview }: { webview: WebviewState }) {
     window.addEventListener("message", onMessage);
 
     return () => {
-      window.removeEventListener("codez-webview-post", onPost);
+      window.removeEventListener("agentz-webview-post", onPost);
       window.removeEventListener("message", onMessage);
     };
   }, [webview.handle]);
@@ -47,7 +47,7 @@ export default function WebviewHost({ webview }: { webview: WebviewState }) {
   return (
     <iframe
       ref={iframeRef}
-      className="codez-webview-frame"
+      className="agentz-webview-frame"
       title={webview.title}
       sandbox="allow-scripts allow-forms allow-same-origin"
       srcDoc={srcDoc}

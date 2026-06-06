@@ -94,12 +94,12 @@ async function run(): Promise<void> {
   docExt.$acceptModelOpened({ uri, languageId: "javascript", versionId: 1, lines: ["const x = 1;"], eol: "\n" });
 
   // 1. command registration
-  assert(registered.includes("codezSample.hello"), "command registered");
+  assert(registered.includes("agentzSample.hello"), "command registered");
 
   // 2. execute the contributed command
-  const result = await cmdExt.$executeContributedCommand("codezSample.hello", ["CodeZ"]);
-  assert(result === "hello:CodeZ:1", `command result: ${String(result)}`);
-  assert(messages.length === 1 && messages[0].includes("Hello, CodeZ"), "message shown");
+  const result = await cmdExt.$executeContributedCommand("agentzSample.hello", ["AgentZ"]);
+  assert(result === "hello:AgentZ:1", `command result: ${String(result)}`);
+  assert(messages.length === 1 && messages[0].includes("Hello, AgentZ"), "message shown");
 
   // 3. completion registered for javascript
   const handle = [...completionHandles.entries()].find(([, sel]) => sel.includes("javascript"))?.[0];
@@ -108,7 +108,7 @@ async function run(): Promise<void> {
   // 4. completion invocation round-trips a real item
   const completions = await langExt.$provideCompletionItems(handle as number, uri, { line: 0, character: 6 }, ".");
   assert(!!completions && completions.items.length === 1, "completion returned 1 item");
-  assert(completions!.items[0].label === "codezHello", "completion label");
+  assert(completions!.items[0].label === "agentzHello", "completion label");
   assert(completions!.items[0].insertTextIsSnippet === true, "completion is snippet");
 
   console.log("\nSMOKE OK — all assertions passed");

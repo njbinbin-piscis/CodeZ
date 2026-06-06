@@ -57,7 +57,7 @@ export function attachBreakpointGutter(
         range: new monacoNs.Range(line, 1, line, 1),
         options: {
           isWholeLine: false,
-          glyphMarginClassName: "codez-bp-glyph",
+          glyphMarginClassName: "agentz-bp-glyph",
           glyphMarginHoverMessage: { value: "Breakpoint" },
         },
       })),

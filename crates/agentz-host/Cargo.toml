@@ -1,0 +1,16 @@
+[package]
+name = "agentz-host"
+version = "0.0.1"
+edition = "2021"
+description = "AgentZ host shell — Cursor-like AI IDE (IDE + Agent modes) built on the piscis-engine kernel."
+
+[[bin]]
+name = "agentz-host"
+path = "src/main.rs"
+
+[dependencies]
+piscis-core = { workspace = true }
+piscis-kernel = { workspace = true }
+
+[lints]
+workspace = true

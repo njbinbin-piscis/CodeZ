@@ -1,8 +1,8 @@
-# CodeZ Extension Host
+# AgentZ Extension Host
 
-A clean-room, VS Code–compatible **extension host** for CodeZ. It runs real
+A clean-room, VS Code–compatible **extension host** for AgentZ. It runs real
 `.vsix` extension JavaScript against a `vscode` API implementation and talks to
-the CodeZ renderer (Monaco + React) over a structured RPC protocol — the
+the AgentZ renderer (Monaco + React) over a structured RPC protocol — the
 "Theia-style compatible host" approach.
 
 ## Architecture
@@ -19,7 +19,7 @@ Tauri renderer (React + Monaco)          Tauri host (Rust)         Node sidecar 
 
 - **Transport**: line-delimited JSON (NDJSON). The renderer cannot talk to the
   Node process directly, so the Rust host brokers it: the sidecar's stdout lines
-  are emitted on the `codez:ext-host` Tauri event channel, and the renderer
+  are emitted on the `agentz:ext-host` Tauri event channel, and the renderer
   sends frames back through the `ext_host_send` command (→ sidecar stdin).
 - **Protocol**: `src/common/{proxyIdentifier,rpcProtocol,protocol,dto}.ts`.
   `MainThread*` shapes run on the renderer; `ExtHost*` shapes run here. Methods

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import { parseIpynb, serializeIpynb, emptyCell, type NbCell } from "./ipynb";
 import { extensionService } from "../extensionService";
-import MarkdownPreview from "../../workspaces/ide/MarkdownPreview";
+import MarkdownPreview from "../../workspaces/codez/MarkdownPreview";
 import "./notebook.css";
 
 interface NotebookEditorProps {
@@ -49,7 +49,7 @@ function CodeCell({ cell, onSource }: { cell: NbCell; onSource: (v: string) => v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div className="codez-nb-code" ref={hostRef} />;
+  return <div className="agentz-nb-code" ref={hostRef} />;
 }
 
 /** A markdown cell: edit mode (textarea) toggled with rendered preview. */
@@ -58,7 +58,7 @@ function MarkdownCell({ cell, onSource }: { cell: NbCell; onSource: (v: string) 
   if (editing) {
     return (
       <textarea
-        className="codez-nb-md-edit"
+        className="agentz-nb-md-edit"
         value={cell.source}
         autoFocus
         onChange={(e) => onSource(e.target.value)}
@@ -68,7 +68,7 @@ function MarkdownCell({ cell, onSource }: { cell: NbCell; onSource: (v: string) 
     );
   }
   return (
-    <div className="codez-nb-md-view" onDoubleClick={() => setEditing(true)} title="Double-click to edit">
+    <div className="agentz-nb-md-view" onDoubleClick={() => setEditing(true)} title="Double-click to edit">
       <MarkdownPreview content={cell.source || "*Empty markdown cell*"} />
     </div>
   );
@@ -129,18 +129,18 @@ export default function NotebookEditor({ content, onChange }: NotebookEditorProp
   };
 
   return (
-    <div className="codez-nb">
-      <div className="codez-nb-toolbar">
+    <div className="agentz-nb">
+      <div className="agentz-nb-toolbar">
         <button onClick={() => addCell(2, cells.length - 1)}>+ Code</button>
         <button onClick={() => addCell(1, cells.length - 1)}>+ Markdown</button>
-        <span className="codez-nb-lang">{language}</span>
+        <span className="agentz-nb-lang">{language}</span>
       </div>
-      <div className="codez-nb-cells">
-        {cells.length === 0 && <div className="codez-nb-empty">Empty notebook. Add a cell to begin.</div>}
+      <div className="agentz-nb-cells">
+        {cells.length === 0 && <div className="agentz-nb-empty">Empty notebook. Add a cell to begin.</div>}
         {cells.map((cell, i) => (
-          <div key={cell.id} className={`codez-nb-cell ${cell.kind === 2 ? "code" : "markup"}`}>
-            <div className="codez-nb-cell-rail">
-              <span className="codez-nb-cell-kind">{cell.kind === 2 ? "[ ]" : "md"}</span>
+          <div key={cell.id} className={`agentz-nb-cell ${cell.kind === 2 ? "code" : "markup"}`}>
+            <div className="agentz-nb-cell-rail">
+              <span className="agentz-nb-cell-kind">{cell.kind === 2 ? "[ ]" : "md"}</span>
               <button title="Move up" onClick={() => move(i, -1)}>
                 ↑
               </button>
@@ -151,14 +151,14 @@ export default function NotebookEditor({ content, onChange }: NotebookEditorProp
                 ✕
               </button>
             </div>
-            <div className="codez-nb-cell-body">
+            <div className="agentz-nb-cell-body">
               {cell.kind === 2 ? (
                 <CodeCell cell={cell} onSource={(v) => updateSource(cell.id, v)} />
               ) : (
                 <MarkdownCell cell={cell} onSource={(v) => updateSource(cell.id, v)} />
               )}
               {cell.outputs && cell.outputs.length > 0 && (
-                <pre className="codez-nb-output">{cell.outputs.join("\n")}</pre>
+                <pre className="agentz-nb-output">{cell.outputs.join("\n")}</pre>
               )}
             </div>
           </div>

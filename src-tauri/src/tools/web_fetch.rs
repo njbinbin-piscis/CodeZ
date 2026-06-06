@@ -77,7 +77,7 @@ impl Tool for WebFetchTool {
 
         let client = Client::builder()
             .timeout(Duration::from_secs(TIMEOUT_SECS))
-            .user_agent("CodeZ/1.0 (+https://github.com/njbinbin-piscis/CodeZ)")
+            .user_agent("AgentZ/1.0 (+https://github.com/njbinbin-piscis/AgentZ)")
             .build()
             .map_err(|e| anyhow::anyhow!("HTTP client: {e}"))?;
 

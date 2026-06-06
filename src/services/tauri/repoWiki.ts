@@ -1,6 +1,6 @@
 /**
  * Repo Wiki IPC (M8) — generate a module/architecture overview of the
- * workspace from the codebase index and persist it to `.codez/REPO_WIKI.md`.
+ * workspace from the codebase index and persist it to `.agentz/REPO_WIKI.md`.
  */
 import { invoke } from "@tauri-apps/api/core";
 

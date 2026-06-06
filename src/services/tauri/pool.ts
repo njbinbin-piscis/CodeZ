@@ -1,12 +1,12 @@
 /**
  * Pool (team collaboration) IPC (Phase 3) — board reads + lifecycle. The kernel
  * owns orchestration; these expose the project DB rows the collaboration board
- * renders, plus a single typed `codez:pool-event` stream for live updates.
+ * renders, plus a single typed `agentz:pool-event` stream for live updates.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export const POOL_EVENT = "codez:pool-event";
+export const POOL_EVENT = "agentz:pool-event";
 
 export interface PoolSession {
   id: string;

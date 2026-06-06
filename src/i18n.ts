@@ -3,7 +3,7 @@ import { initReactI18next } from "react-i18next";
 import en from "./i18n/en";
 import zh from "./i18n/zh";
 
-export const LANGUAGE_STORAGE_KEY = "codez-language";
+export const LANGUAGE_STORAGE_KEY = "agentz-language";
 
 function detectInitialLanguage(): "zh" | "en" {
   const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);

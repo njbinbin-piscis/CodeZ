@@ -153,7 +153,7 @@ pub async fn teams_install(app: AppHandle, source: String) -> Result<TeamInfo, S
             .map_err(|e| e.to_string())?;
         client
             .get(&source)
-            .header("User-Agent", "CodeZ-Desktop/1.0")
+            .header("User-Agent", "AgentZ-Desktop/1.0")
             .send()
             .await
             .map_err(|e| format!("Download error: {e}"))?

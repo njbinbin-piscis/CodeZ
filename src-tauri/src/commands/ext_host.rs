@@ -20,7 +20,7 @@ use tracing::{info, warn};
 use crate::state::AppState;
 
 /// Tauri event channel that carries extension-host RPC frames + logs to the UI.
-pub const EXT_HOST_EVENT: &str = "codez:ext-host";
+pub const EXT_HOST_EVENT: &str = "agentz:ext-host";
 
 /// Shared lifecycle state for the (single) extension host process.
 #[derive(Default)]

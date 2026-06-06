@@ -449,7 +449,7 @@ export class MainThreadWebviews implements MainThreadWebviewsShape {
   }
   async $postMessage(handle: string, message: unknown): Promise<boolean> {
     // Forward to the iframe (handled by the WebviewHost React component bus).
-    window.dispatchEvent(new CustomEvent("codez-webview-post", { detail: { handle, message } }));
+    window.dispatchEvent(new CustomEvent("agentz-webview-post", { detail: { handle, message } }));
     return true;
   }
   $dispose(handle: string): void {
@@ -477,7 +477,7 @@ export class MainThreadTerminal implements MainThreadTerminalShape {
     void invoke("ide_terminal_write", { terminalId: id, data: addNewLine ? text + "\n" : text });
   }
   $show(_id: string): void {
-    window.dispatchEvent(new CustomEvent("codez-show-terminal"));
+    window.dispatchEvent(new CustomEvent("agentz-show-terminal"));
   }
   $dispose(id: string): void {
     void invoke("ide_terminal_destroy", { terminalId: id });
@@ -514,7 +514,7 @@ export class MainThreadTask implements MainThreadTaskShape {
     try {
       await invoke<void>("ide_terminal_create", { terminalId: id, projectDir: task.cwd ?? this.ctx.projectDir });
       await invoke<void>("ide_terminal_write", { terminalId: id, data: cmd + "\n" });
-      window.dispatchEvent(new CustomEvent("codez-show-terminal"));
+      window.dispatchEvent(new CustomEvent("agentz-show-terminal"));
     } catch (err) {
       console.error("[ext] task execution failed", err);
     }
@@ -534,7 +534,7 @@ export class MainThreadDebug implements MainThreadDebugShape {
   async $startDebugging(config: DebugConfigurationDto): Promise<boolean> {
     const resolved = await this.extHost.$resolveDebugConfiguration(config.type, config);
     extensionUiStore.appendDebugOutput(`Starting debug session: ${JSON.stringify(resolved ?? config)}`);
-    window.dispatchEvent(new CustomEvent("codez-debug-start", { detail: resolved ?? config }));
+    window.dispatchEvent(new CustomEvent("agentz-debug-start", { detail: resolved ?? config }));
     return true;
   }
   $appendDebugOutput(category: string, output: string): void {

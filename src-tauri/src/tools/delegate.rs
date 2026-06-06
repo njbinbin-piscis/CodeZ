@@ -4,7 +4,7 @@
 //! implemented", "summarise how Y works") to a child agent that runs the
 //! kernel agent loop with a bounded budget and a read-only tool surface. The
 //! child's findings come back as this tool's result, keeping the parent's
-//! context focused. This is CodeZ's in-process take on SubAgent delegation,
+//! context focused. This is AgentZ's in-process take on SubAgent delegation,
 //! reusing [`crate::commands::chat_turn::run_subagent_research`].
 
 use std::sync::Arc;

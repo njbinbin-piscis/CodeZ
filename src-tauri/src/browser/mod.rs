@@ -1,6 +1,6 @@
 //! Headless Chromium driver (CDP via `chromiumoxide`).
 //!
-//! CodeZ embeds a real Chromium instance driven over the Chrome DevTools
+//! AgentZ embeds a real Chromium instance driven over the Chrome DevTools
 //! Protocol — the same approach Cursor/Playwright use. The browser runs
 //! headless; its frames are streamed into the IDE's Browser panel as PNG
 //! screenshots, and pointer events from the panel are forwarded back. The
@@ -366,7 +366,7 @@ impl BrowserManager {
 }
 
 fn fresh_profile_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("codez-browser-{}", uuid::Uuid::new_v4()))
+    std::env::temp_dir().join(format!("agentz-browser-{}", uuid::Uuid::new_v4()))
 }
 
 async fn current_url(page: &Page) -> Result<String> {

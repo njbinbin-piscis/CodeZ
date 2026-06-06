@@ -2,7 +2,7 @@
 
 export type AppearanceTheme = "dark" | "light";
 
-const STORAGE_KEY = "codez-appearance";
+const STORAGE_KEY = "agentz-appearance";
 
 export function getAppearanceTheme(): AppearanceTheme {
   const saved = localStorage.getItem(STORAGE_KEY);

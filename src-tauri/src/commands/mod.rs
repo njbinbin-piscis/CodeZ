@@ -1,4 +1,4 @@
-//! Tauri command modules exposed to the CodeZ frontend.
+//! Tauri command modules exposed to the AgentZ frontend.
 
 pub mod agent_task;
 pub mod agents;

@@ -1,20 +1,20 @@
 [package]
-name = "codez-desktop"
+name = "agentz-desktop"
 version = "0.2.0"
-description = "CodeZ — Cursor-like AI IDE desktop host"
-authors = ["CodeZ"]
+description = "AgentZ — Cursor-like AI IDE desktop host"
+authors = ["AgentZ"]
 license = "Apache-2.0"
 edition = "2021"
 rust-version = "1.77.2"
 autobins = false
-default-run = "codez-desktop"
+default-run = "agentz-desktop"
 
 [lib]
-name = "codez_desktop_lib"
+name = "agentz_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "codez-desktop"
+name = "agentz-desktop"
 path = "src/main.rs"
 
 [build-dependencies]

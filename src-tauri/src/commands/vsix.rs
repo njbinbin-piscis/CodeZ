@@ -1,7 +1,7 @@
 //! VS Code `.vsix` contribution-point ingestion.
 //!
 //! A `.vsix` is a zip whose `extension/package.json` declares `contributes.*`.
-//! Per the design (`codez-design.md` §10) we consume only the **declarative**
+//! Per the design (`agentz-design.md` §10) we consume only the **declarative**
 //! data — color themes and snippets here — and never execute extension JS.
 //! TextMate grammars and LSP servers are handled elsewhere / left for later.
 
@@ -30,7 +30,7 @@ pub struct VsixSnippetSet {
     pub content: String,
 }
 
-/// The subset of a `.vsix` manifest CodeZ can consume.
+/// The subset of a `.vsix` manifest AgentZ can consume.
 #[derive(Debug, Serialize)]
 pub struct VsixManifest {
     pub name: String,
@@ -225,7 +225,7 @@ pub fn vsix_install(app: AppHandle, path: String) -> Result<InstalledExtension, 
 pub async fn vsix_install_from_url(app: AppHandle, url: String) -> Result<InstalledExtension, String> {
     let bytes = reqwest::Client::new()
         .get(&url)
-        .header("User-Agent", "CodeZ")
+        .header("User-Agent", "AgentZ")
         .send()
         .await
         .map_err(|e| format!("download failed: {e}"))?

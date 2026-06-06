@@ -1,12 +1,12 @@
 {
-  "name": "codez-sample",
-  "displayName": "CodeZ Sample Extension",
-  "publisher": "codez",
+  "name": "agentz-sample",
+  "displayName": "AgentZ Sample Extension",
+  "publisher": "agentz",
   "version": "0.0.1",
   "engines": { "vscode": "^1.80.0" },
   "main": "./extension.js",
   "activationEvents": ["*"],
   "contributes": {
-    "commands": [{ "command": "codezSample.hello", "title": "CodeZ: Hello" }]
+    "commands": [{ "command": "agentzSample.hello", "title": "AgentZ: Hello" }]
   }
 }

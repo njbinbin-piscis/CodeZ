@@ -2,7 +2,7 @@
    (--bg-*/--text-*/--border/--accent) so light/dark both render correctly. */
 
 /* Toasts */
-.codez-ext-toasts {
+.agentz-ext-toasts {
   position: fixed;
   right: 16px;
   bottom: 36px;
@@ -12,7 +12,7 @@
   z-index: 2000;
   max-width: 360px;
 }
-.codez-ext-toast {
+.agentz-ext-toast {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-left-width: 3px;
@@ -22,24 +22,24 @@
   color: var(--text-primary);
   font-size: 13px;
 }
-.codez-ext-toast.sev-0 { border-left-color: var(--error); }
-.codez-ext-toast.sev-1 { border-left-color: var(--warning); }
-.codez-ext-toast.sev-2 { border-left-color: var(--accent); }
-.codez-ext-toast-row { display: flex; align-items: center; gap: 8px; }
-.codez-ext-toast-badge { font-size: 11px; opacity: 0.7; text-transform: uppercase; }
-.codez-ext-toast-msg { flex: 1; }
-.codez-ext-toast-x { background: none; border: none; color: inherit; cursor: pointer; opacity: 0.6; }
-.codez-ext-toast-x:hover { opacity: 1; }
-.codez-ext-toast-detail { margin-top: 6px; opacity: 0.8; font-size: 12px; }
-.codez-ext-toast-actions { margin-top: 8px; display: flex; gap: 6px; }
-.codez-ext-toast-actions button {
+.agentz-ext-toast.sev-0 { border-left-color: var(--error); }
+.agentz-ext-toast.sev-1 { border-left-color: var(--warning); }
+.agentz-ext-toast.sev-2 { border-left-color: var(--accent); }
+.agentz-ext-toast-row { display: flex; align-items: center; gap: 8px; }
+.agentz-ext-toast-badge { font-size: 11px; opacity: 0.7; text-transform: uppercase; }
+.agentz-ext-toast-msg { flex: 1; }
+.agentz-ext-toast-x { background: none; border: none; color: inherit; cursor: pointer; opacity: 0.6; }
+.agentz-ext-toast-x:hover { opacity: 1; }
+.agentz-ext-toast-detail { margin-top: 6px; opacity: 0.8; font-size: 12px; }
+.agentz-ext-toast-actions { margin-top: 8px; display: flex; gap: 6px; }
+.agentz-ext-toast-actions button {
   background: var(--accent); border: none; color: #fff;
   padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
 }
-.codez-ext-toast-actions button:hover { background: var(--accent-hover); }
+.agentz-ext-toast-actions button:hover { background: var(--accent-hover); }
 
 /* Quick input */
-.codez-quick-overlay {
+.agentz-quick-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.25);
@@ -49,7 +49,7 @@
   padding-top: 90px;
   z-index: 2100;
 }
-.codez-quick {
+.agentz-quick {
   width: 560px;
   max-width: 90vw;
   background: var(--bg-secondary);
@@ -58,8 +58,8 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
-.codez-quick-prompt { padding: 10px 12px 0; color: var(--text-secondary); font-size: 12px; }
-.codez-quick input {
+.agentz-quick-prompt { padding: 10px 12px 0; color: var(--text-secondary); font-size: 12px; }
+.agentz-quick input {
   width: 100%;
   box-sizing: border-box;
   background: var(--bg-primary);
@@ -70,8 +70,8 @@
   font-size: 14px;
   outline: none;
 }
-.codez-quick-list { max-height: 320px; overflow-y: auto; }
-.codez-quick-item {
+.agentz-quick-list { max-height: 320px; overflow-y: auto; }
+.agentz-quick-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -84,24 +84,24 @@
   cursor: pointer;
   font-size: 13px;
 }
-.codez-quick-item:hover { background: var(--bg-hover); }
-.codez-quick-desc { opacity: 0.6; font-size: 12px; }
-.codez-quick-empty { padding: 14px; opacity: 0.6; }
-.codez-quick-footer { padding: 8px 14px; border-top: 1px solid var(--border); text-align: right; }
-.codez-quick-footer button { background: var(--accent); border: none; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
-.codez-quick-footer button:hover { background: var(--accent-hover); }
+.agentz-quick-item:hover { background: var(--bg-hover); }
+.agentz-quick-desc { opacity: 0.6; font-size: 12px; }
+.agentz-quick-empty { padding: 14px; opacity: 0.6; }
+.agentz-quick-footer { padding: 8px 14px; border-top: 1px solid var(--border); text-align: right; }
+.agentz-quick-footer button { background: var(--accent); border: none; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+.agentz-quick-footer button:hover { background: var(--accent-hover); }
 
 /* Shared panel content (rendered inside the unified bottom panel) */
-.codez-ext-panel-empty { padding: 16px; opacity: 0.6; font-size: 13px; }
-.codez-ext-view-section { margin-bottom: 8px; }
-.codez-ext-view-title {
+.agentz-ext-panel-empty { padding: 16px; opacity: 0.6; font-size: 13px; }
+.agentz-ext-view-section { margin-bottom: 8px; }
+.agentz-ext-view-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.6;
   padding: 4px 12px;
 }
-.codez-ext-output select {
+.agentz-ext-output select {
   margin: 4px 12px;
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -109,7 +109,7 @@
   border-radius: 4px;
   padding: 2px 6px;
 }
-.codez-ext-output pre, .codez-ext-debug {
+.agentz-ext-output pre, .agentz-ext-debug {
   margin: 0;
   padding: 8px 12px;
   font-family: var(--font-mono, monospace);
@@ -117,7 +117,7 @@
   white-space: pre-wrap;
   color: var(--text-primary);
 }
-.codez-webview-frame {
+.agentz-webview-frame {
   width: 100%;
   height: 200px;
   border: 1px solid var(--border);
@@ -126,16 +126,16 @@
 }
 
 /* Tree */
-.codez-tree { font-size: 13px; }
-.codez-tree-row { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; }
-.codez-tree-row:hover { background: var(--bg-hover); }
-.codez-tree-twist { width: 12px; opacity: 0.7; }
-.codez-tree-icon { opacity: 0.7; font-size: 11px; }
-.codez-tree-desc { opacity: 0.5; font-size: 12px; }
-.codez-tree-empty, .codez-tree-label { color: var(--text-primary); }
-.codez-scm-group-label { padding: 4px 12px; font-size: 12px; font-weight: 600; }
-.codez-scm-resource { padding: 2px 22px; font-size: 12px; color: var(--text-secondary); }
-.codez-ext-panel-count {
+.agentz-tree { font-size: 13px; }
+.agentz-tree-row { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; }
+.agentz-tree-row:hover { background: var(--bg-hover); }
+.agentz-tree-twist { width: 12px; opacity: 0.7; }
+.agentz-tree-icon { opacity: 0.7; font-size: 11px; }
+.agentz-tree-desc { opacity: 0.5; font-size: 12px; }
+.agentz-tree-empty, .agentz-tree-label { color: var(--text-primary); }
+.agentz-scm-group-label { padding: 4px 12px; font-size: 12px; font-weight: 600; }
+.agentz-scm-resource { padding: 2px 22px; font-size: 12px; color: var(--text-secondary); }
+.agentz-ext-panel-count {
   margin-left: 5px;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
@@ -143,10 +143,10 @@
   padding: 0 6px;
   font-size: 11px;
 }
-.codez-test-run { background: none; border: none; color: var(--success); cursor: pointer; }
+.agentz-test-run { background: none; border: none; color: var(--success); cursor: pointer; }
 
 /* Breakpoint glyph in the editor gutter */
-.codez-bp-glyph {
+.agentz-bp-glyph {
   background: var(--error);
   border-radius: 50%;
   width: 10px !important;
@@ -156,21 +156,21 @@
 }
 
 /* Debug view */
-.codez-debug-view { padding: 4px 8px; }
-.codez-debug-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
-.codez-debug-toolbar button {
+.agentz-debug-view { padding: 4px 8px; }
+.agentz-debug-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+.agentz-debug-toolbar button {
   background: var(--bg-tertiary); border: none; color: var(--text-primary);
   width: 26px; height: 24px; border-radius: 4px; cursor: pointer;
 }
-.codez-debug-toolbar button:hover:not(:disabled) { background: var(--bg-hover); }
-.codez-debug-toolbar button:disabled { opacity: 0.4; cursor: default; }
-.codez-debug-stop { color: var(--error) !important; }
-.codez-debug-state { font-size: 12px; opacity: 0.7; margin-left: 6px; }
-.codez-debug-idle { font-size: 12px; opacity: 0.6; }
-.codez-debug-cols { display: flex; gap: 12px; }
-.codez-debug-col { flex: 1; min-width: 0; }
-.codez-debug-frame, .codez-debug-var { font-size: 12px; padding: 2px 0; }
-.codez-debug-var { display: flex; gap: 8px; }
-.codez-debug-var-name { color: var(--accent-hover); }
-.codez-debug-var-val { color: var(--text-secondary); }
-.codez-debug-muted { opacity: 0.5; font-size: 12px; }
+.agentz-debug-toolbar button:hover:not(:disabled) { background: var(--bg-hover); }
+.agentz-debug-toolbar button:disabled { opacity: 0.4; cursor: default; }
+.agentz-debug-stop { color: var(--error) !important; }
+.agentz-debug-state { font-size: 12px; opacity: 0.7; margin-left: 6px; }
+.agentz-debug-idle { font-size: 12px; opacity: 0.6; }
+.agentz-debug-cols { display: flex; gap: 12px; }
+.agentz-debug-col { flex: 1; min-width: 0; }
+.agentz-debug-frame, .agentz-debug-var { font-size: 12px; padding: 2px 0; }
+.agentz-debug-var { display: flex; gap: 8px; }
+.agentz-debug-var-name { color: var(--accent-hover); }
+.agentz-debug-var-val { color: var(--text-secondary); }
+.agentz-debug-muted { opacity: 0.5; font-size: 12px; }

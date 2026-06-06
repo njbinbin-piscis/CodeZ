@@ -23,9 +23,9 @@ export default function QuickInput() {
 
   if (inputBox) {
     return (
-      <div className="codez-quick-overlay" onClick={() => inputBox.resolve(undefined)}>
-        <div className="codez-quick" onClick={(e) => e.stopPropagation()}>
-          {inputBox.prompt && <div className="codez-quick-prompt">{inputBox.prompt}</div>}
+      <div className="agentz-quick-overlay" onClick={() => inputBox.resolve(undefined)}>
+        <div className="agentz-quick" onClick={(e) => e.stopPropagation()}>
+          {inputBox.prompt && <div className="agentz-quick-prompt">{inputBox.prompt}</div>}
           <input
             ref={inputRef}
             type={inputBox.password ? "password" : "text"}
@@ -54,8 +54,8 @@ export default function QuickInput() {
   };
 
   return (
-    <div className="codez-quick-overlay" onClick={() => qp.resolve(undefined)}>
-      <div className="codez-quick" onClick={(e) => e.stopPropagation()}>
+    <div className="agentz-quick-overlay" onClick={() => qp.resolve(undefined)}>
+      <div className="agentz-quick" onClick={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
           type="text"
@@ -67,11 +67,11 @@ export default function QuickInput() {
             else if (e.key === "Enter" && qp.canPickMany) accept();
           }}
         />
-        <div className="codez-quick-list">
+        <div className="agentz-quick-list">
           {items.map(({ it, idx }) => (
             <button
               key={idx}
-              className="codez-quick-item"
+              className="agentz-quick-item"
               onClick={() => {
                 if (qp.canPickMany) {
                   setChecked((prev) => {
@@ -85,15 +85,15 @@ export default function QuickInput() {
                 }
               }}
             >
-              {qp.canPickMany && <span className="codez-quick-check">{checked.has(idx) ? "☑" : "☐"}</span>}
-              <span className="codez-quick-label">{it.label}</span>
-              {it.description && <span className="codez-quick-desc">{it.description}</span>}
+              {qp.canPickMany && <span className="agentz-quick-check">{checked.has(idx) ? "☑" : "☐"}</span>}
+              <span className="agentz-quick-label">{it.label}</span>
+              {it.description && <span className="agentz-quick-desc">{it.description}</span>}
             </button>
           ))}
-          {items.length === 0 && <div className="codez-quick-empty">No matching items</div>}
+          {items.length === 0 && <div className="agentz-quick-empty">No matching items</div>}
         </div>
         {qp.canPickMany && (
-          <div className="codez-quick-footer">
+          <div className="agentz-quick-footer">
             <button onClick={accept}>OK ({checked.size})</button>
           </div>
         )}

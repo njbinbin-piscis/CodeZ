@@ -1,4 +1,4 @@
-// CodeZ extension host entrypoint. Launched by the Tauri host as a Node
+// AgentZ extension host entrypoint. Launched by the Tauri host as a Node
 // sidecar; speaks line-delimited-JSON RPC over stdin/stdout.
 
 import { RPCProtocol } from "./common/rpcProtocol";
@@ -12,7 +12,7 @@ function log(msg: string): void {
 }
 
 function main(): void {
-  log("[host] CodeZ extension host starting");
+  log("[host] AgentZ extension host starting");
 
   const transport = new StdioTransport(process.stdin, process.stdout);
   const rpc = new RPCProtocol(transport);

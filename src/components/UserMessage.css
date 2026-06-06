@@ -1,9 +1,9 @@
-.codez-user-message {
+.agentz-user-message {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.codez-ref-chip {
+.agentz-ref-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -22,13 +22,13 @@
   vertical-align: baseline;
 }
 
-.codez-ref-chip svg {
+.agentz-ref-chip svg {
   flex-shrink: 0;
   opacity: 0.85;
   color: var(--accent-hover, #9585ff);
 }
 
-.codez-browser-chip {
+.agentz-browser-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -47,12 +47,12 @@
   vertical-align: baseline;
 }
 
-.codez-browser-chip svg {
+.agentz-browser-chip svg {
   flex-shrink: 0;
   opacity: 0.85;
 }
 
-.codez-terminal-chip {
+.agentz-terminal-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -71,7 +71,7 @@
   vertical-align: baseline;
 }
 
-.codez-terminal-chip svg {
+.agentz-terminal-chip svg {
   flex-shrink: 0;
   opacity: 0.85;
 }

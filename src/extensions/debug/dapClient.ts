@@ -1,5 +1,5 @@
 // Debug Adapter Protocol client. Speaks DAP over the Tauri DAP broker: requests
-// go out via the `dap_send` command; responses + events arrive on `codez:dap`.
+// go out via the `dap_send` command; responses + events arrive on `agentz:dap`.
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -26,7 +26,7 @@ export class DapClient {
   private logHandler: LogHandler | undefined;
 
   async connect(command: string, args: string[], cwd?: string): Promise<void> {
-    this.unlisten = await listen<DapEvent>("codez:dap", (e) => {
+    this.unlisten = await listen<DapEvent>("agentz:dap", (e) => {
       const { channel, data } = e.payload;
       if (channel === "message") this.onMessage(data);
       else if (channel === "log") this.logHandler?.(data);

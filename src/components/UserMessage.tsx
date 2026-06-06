@@ -43,11 +43,11 @@ export default function UserMessage({ text }: { text: string }) {
   const { t } = useTranslation();
   const parts = parseUserMessageRefs(text);
   return (
-    <div className="codez-msg-text codez-user-message">
+    <div className="agentz-msg-text agentz-user-message">
       {parts.map((part, i) => {
         if (part.type === "ref") {
           return (
-            <span key={`${part.path}-${i}`} className="codez-ref-chip" title={part.path}>
+            <span key={`${part.path}-${i}`} className="agentz-ref-chip" title={part.path}>
               <FileRefGlyph isDir={part.isDir} />
               <span>{fileRefChipLabel(part.path, part.isDir)}</span>
             </span>
@@ -57,7 +57,7 @@ export default function UserMessage({ text }: { text: string }) {
           return (
             <span
               key={`${part.selector}-${i}`}
-              className="codez-browser-chip"
+              className="agentz-browser-chip"
               title={part.selector}
             >
               <BrowserElementGlyph />
@@ -69,7 +69,7 @@ export default function UserMessage({ text }: { text: string }) {
           return (
             <span
               key={`${part.snippetId}-${i}`}
-              className="codez-terminal-chip"
+              className="agentz-terminal-chip"
               title={part.snippetId}
             >
               <TerminalGlyph />

@@ -9,8 +9,8 @@ export default function DebugView() {
   const { debugOutput } = useExtensionUi();
 
   return (
-    <div className="codez-debug-view">
-      <div className="codez-debug-toolbar">
+    <div className="agentz-debug-view">
+      <div className="agentz-debug-toolbar">
         {dbg.active ? (
           <>
             <button onClick={() => void debugController.continue()} disabled={dbg.running} title="Continue">
@@ -25,39 +25,39 @@ export default function DebugView() {
             <button onClick={() => void debugController.stepOut()} disabled={dbg.running} title="Step out">
               ⤒
             </button>
-            <button onClick={() => void debugController.stop()} title="Stop" className="codez-debug-stop">
+            <button onClick={() => void debugController.stop()} title="Stop" className="agentz-debug-stop">
               ■
             </button>
-            <span className="codez-debug-state">{dbg.running ? "running" : "paused"}</span>
+            <span className="agentz-debug-state">{dbg.running ? "running" : "paused"}</span>
           </>
         ) : (
-          <span className="codez-debug-idle">No active debug session. Start one via an extension launch config.</span>
+          <span className="agentz-debug-idle">No active debug session. Start one via an extension launch config.</span>
         )}
       </div>
 
       {dbg.active && (
-        <div className="codez-debug-cols">
-          <div className="codez-debug-col">
-            <div className="codez-ext-view-title">Call Stack</div>
+        <div className="agentz-debug-cols">
+          <div className="agentz-debug-col">
+            <div className="agentz-ext-view-title">Call Stack</div>
             {dbg.frames.length === 0 ? (
-              <div className="codez-debug-muted">—</div>
+              <div className="agentz-debug-muted">—</div>
             ) : (
               dbg.frames.map((f) => (
-                <div key={f.id} className="codez-debug-frame">
-                  {f.name} <span className="codez-debug-muted">:{f.line}</span>
+                <div key={f.id} className="agentz-debug-frame">
+                  {f.name} <span className="agentz-debug-muted">:{f.line}</span>
                 </div>
               ))
             )}
           </div>
-          <div className="codez-debug-col">
-            <div className="codez-ext-view-title">Variables</div>
+          <div className="agentz-debug-col">
+            <div className="agentz-ext-view-title">Variables</div>
             {dbg.variables.length === 0 ? (
-              <div className="codez-debug-muted">—</div>
+              <div className="agentz-debug-muted">—</div>
             ) : (
               dbg.variables.map((v) => (
-                <div key={v.name} className="codez-debug-var">
-                  <span className="codez-debug-var-name">{v.name}</span>
-                  <span className="codez-debug-var-val">{v.value}</span>
+                <div key={v.name} className="agentz-debug-var">
+                  <span className="agentz-debug-var-name">{v.name}</span>
+                  <span className="agentz-debug-var-val">{v.value}</span>
                 </div>
               ))
             )}
@@ -65,8 +65,8 @@ export default function DebugView() {
         </div>
       )}
 
-      <div className="codez-ext-view-title">Debug Console</div>
-      <pre className="codez-ext-debug">{debugOutput.length === 0 ? "No debug output." : debugOutput.join("\n")}</pre>
+      <div className="agentz-ext-view-title">Debug Console</div>
+      <pre className="agentz-ext-debug">{debugOutput.length === 0 ? "No debug output." : debugOutput.join("\n")}</pre>
     </div>
   );
 }

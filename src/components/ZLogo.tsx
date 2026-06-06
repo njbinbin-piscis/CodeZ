@@ -1,4 +1,4 @@
-/** Brand mark — stylized “Z” used beside “Code” in the title bar. */
+/** Brand mark — stylized “Z” used beside the AgentZ title in the title bar. */
 
 interface ZLogoProps {
   size?: number;

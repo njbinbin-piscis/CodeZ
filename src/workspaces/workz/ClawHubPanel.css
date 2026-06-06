@@ -1,0 +1,163 @@
+.agentz-clawhub-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.agentz-clawhub-panel {
+  width: min(640px, 100%);
+  max-height: min(80vh, 720px);
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agentz-clawhub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-clawhub-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.agentz-clawhub-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.agentz-clawhub-hint {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.5;
+}
+
+.agentz-clawhub-search {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.agentz-clawhub-search input {
+  flex: 1;
+  background: var(--bg, #0e0e14);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  color: inherit;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.agentz-clawhub-search button {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agentz-clawhub-search button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.agentz-clawhub-error,
+.agentz-clawhub-success {
+  margin: 0 16px 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.agentz-clawhub-error {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.agentz-clawhub-success {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+}
+
+.agentz-clawhub-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+.agentz-clawhub-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 13px;
+}
+
+.agentz-clawhub-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #2a2a38);
+}
+
+.agentz-clawhub-card:last-child {
+  border-bottom: 0;
+}
+
+.agentz-clawhub-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.agentz-clawhub-card-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agentz-clawhub-card-slug {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  font-family: Consolas, monospace;
+}
+
+.agentz-clawhub-card-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+  line-height: 1.45;
+}
+
+.agentz-clawhub-install {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--accent, #7c6af7);
+  color: var(--accent, #7c6af7);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agentz-clawhub-install:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

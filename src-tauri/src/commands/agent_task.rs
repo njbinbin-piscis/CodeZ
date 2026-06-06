@@ -4,9 +4,9 @@
 //! never written to directly, so a misbehaving agent can't corrupt the user's
 //! checkout.
 //!
-//! Worktrees live under `<project>/../.codez-worktrees/task-<id>` (a sibling of
+//! Worktrees live under `<project>/../.agentz-worktrees/task-<id>` (a sibling of
 //! the project, matching the kernel's `.koi-worktrees` convention) on a fresh
-//! `codez/task-<id>` branch.
+//! `workz/task-<id>` branch.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -22,7 +22,7 @@ use crate::commands::data_scope::require_project_dir;
 pub struct AgentTaskInfo {
     /// Short task id (the suffix used in the branch / worktree names).
     pub id: String,
-    /// Branch the worktree is checked out on (`codez/task-<id>`).
+    /// Branch the worktree is checked out on (`workz/task-<id>`).
     pub branch: String,
     /// Absolute path to the worktree directory.
     pub worktree_path: String,
@@ -60,7 +60,7 @@ fn worktrees_root(project: &Path) -> PathBuf {
     project
         .parent()
         .unwrap_or(project)
-        .join(".codez-worktrees")
+        .join(".agentz-worktrees")
 }
 
 fn branch_for(task_id: &str) -> String {
@@ -74,7 +74,7 @@ fn branch_for(task_id: &str) -> String {
             }
         })
         .collect();
-    format!("codez/task-{safe}")
+    format!("workz/task-{safe}")
 }
 
 async fn run_git(dir: &Path, args: &[&str]) -> Result<String, String> {
@@ -176,7 +176,7 @@ pub async fn agent_task_create(
     })
 }
 
-/// List existing CodeZ agent task worktrees.
+/// List existing AgentZ agent task worktrees.
 #[tauri::command]
 pub async fn agent_task_list(project_dir: Option<String>) -> Result<Vec<AgentTaskInfo>, String> {
     let project = require_project_dir(project_dir.as_deref())?;
@@ -195,9 +195,9 @@ pub async fn agent_task_list(project_dir: Option<String>) -> Result<Vec<AgentTas
             cur_path = Some(p.trim().to_string());
         } else if let Some(b) = line.strip_prefix("branch ") {
             let branch = b.trim().trim_start_matches("refs/heads/").to_string();
-            if branch.starts_with("codez/task-") {
+            if branch.starts_with("workz/task-") {
                 if let Some(path) = cur_path.clone() {
-                    let id = branch.trim_start_matches("codez/task-").to_string();
+                    let id = branch.trim_start_matches("workz/task-").to_string();
                     tasks.push(AgentTaskInfo {
                         id,
                         branch,

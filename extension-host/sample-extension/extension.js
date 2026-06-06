@@ -1,4 +1,4 @@
-// A minimal VS Code extension used to smoke-test the CodeZ extension host.
+// A minimal VS Code extension used to smoke-test the AgentZ extension host.
 // It uses only the public `vscode` API surface.
 const vscode = require("vscode");
 
@@ -21,7 +21,7 @@ function activate(context) {
           const item = new vscode.CompletionItem("codezHello", vscode.CompletionItemKind.Snippet);
           item.insertText = new vscode.SnippetString("codezHello(${1:arg})");
           item.detail = `from ${document.languageId} @ ${position.line}:${position.character}`;
-          item.documentation = new vscode.MarkdownString("**CodeZ** sample completion");
+          item.documentation = new vscode.MarkdownString("**AgentZ** sample completion");
           return [item];
         },
       },
@@ -34,7 +34,7 @@ function activate(context) {
       provideHover(document, position) {
         const range = document.getWordRangeAtPosition(position);
         const word = range ? document.getText(range) : "";
-        return new vscode.Hover(new vscode.MarkdownString(`CodeZ hover for \`${word}\``));
+        return new vscode.Hover(new vscode.MarkdownString(`AgentZ hover for \`${word}\``));
       },
     }),
   );

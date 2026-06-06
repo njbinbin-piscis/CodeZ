@@ -1,10 +1,10 @@
 /**
- * Minimal Tauri IPC barrel for CodeZ.
+ * Minimal Tauri IPC barrel for AgentZ.
  *
  * Only the surface the IDE workspace needs today: revealing a path in the OS
  * file manager and a folder picker for choosing the project directory. The
  * full domain services (chat / pool / config) from openpiscis are intentionally
- * left out — CodeZ wires its own host commands as the milestones land.
+ * left out — AgentZ wires its own host commands as the milestones land.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";

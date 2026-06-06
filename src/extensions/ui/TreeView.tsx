@@ -23,19 +23,19 @@ function TreeNode({ viewId, item, depth }: NodeProps) {
   }, [expanded, children, collapsible, loadChildren]);
 
   return (
-    <div className="codez-tree-node">
+    <div className="agentz-tree-node">
       <div
-        className="codez-tree-row"
+        className="agentz-tree-row"
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={() => {
           if (collapsible) setExpanded((v) => !v);
           if (item.command) void extensionService.executeCommand(item.command.id, ...(item.command.arguments ?? []));
         }}
       >
-        <span className="codez-tree-twist">{collapsible ? (expanded ? "▾" : "▸") : ""}</span>
-        {item.iconId && <span className="codez-tree-icon">$({item.iconId})</span>}
-        <span className="codez-tree-label">{item.label}</span>
-        {item.description && <span className="codez-tree-desc">{item.description}</span>}
+        <span className="agentz-tree-twist">{collapsible ? (expanded ? "▾" : "▸") : ""}</span>
+        {item.iconId && <span className="agentz-tree-icon">$({item.iconId})</span>}
+        <span className="agentz-tree-label">{item.label}</span>
+        {item.description && <span className="agentz-tree-desc">{item.description}</span>}
       </div>
       {expanded && children && children.map((c) => <TreeNode key={c.handle} viewId={viewId} item={c} depth={depth + 1} />)}
     </div>
@@ -61,9 +61,9 @@ export default function TreeView({ viewId, roots, version }: TreeViewProps) {
     void extensionService.getTreeChildren(viewId).then((kids) => setRootItems(kids as TreeItemDto[]));
   }, [viewId, roots, version]);
 
-  if (rootItems.length === 0) return <div className="codez-tree-empty">No items</div>;
+  if (rootItems.length === 0) return <div className="agentz-tree-empty">No items</div>;
   return (
-    <div className="codez-tree">
+    <div className="agentz-tree">
       {rootItems.map((item) => (
         <TreeNode key={item.handle} viewId={viewId} item={item} depth={0} />
       ))}

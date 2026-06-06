@@ -1,4 +1,4 @@
-// esbuild bundler for the CodeZ extension host.
+// esbuild bundler for the AgentZ extension host.
 //
 // Produces a single CommonJS file the Tauri host launches with Node:
 //   dist/host.js   — the real extension host entry (stdio RPC transport)

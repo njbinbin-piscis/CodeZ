@@ -1,5 +1,5 @@
 #![recursion_limit = "512"]
-//! CodeZ desktop host — Tauri application entry point.
+//! AgentZ desktop host — Tauri application entry point.
 //!
 //! Bridges the React frontend (IDE / Agent modes) to native capabilities and,
 //! in later milestones, to the shared `piscis-engine` agent kernel. M0 wires
@@ -19,7 +19,7 @@ pub mod tools;
 use state::AppState;
 use tauri::Manager;
 
-/// Build and run the CodeZ desktop application.
+/// Build and run the AgentZ desktop application.
 pub fn run() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
@@ -209,5 +209,5 @@ pub fn run() {
             commands::journal::journal_undo_turn,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running the CodeZ desktop application");
+        .expect("error while running the AgentZ desktop application");
 }

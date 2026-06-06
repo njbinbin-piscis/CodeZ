@@ -53,6 +53,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentz-desktop"
+version = "0.2.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chromiumoxide",
+ "chrono",
+ "ecb",
+ "encoding_rs",
+ "futures",
+ "getrandom 0.2.17",
+ "hex",
+ "md5 0.8.0",
+ "notify",
+ "piscis-core",
+ "piscis-kernel",
+ "portable-pty",
+ "qrcode",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-shell",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+ "tungstenite 0.24.0",
+ "urlencoding",
+ "uuid",
+ "zip",
+]
+
+[[package]]
+name = "agentz-host"
+version = "0.0.1"
+dependencies = [
+ "piscis-core",
+ "piscis-kernel",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -631,53 +678,6 @@ name = "cmov"
 version = "0.5.0-pre.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5417da527aa9bf6a1e10a781231effd1edd3ee82f27d5f8529ac9b279babce96"
-
-[[package]]
-name = "codez-desktop"
-version = "0.2.0"
-dependencies = [
- "aes",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "chromiumoxide",
- "chrono",
- "ecb",
- "encoding_rs",
- "futures",
- "getrandom 0.2.17",
- "hex",
- "md5 0.8.0",
- "notify",
- "piscis-core",
- "piscis-kernel",
- "portable-pty",
- "qrcode",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-shell",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "tracing-subscriber",
- "tungstenite 0.24.0",
- "urlencoding",
- "uuid",
- "zip",
-]
-
-[[package]]
-name = "codez-host"
-version = "0.0.1"
-dependencies = [
- "piscis-core",
- "piscis-kernel",
-]
 
 [[package]]
 name = "combine"

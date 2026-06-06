@@ -157,12 +157,12 @@ export function createApiFactory(services: Services) {
   };
 
   const env = {
-    appName: "CodeZ",
+    appName: "AgentZ",
     appHost: "desktop",
-    uriScheme: "codez",
+    uriScheme: "agentz",
     language: "en",
-    machineId: "codez-machine",
-    sessionId: `codez-${Date.now()}`,
+    machineId: "agentz-machine",
+    sessionId: `agentz-${Date.now()}`,
     isNewAppInstall: false,
     isTelemetryEnabled: false,
     clipboard: {

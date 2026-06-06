@@ -1,4 +1,4 @@
-//! In-process agent runtimes for CodeZ.
+//! In-process agent runtimes for AgentZ.
 //!
 //! [`koi::DesktopInProcessSubagentRuntime`] implements the kernel
 //! [`piscis_core::host::SubagentRuntime`] contract by running Koi turns inside

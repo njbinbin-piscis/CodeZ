@@ -3,7 +3,7 @@
 //! Launches a debug adapter process and brokers its `Content-Length`-framed
 //! DAP messages over a Tauri event channel, mirroring [`ext_host`]. The
 //! renderer's `dapClient` speaks DAP on top: stdout DAP messages are emitted on
-//! `codez:dap`, and the renderer sends requests via [`dap_send`].
+//! `agentz:dap`, and the renderer sends requests via [`dap_send`].
 
 use std::process::Stdio;
 
@@ -18,7 +18,7 @@ use tracing::{info, warn};
 use crate::state::AppState;
 
 /// Tauri event channel carrying DAP messages + logs to the renderer.
-pub const DAP_EVENT: &str = "codez:dap";
+pub const DAP_EVENT: &str = "agentz:dap";
 
 #[derive(Default)]
 pub struct DapManager {

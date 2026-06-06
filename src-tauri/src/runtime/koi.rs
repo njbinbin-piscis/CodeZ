@@ -5,7 +5,7 @@
 //! [`spawn_koi_turn`](SubagentRuntime::spawn_koi_turn) with a fully assembled
 //! system prompt; we run it through the shared kernel headless turn
 //! ([`run_piscis_turn_cancellable`]) against the Koi's project DB and stream
-//! its agent events to the UI over the same `codez:chat-event` channel the IDE
+//! its agent events to the UI over the same `agentz:chat-event` channel the IDE
 //! chat uses.
 
 use std::collections::HashMap;
@@ -32,12 +32,12 @@ use crate::commands::data_scope::{open_project_kernel_state, resolve_global_conf
 
 /// Same channel the IDE chat streams over, so a Koi turn's tokens/tools can be
 /// surfaced in the UI keyed by the Koi's session id.
-const POOL_CHAT_EVENT: &str = "codez:chat-event";
+const POOL_CHAT_EVENT: &str = "agentz:chat-event";
 
 /// Canonical channel every kernel [`PoolEvent`] is fanned out on. The frontend
 /// collaboration board subscribes once and dispatches on the serialized
 /// `kind` tag.
-pub const POOL_EVENT_CHANNEL: &str = "codez:pool-event";
+pub const POOL_EVENT_CHANNEL: &str = "agentz:pool-event";
 
 /// Forwards kernel pool events (todo board, koi status, coordinator lifecycle)
 /// to the UI as a single typed stream.

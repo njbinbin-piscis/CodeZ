@@ -28,7 +28,7 @@ interface InstalledExtensionRaw {
   enabled: boolean;
 }
 
-const CONFIG_KEY = "codez.ext.config";
+const CONFIG_KEY = "agentz.ext.config";
 
 function loadConfig(): Record<string, unknown> {
   try {

@@ -11,7 +11,7 @@ export async function confirmDialog(
 ): Promise<boolean> {
   try {
     return await ask(message, {
-      title: options?.title ?? "CodeZ",
+      title: options?.title ?? "AgentZ",
       kind: "warning",
     });
   } catch {

@@ -78,10 +78,10 @@ const en = {
   },
 
   app: {
-    modeIde: "IDE",
-    modeIdeTitle: "IDE mode (editor-centric)",
-    modeAgent: "Agent",
-    modeAgentTitle: "Agent mode (task-centric)",
+    modeCodeZ: "CodeZ",
+    modeCodeZTitle: "CodeZ mode (editor-centric)",
+    modeWorkZ: "WorkZ",
+    modeWorkZTitle: "WorkZ mode (task-centric)",
     chat: "Chat",
     chatTitle: "Toggle AI chat",
     browserTitle: "Toggle embedded browser",
@@ -194,7 +194,7 @@ const en = {
     configuredOk: "LLM configured — Chat is ready",
     configuredMissing: "No API key yet — fill in a key below",
     configDir: "Config directory",
-    configDirHint: "Set env var CODEZ_CONFIG_DIR to reuse an existing openpiscis config directory.",
+    configDirHint: "Set env var AGENTZ_CONFIG_DIR to reuse an existing openpiscis config directory.",
     aiProvider: "Model provider",
     provider: "Provider",
     model: "Model",
@@ -265,7 +265,7 @@ const en = {
 
   rules: {
     title: "Project rules",
-    hint: "Rules live in .codez/rules/ (also reads .cursor/rules/) and are injected as system constraints for the agent.",
+    hint: "Rules live in .agentz/rules/ (also reads .cursor/rules/) and are injected as system constraints for the agent.",
     empty: "No rules yet. Create one below.",
     name: "File name",
     content: "Rule content (Markdown)",
@@ -279,7 +279,7 @@ const en = {
 
   hooks: {
     title: "Hooks",
-    hint: "Hooks live in .codez/hooks.json. Output of beforeAgentTurn hooks is injected into the agent context.",
+    hint: "Hooks live in .agentz/hooks.json. Output of beforeAgentTurn hooks is injected into the agent context.",
     empty: "No hooks yet. Create one below.",
     namePlaceholder: "Hook name",
     enabledLabel: "Enabled",
@@ -365,7 +365,7 @@ const en = {
     untitled: "Untitled",
     delete: "Delete",
     empty: "Ask about the codebase or request a change. Reference files with @path/to/file. The agent edits files in place; the editor reloads automatically.",
-    placeholder: "Ask CodeZ… (@file for context, Enter to send, Shift+Enter for newline)",
+    placeholder: "Ask AgentZ… (@file for context, Enter to send, Shift+Enter for newline)",
     placeholderFollowUp: "Add a follow-up…",
     placeholderPlan: "Describe the task — Plan mode explores and builds a todo list…",
     send: "Send",
@@ -376,7 +376,7 @@ const en = {
     agentRole: "Agent",
     placeholderBusyQueue: "Agent is working — messages queue…",
     queue: "Queue",
-    modeAgent: "Agent",
+    modeWorkZ: "WorkZ",
     modePlan: "Plan",
     modeAgentHint: "Agent mode: read/write files and run commands",
     modePlanHint: "Plan mode: read-only exploration + plan todo list, no file edits",
@@ -456,7 +456,7 @@ const en = {
     review: "Review",
     repoWiki: "Repo Wiki",
     repoWikiBusy: "Generating…",
-    repoWikiHint: "Generate a module/architecture overview from the code index (writes .codez/REPO_WIKI.md)",
+    repoWikiHint: "Generate a module/architecture overview from the code index (writes .agentz/REPO_WIKI.md)",
     reviewTitle: "Review task changes",
     reviewEmpty: "No changes on this task branch yet.",
     reviewBranch: "Branch",

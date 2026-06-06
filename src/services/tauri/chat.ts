@@ -5,8 +5,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-/** Mirror of the backend `codez:chat-event` channel name. */
-export const CHAT_EVENT = "codez:chat-event";
+/** Mirror of the backend `agentz:chat-event` channel name. */
+export const CHAT_EVENT = "agentz:chat-event";
 
 export interface ChatAttachment {
   media_type: string;

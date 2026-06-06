@@ -57,13 +57,13 @@ function ChipGlyph({ chip }: { chip: ComposerChip }) {
 function chipClassName(chip: ComposerChip): string {
   switch (chip.kind) {
     case "browser-element":
-      return "codez-composer-chip-browser";
+      return "agentz-composer-chip-browser";
     case "file-ref":
-      return "codez-composer-chip-file";
+      return "agentz-composer-chip-file";
     case "terminal-snippet":
-      return "codez-composer-chip-terminal";
+      return "agentz-composer-chip-terminal";
     case "image-attachment":
-      return "codez-composer-chip-image";
+      return "agentz-composer-chip-image";
   }
 }
 
@@ -104,7 +104,7 @@ function ModeIcon({ mode }: { mode: ChatMode }) {
       </svg>
     );
   }
-  return <span className="codez-mode-infinity">∞</span>;
+  return <span className="agentz-mode-infinity">∞</span>;
 }
 
 function ComposerMenu({
@@ -136,25 +136,25 @@ function ComposerMenu({
   }, [open]);
 
   return (
-    <div className={`codez-composer-menu ${variant}`} ref={rootRef}>
+    <div className={`agentz-composer-menu ${variant}`} ref={rootRef}>
       <button
         type="button"
-        className="codez-composer-menu-trigger"
+        className="agentz-composer-menu-trigger"
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         {variant === "pill" && modeIcon && (
-          <span className="codez-composer-menu-icon">
+          <span className="agentz-composer-menu-icon">
             <ModeIcon mode={modeIcon} />
           </span>
         )}
-        <span className="codez-composer-menu-label">{selected?.label}</span>
+        <span className="agentz-composer-menu-label">{selected?.label}</span>
         <ChevronDown />
       </button>
       {open && (
-        <div className="codez-composer-menu-popup" role="listbox">
+        <div className="agentz-composer-menu-popup" role="listbox">
           {options.map((opt) => (
             <button
               key={opt.id || "__default"}
@@ -167,8 +167,8 @@ function ComposerMenu({
                 setOpen(false);
               }}
             >
-              <span className="codez-composer-menu-option-label">{opt.label}</span>
-              {opt.hint && <span className="codez-composer-menu-option-hint">{opt.hint}</span>}
+              <span className="agentz-composer-menu-option-label">{opt.label}</span>
+              {opt.hint && <span className="agentz-composer-menu-option-hint">{opt.hint}</span>}
             </button>
           ))}
         </div>
@@ -213,26 +213,26 @@ function SkillsMenu({ selector, disabled }: { selector: SkillSelector; disabled?
 
   const count = selected.length;
   return (
-    <div className="codez-composer-menu text" ref={rootRef}>
+    <div className="agentz-composer-menu text" ref={rootRef}>
       <button
         type="button"
-        className={`codez-composer-menu-trigger${count > 0 ? " has-skills" : ""}`}
+        className={`agentz-composer-menu-trigger${count > 0 ? " has-skills" : ""}`}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         title={label}
       >
-        <span className="codez-composer-menu-icon">
+        <span className="agentz-composer-menu-icon">
           <SkillGlyph />
         </span>
-        <span className="codez-composer-menu-label">{count > 0 ? `${label} · ${count}` : label}</span>
+        <span className="agentz-composer-menu-label">{count > 0 ? `${label} · ${count}` : label}</span>
         <ChevronDown />
       </button>
       {open && (
-        <div className="codez-composer-menu-popup" role="listbox" aria-multiselectable="true">
+        <div className="agentz-composer-menu-popup" role="listbox" aria-multiselectable="true">
           {options.length === 0 ? (
-            <div className="codez-composer-menu-empty">{emptyHint ?? "—"}</div>
+            <div className="agentz-composer-menu-empty">{emptyHint ?? "—"}</div>
           ) : (
             options.map((opt) => {
               const active = selected.includes(opt.id);
@@ -242,16 +242,16 @@ function SkillsMenu({ selector, disabled }: { selector: SkillSelector; disabled?
                   type="button"
                   role="option"
                   aria-selected={active}
-                  className={`codez-skill-option${active ? " active" : ""}`}
+                  className={`agentz-skill-option${active ? " active" : ""}`}
                   onClick={() => toggle(opt.id)}
                 >
-                  <span className="codez-skill-option-head">
-                    <span className="codez-composer-menu-check" aria-hidden>
+                  <span className="agentz-skill-option-head">
+                    <span className="agentz-composer-menu-check" aria-hidden>
                       {active ? "✓" : ""}
                     </span>
-                    <span className="codez-composer-menu-option-label">{opt.label}</span>
+                    <span className="agentz-composer-menu-option-label">{opt.label}</span>
                   </span>
-                  {opt.hint && <span className="codez-composer-menu-option-hint">{opt.hint}</span>}
+                  {opt.hint && <span className="agentz-composer-menu-option-hint">{opt.hint}</span>}
                 </button>
               );
             })
@@ -344,26 +344,26 @@ export default function ChatComposer({
   const locked = inputDisabled && !busy;
 
   return (
-    <div className="codez-composer-wrap">
-      {modeNotice && <div className="codez-mode-notice">{modeNotice}</div>}
+    <div className="agentz-composer-wrap">
+      {modeNotice && <div className="agentz-mode-notice">{modeNotice}</div>}
       <div
-        className={`codez-composer${modeSelector?.chatMode === "plan" ? " is-plan" : ""}${busy ? " is-busy" : ""}${composerClassName ? ` ${composerClassName}` : ""}`}
+        className={`agentz-composer${modeSelector?.chatMode === "plan" ? " is-plan" : ""}${busy ? " is-busy" : ""}${composerClassName ? ` ${composerClassName}` : ""}`}
       >
         {chips.length > 0 && (
-          <div className="codez-composer-chips">
+          <div className="agentz-composer-chips">
             {chips.map((chip) =>
               chip.kind === "image-attachment" ? (
                 <span
                   key={chip.id}
-                  className={`codez-composer-chip ${chipClassName(chip)}`}
+                  className={`agentz-composer-chip ${chipClassName(chip)}`}
                   title={chipTitle(chip) ?? chipDisplayLabel(chip, t)}
                 >
-                  <img src={chip.preview} alt="" className="codez-composer-chip-thumb" />
-                  <span className="codez-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
+                  <img src={chip.preview} alt="" className="agentz-composer-chip-thumb" />
+                  <span className="agentz-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
                   {onRemoveChip && !busy && !locked && (
                     <button
                       type="button"
-                      className="codez-composer-chip-remove"
+                      className="agentz-composer-chip-remove"
                       onClick={() => onRemoveChip(chip.id)}
                       aria-label={t("chat.removeChip")}
                     >
@@ -374,15 +374,15 @@ export default function ChatComposer({
               ) : (
                 <span
                   key={chip.id}
-                  className={`codez-composer-chip ${chipClassName(chip)}`}
+                  className={`agentz-composer-chip ${chipClassName(chip)}`}
                   title={chipTitle(chip)}
                 >
                   <ChipGlyph chip={chip} />
-                  <span className="codez-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
+                  <span className="agentz-composer-chip-label">{chipDisplayLabel(chip, t)}</span>
                   {onRemoveChip && !busy && !locked && (
                     <button
                       type="button"
-                      className="codez-composer-chip-remove"
+                      className="agentz-composer-chip-remove"
                       onClick={() => onRemoveChip(chip.id)}
                       aria-label={t("chat.removeChip")}
                     >
@@ -396,18 +396,18 @@ export default function ChatComposer({
         )}
 
         {attachment && (
-          <div className="codez-attachment-preview">
+          <div className="agentz-attachment-preview">
             {attachmentPreview ? (
-              <img src={attachmentPreview} className="codez-attachment-thumb" alt={attachment.filename ?? ""} />
+              <img src={attachmentPreview} className="agentz-attachment-thumb" alt={attachment.filename ?? ""} />
             ) : (
-              <span className="codez-attachment-file-icon">📎</span>
+              <span className="agentz-attachment-file-icon">📎</span>
             )}
-            <span className="codez-attachment-name" title={attachment.path ?? ""}>
+            <span className="agentz-attachment-name" title={attachment.path ?? ""}>
               {attachment.filename ?? attachment.path}
             </span>
             <button
               type="button"
-              className="codez-attachment-remove"
+              className="agentz-attachment-remove"
               onClick={onClearAttachment}
               title={removeAttachmentTitle}
             >
@@ -420,7 +420,7 @@ export default function ChatComposer({
 
         <textarea
           ref={textareaRef}
-          className="codez-composer-input"
+          className="agentz-composer-input"
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
@@ -430,8 +430,8 @@ export default function ChatComposer({
           disabled={busy || locked}
         />
 
-        <div className="codez-composer-footer">
-          <div className="codez-composer-footer-left">
+        <div className="agentz-composer-footer">
+          <div className="agentz-composer-footer-left">
             {modeSelector && (
               <ComposerMenu
                 value={modeSelector.chatMode}
@@ -461,7 +461,7 @@ export default function ChatComposer({
             {skillSelector && <SkillsMenu selector={skillSelector} disabled={busy || locked} />}
             <button
               type="button"
-              className="codez-composer-icon-btn"
+              className="agentz-composer-icon-btn"
               onClick={onAttach}
               disabled={busy || locked}
               title={attachTitle}
@@ -471,10 +471,10 @@ export default function ChatComposer({
               </svg>
             </button>
           </div>
-          <div className="codez-composer-footer-right">
-            {busy && <span className="codez-composer-spinner" aria-hidden />}
+          <div className="agentz-composer-footer-right">
+            {busy && <span className="agentz-composer-spinner" aria-hidden />}
             {busy ? (
-              <button type="button" className="codez-composer-stop-icon" onClick={onStop} title={stopTitle}>
+              <button type="button" className="agentz-composer-stop-icon" onClick={onStop} title={stopTitle}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                   <rect x="6" y="6" width="12" height="12" rx="1" />
                 </svg>
@@ -482,7 +482,7 @@ export default function ChatComposer({
             ) : (
               <button
                 type="button"
-                className={`codez-composer-send-icon${canSend ? " ready" : ""}`}
+                className={`agentz-composer-send-icon${canSend ? " ready" : ""}`}
                 onClick={onSubmit}
                 disabled={!canSend || locked}
                 title={sendTitle}

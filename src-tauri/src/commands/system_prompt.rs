@@ -1,4 +1,4 @@
-//! CodeZ agent system prompts — behaviour rules distilled from Cursor-style
+//! AgentZ agent system prompts — behaviour rules distilled from Cursor-style
 //! operational guidance and Piscis collaboration principles.
 
 /// Main Agent-mode system prompt. `extra_context` carries skills, project
@@ -14,7 +14,7 @@ pub fn agent_system_prompt(
     let workspace_line = workspace_section(workspace_root, allow_outside);
 
     let mut body = format!(
-        "You are Piscis, an AI coding assistant embedded in CodeZ IDE.\n\
+        "You are Piscis, an AI coding assistant embedded in AgentZ IDE.\n\
          Today's date: {today}{workspace_line}\n\n\
          ## Goal\n\
          Follow the user's instructions. Each user message is a task to complete.\n\n\
@@ -99,7 +99,7 @@ pub fn plan_mode_context() -> &'static str {
 /// Read-only research sub-agent spawned via `delegate`.
 pub fn subagent_system_prompt(workspace_root: &str) -> String {
     format!(
-        "You are a focused research sub-agent inside CodeZ. A parent agent has \
+        "You are a focused research sub-agent inside AgentZ. A parent agent has \
          delegated a scoped investigation to you.\n\n\
          ## Constraints\n\
          - READ-ONLY: use `file_read`, `file_list`, `file_search`, `file_diff`, \

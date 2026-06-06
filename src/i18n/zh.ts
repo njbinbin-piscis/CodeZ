@@ -78,10 +78,10 @@ const zh = {
   },
 
   app: {
-    modeIde: "IDE",
-    modeIdeTitle: "IDE 模式（以编辑器为中心）",
-    modeAgent: "Agent",
-    modeAgentTitle: "Agent 模式（以任务为中心）",
+    modeCodeZ: "CodeZ",
+    modeCodeZTitle: "CodeZ 模式（以编辑器为中心）",
+    modeWorkZ: "WorkZ",
+    modeWorkZTitle: "WorkZ 模式（以任务为中心）",
     chat: "Chat",
     chatTitle: "切换 AI 聊天侧栏",
     browserTitle: "切换内置浏览器",
@@ -194,7 +194,7 @@ const zh = {
     configuredOk: "LLM 已配置，Chat 可用",
     configuredMissing: "尚未配置 API Key，请先填写下方密钥",
     configDir: "配置文件目录",
-    configDirHint: "可通过环境变量 CODEZ_CONFIG_DIR 指向 openpiscis 等已有配置目录。",
+    configDirHint: "可通过环境变量 AGENTZ_CONFIG_DIR 指向 openpiscis 等已有配置目录。",
     aiProvider: "模型提供商",
     provider: "Provider",
     model: "Model",
@@ -264,7 +264,7 @@ const zh = {
 
   rules: {
     title: "项目规则",
-    hint: "规则保存在 .codez/rules/ 下（兼容 .cursor/rules/），会作为系统约束注入到 Agent。",
+    hint: "规则保存在 .agentz/rules/ 下（兼容 .cursor/rules/），会作为系统约束注入到 Agent。",
     empty: "暂无规则。点击下方新建一条。",
     name: "文件名",
     content: "规则内容（Markdown）",
@@ -278,7 +278,7 @@ const zh = {
 
   hooks: {
     title: "钩子（Hooks）",
-    hint: "钩子保存在 .codez/hooks.json。beforeAgentTurn 钩子的输出会注入到 Agent 上下文。",
+    hint: "钩子保存在 .agentz/hooks.json。beforeAgentTurn 钩子的输出会注入到 Agent 上下文。",
     empty: "暂无钩子。点击下方新建一条。",
     namePlaceholder: "钩子名称",
     enabledLabel: "启用",
@@ -364,7 +364,7 @@ const zh = {
     untitled: "未命名",
     delete: "删除",
     empty: "询问代码库或请求修改。用 @path/to/file 引用文件。Agent 会直接修改文件，编辑器会自动刷新。",
-    placeholder: "向 CodeZ 提问…（@文件 添加上下文，Enter 发送，Shift+Enter 换行）",
+    placeholder: "向 AgentZ 提问…（@文件 添加上下文，Enter 发送，Shift+Enter 换行）",
     placeholderFollowUp: "输入追问…",
     placeholderPlan: "描述任务，Plan 模式将探索代码并制定计划…",
     send: "发送",
@@ -375,7 +375,7 @@ const zh = {
     agentRole: "Agent",
     placeholderBusyQueue: "Agent 正在执行 — 新消息将排队…",
     queue: "排队",
-    modeAgent: "Agent",
+    modeWorkZ: "WorkZ",
     modePlan: "Plan",
     modeAgentHint: "Agent 模式：可读写文件并执行命令",
     modePlanHint: "Plan 模式：只读探索 + 计划待办列表，不修改文件",
@@ -455,7 +455,7 @@ const zh = {
     review: "评审",
     repoWiki: "仓库 Wiki",
     repoWikiBusy: "生成中…",
-    repoWikiHint: "基于代码索引生成模块/架构概览（写入 .codez/REPO_WIKI.md）",
+    repoWikiHint: "基于代码索引生成模块/架构概览（写入 .agentz/REPO_WIKI.md）",
     reviewTitle: "评审任务变更",
     reviewEmpty: "该任务分支暂无变更。",
     reviewBranch: "分支",

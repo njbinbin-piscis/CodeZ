@@ -1,4 +1,4 @@
-//! Shared application state for the CodeZ desktop host.
+//! Shared application state for the AgentZ desktop host.
 //!
 //! Deliberately small: only what the IDE workspace commands need. As later
 //! milestones land (agent runtime, indexing, settings) this grows alongside

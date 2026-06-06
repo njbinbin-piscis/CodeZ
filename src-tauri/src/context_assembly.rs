@@ -1,6 +1,6 @@
-//! Host-side context assembly for CodeZ chat turns.
+//! Host-side context assembly for AgentZ chat turns.
 //!
-//! Previously CodeZ handed the kernel the latest ~500 DB rows as plain text and
+//! Previously AgentZ handed the kernel the latest ~500 DB rows as plain text and
 //! relied solely on the kernel's in-loop compaction. This module mirrors
 //! openpiscis's host pre-assembly so the *first* request of a (resumed) session
 //! is already controlled:

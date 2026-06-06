@@ -1,0 +1,119 @@
+.agentz-markdown {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text, #e8e8f0);
+  word-break: break-word;
+}
+
+.agentz-markdown p {
+  margin: 0 0 8px;
+}
+
+.agentz-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.agentz-markdown ul,
+.agentz-markdown ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.agentz-markdown li {
+  margin: 2px 0;
+}
+
+.agentz-markdown h1,
+.agentz-markdown h2,
+.agentz-markdown h3 {
+  font-size: 14px;
+  margin: 12px 0 6px;
+}
+
+.agentz-markdown :not(pre) > code {
+  background: var(--bg-elev-2, #1b1b26);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.agentz-markdown blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-markdown table {
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+
+.agentz-markdown th,
+.agentz-markdown td {
+  border: 1px solid var(--border, #2a2a38);
+  padding: 4px 8px;
+}
+
+.agentz-codeblock {
+  position: relative;
+  margin: 8px 0;
+}
+
+.agentz-codeblock pre {
+  margin: 0;
+  background: #0c0c12;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.agentz-codeblock pre code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  background: transparent;
+  padding: 0;
+}
+
+.agentz-codeblock-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 1;
+}
+
+.agentz-codeblock:hover .agentz-codeblock-actions {
+  opacity: 1;
+}
+
+.agentz-codeblock-copy,
+.agentz-codeblock-apply {
+  background: var(--bg-elev-2, #1b1b26);
+  border: 1px solid var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agentz-codeblock-copy:hover {
+  color: var(--text, #e8e8f0);
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-codeblock-apply {
+  color: #7c6af7;
+  border-color: #7c6af7;
+}
+
+.agentz-codeblock-apply:hover {
+  background: rgba(124, 106, 247, 0.18);
+  color: #fff;
+}
