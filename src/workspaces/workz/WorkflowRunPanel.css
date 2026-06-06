@@ -148,6 +148,10 @@
   color: var(--text, #e8e8f0);
 }
 
+.agentz-wfrun-hrow.skipped {
+  color: #f7b84e;
+}
+
 .agentz-wfrun-hnode {
   font-weight: 600;
 }

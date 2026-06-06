@@ -97,6 +97,13 @@ pub struct WorkflowNode {
     /// Blackboard key the agent's output is written to (defaults to node id).
     #[serde(default)]
     pub output_key: Option<String>,
+    /// Retry budget if the agent turn fails (default 0 — no retry).
+    #[serde(default)]
+    pub max_retries: u32,
+    /// What to do once retries are exhausted: `fail` (default, abort the run) or
+    /// `skip` (record the error, write an empty output, advance to the next node).
+    #[serde(default)]
+    pub on_error: Option<String>,
 
     // ── branch ──
     #[serde(default)]

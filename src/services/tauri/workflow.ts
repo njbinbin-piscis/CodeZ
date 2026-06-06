@@ -35,6 +35,10 @@ export interface WorkflowNode {
   agent_id?: string | null;
   prompt_template?: string | null;
   output_key?: string | null;
+  /** Retry budget if the agent turn fails (default 0). */
+  max_retries?: number;
+  /** `fail` (default, abort run) or `skip` (record error, advance). */
+  on_error?: string | null;
   // branch
   evaluator?: BranchEvaluator | null;
   cases?: BranchCase[];

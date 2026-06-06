@@ -377,6 +377,24 @@ export default function WorkflowDesigner({ graph, agents, onChange }: Props) {
                     value={active.output_key ?? ""}
                     onChange={(e) => updateNode(active.id, { output_key: e.target.value })}
                   />
+                  <label>{t("workflow.maxRetries")}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={active.max_retries ?? 0}
+                    onChange={(e) =>
+                      updateNode(active.id, { max_retries: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                  />
+                  <label>{t("workflow.onError")}</label>
+                  <select
+                    value={active.on_error ?? "fail"}
+                    onChange={(e) => updateNode(active.id, { on_error: e.target.value })}
+                  >
+                    <option value="fail">{t("workflow.onErrorFail")}</option>
+                    <option value="skip">{t("workflow.onErrorSkip")}</option>
+                  </select>
+                  <p className="agentz-settings-hint">{t("workflow.onErrorHint")}</p>
                 </>
               )}
 

@@ -29,6 +29,12 @@ use crate::runtime::koi::DesktopInProcessSubagentRuntime;
 
 const WORKFLOW_EVENT_CHANNEL: &str = "agentz:workflow-event";
 
+/// Result of driving an agent node through its retry/skip policy.
+enum AgentOutcome {
+    Ok(String),
+    Skipped(String),
+}
+
 fn cancel_registry() -> &'static Mutex<HashSet<String>> {
     static REG: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     REG.get_or_init(|| Mutex::new(HashSet::new()))
@@ -162,22 +168,58 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                 return Ok(());
             }
             "agent" => {
-                let summary = match run_agent_node(&app, &runtime, &mut run, &node).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        if is_cancelled(run_id) {
-                            clear_cancel(run_id);
-                            run.status = "cancelled".to_string();
-                            finish(&app, &mut run, "cancelled", Some(&cursor))?;
-                            return Ok(());
+                // Node-level fault tolerance: retry up to `max_retries`, then
+                // honor `on_error` (fail = abort run, skip = record + advance).
+                let mut attempt = 0u32;
+                let outcome: AgentOutcome = loop {
+                    match run_agent_node(&app, &runtime, &mut run, &node).await {
+                        Ok(s) => break AgentOutcome::Ok(s),
+                        Err(e) => {
+                            if is_cancelled(run_id) {
+                                clear_cancel(run_id);
+                                run.status = "cancelled".to_string();
+                                finish(&app, &mut run, "cancelled", Some(&cursor))?;
+                                return Ok(());
+                            }
+                            if attempt < node.max_retries {
+                                attempt += 1;
+                                emit(
+                                    &app,
+                                    &run,
+                                    "retry",
+                                    Some(&cursor),
+                                    Some(&format!("attempt {}/{}: {}", attempt, node.max_retries, e)),
+                                );
+                                tokio::time::sleep(Duration::from_millis(400)).await;
+                                continue;
+                            }
+                            if node.on_error.as_deref() == Some("skip") {
+                                break AgentOutcome::Skipped(e);
+                            }
+                            return Err(e);
                         }
-                        return Err(e);
                     }
                 };
                 run.cursor = run.graph.next_of(&cursor);
-                record(&mut run, &node, Some(summary.clone()), None);
-                save_run(&app, &run)?;
-                emit(&app, &run, "node", Some(&cursor), Some(&summary));
+                match outcome {
+                    AgentOutcome::Ok(summary) => {
+                        record(&mut run, &node, Some(summary.clone()), None);
+                        save_run(&app, &run)?;
+                        emit(&app, &run, "node", Some(&cursor), Some(&summary));
+                    }
+                    AgentOutcome::Skipped(err) => {
+                        let key = node
+                            .output_key
+                            .clone()
+                            .filter(|k| !k.trim().is_empty())
+                            .unwrap_or_else(|| node.id.clone());
+                        run.blackboard.insert(key, Value::String(String::new()));
+                        let note = format!("skipped after error: {}", err);
+                        record(&mut run, &node, Some(note.clone()), Some("skipped".into()));
+                        save_run(&app, &run)?;
+                        emit(&app, &run, "skipped", Some(&cursor), Some(&note));
+                    }
+                }
             }
             "branch" => {
                 let label = match evaluate_branch(&app, &runtime, &mut run, &node).await {

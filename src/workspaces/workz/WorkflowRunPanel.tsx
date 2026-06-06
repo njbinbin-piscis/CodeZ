@@ -155,8 +155,13 @@ export default function WorkflowRunPanel({ runId, onClose }: Props) {
             <h4>{t("workflow.steps")}</h4>
             <div className="agentz-wfrun-history">
               {(run?.history ?? []).map((h, i) => (
-                <div key={i} className="agentz-wfrun-hrow">
-                  <span className="agentz-wfrun-hglyph">{KIND_GLYPH[h.kind] ?? "•"}</span>
+                <div
+                  key={i}
+                  className={`agentz-wfrun-hrow ${h.label === "skipped" ? "skipped" : ""}`}
+                >
+                  <span className="agentz-wfrun-hglyph">
+                    {h.label === "skipped" ? "⚠" : (KIND_GLYPH[h.kind] ?? "•")}
+                  </span>
                   <span className="agentz-wfrun-hnode">{h.node_id}</span>
                   {h.label && <span className="agentz-wfrun-hlabel">{h.label}</span>}
                   {h.summary && <span className="agentz-wfrun-hsummary">{h.summary}</span>}
