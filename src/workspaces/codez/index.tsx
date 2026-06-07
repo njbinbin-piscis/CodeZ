@@ -17,6 +17,8 @@ import { BROWSER_TAB_PATH, isBrowserTab } from "./browserTab";
 import { browserClose } from "../../services/tauri/browser";
 import type { PickedElement } from "../../services/tauri/browser";
 import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
+import type { EditorSnapshot, LayoutSnapshot } from "../../services/tauri/workspace";
+import { editorSnapshotFromTabs } from "../../services/tauri/workspace";
 import "./IDE.css";
 
 type SidebarTab = "explorer" | "search" | "git" | "extensions";
@@ -45,6 +47,16 @@ interface IDEProps {
   onBrowserOpenChange?: (open: boolean) => void;
   onSendElementToChat?: (el: PickedElement) => void;
   onScreenshotToChat?: (base64: string) => void;
+  /** One-shot editor restore after app startup (hot exit). */
+  workspaceRestore?: { key: number; editor: EditorSnapshot; layout: LayoutSnapshot } | null;
+  /** Debounced editor + IDE layout patch for workspace persistence. */
+  onWorkspacePatch?: (patch: {
+    editor: EditorSnapshot;
+    layout: Pick<
+      LayoutSnapshot,
+      "sidebar_tab" | "sidebar_collapsed" | "sidebar_width" | "bottom_open" | "bottom_tab" | "bottom_height"
+    >;
+  }) => void;
 }
 
 /** Handle to the imperative methods exposed by FileTree via its root ref. */
@@ -79,6 +91,8 @@ export default function CodeZWorkspace({
   onBrowserOpenChange,
   onSendElementToChat,
   onScreenshotToChat,
+  workspaceRestore = null,
+  onWorkspacePatch,
 }: IDEProps) {
   const { t } = useTranslation();
 
@@ -171,20 +185,99 @@ export default function CodeZWorkspace({
   const handledOpenPathNonce = useRef(0);
   const openFileRef = useRef<(path: string, readOnly?: boolean) => Promise<void>>(async () => {});
 
-  // Reset editor state when the project folder changes or is closed.
+  const prevProjectDirRef = useRef<string | null>(null);
+  const handledRestoreKeyRef = useRef(0);
+
+  // Reset editor state when switching projects or closing the folder.
   useEffect(() => {
     handledOpenPathNonce.current = 0;
-    setTabs([]);
-    setActiveTabPath(null);
-    setFileLoadError(null);
-    setReveal(null);
-    setFileTree([]);
-    setGitModified(new Set());
-    setGitAdded(new Set());
-    setFileTreeSelection(new Set());
-    setBottomOpen(false);
-    setBottomTab("terminal");
+    if (!projectDir) {
+      prevProjectDirRef.current = null;
+      setTabs([]);
+      setActiveTabPath(null);
+      setFileLoadError(null);
+      setReveal(null);
+      setFileTree([]);
+      setGitModified(new Set());
+      setGitAdded(new Set());
+      setFileTreeSelection(new Set());
+      setBottomOpen(false);
+      setBottomTab("terminal");
+      return;
+    }
+    const prev = prevProjectDirRef.current;
+    const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (prev && norm(prev) !== norm(projectDir)) {
+      setTabs([]);
+      setActiveTabPath(null);
+      setFileLoadError(null);
+      setReveal(null);
+      setFileTreeSelection(new Set());
+      setBottomOpen(false);
+      setBottomTab("terminal");
+    }
+    prevProjectDirRef.current = projectDir;
   }, [projectDir]);
+
+  // Hot-exit restore: reopen tabs and reapply unsaved buffers.
+  useEffect(() => {
+    if (!projectDir || !workspaceRestore) return;
+    if (workspaceRestore.key <= handledRestoreKeyRef.current) return;
+    handledRestoreKeyRef.current = workspaceRestore.key;
+
+    const { editor, layout } = workspaceRestore;
+    if (layout.sidebar_tab === "explorer" || layout.sidebar_tab === "search" || layout.sidebar_tab === "git" || layout.sidebar_tab === "extensions") {
+      setSidebarTab(layout.sidebar_tab);
+    }
+    setSidebarCollapsed(layout.sidebar_collapsed);
+    if (layout.sidebar_width >= 220) setSidebarWidth(layout.sidebar_width);
+    setBottomOpen(layout.bottom_open);
+    const bottomTabs: BottomTab[] = ["terminal", "output", "debug", "scm", "tests", "views", "webviews"];
+    if (bottomTabs.includes(layout.bottom_tab as BottomTab)) {
+      setBottomTab(layout.bottom_tab as BottomTab);
+    }
+    if (layout.bottom_height >= 120) setBottomHeight(layout.bottom_height);
+
+    void (async () => {
+      const restored: OpenTab[] = [];
+      for (const path of editor.open_paths) {
+        const fullPath = `${projectDir}/${path}`;
+        const dirty = editor.dirty_buffers[path];
+        try {
+          const fc = await ideApi.readFile(fullPath);
+          if (fc.is_binary) continue;
+          restored.push({
+            path,
+            name: path.split("/").pop() || path,
+            language: fc.language,
+            content: dirty !== undefined ? dirty : fc.content,
+            isDirty: dirty !== undefined,
+            isReadOnly: false,
+            viewMode: "editor",
+            fileSize: fc.size,
+          });
+        } catch {
+          if (dirty !== undefined) {
+            restored.push({
+              path,
+              name: path.split("/").pop() || path,
+              language: null,
+              content: dirty,
+              isDirty: true,
+              isReadOnly: false,
+              viewMode: "editor",
+            });
+          }
+        }
+      }
+      setTabs(restored);
+      const active =
+        editor.active_path && restored.some((t) => t.path === editor.active_path)
+          ? editor.active_path
+          : restored[0]?.path ?? null;
+      setActiveTabPath(active);
+    })();
+  }, [projectDir, workspaceRestore]);
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) || null;
 
@@ -713,19 +806,35 @@ export default function CodeZWorkspace({
     return () => window.removeEventListener("keydown", handler);
   }, [saveFile]);
 
-  // ─── beforeunload: warn if any tab has unsaved changes ────────────
+  // ─── Workspace persistence (debounced editor + layout patch) ─────
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      const hasDirty = tabsRef.current.some((t) => t.isDirty);
-      if (hasDirty) {
-        e.preventDefault();
-        // Modern browsers ignore custom messages but still require returnValue
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+    if (!projectDir || !onWorkspacePatch) return;
+    const timer = window.setTimeout(() => {
+      onWorkspacePatch({
+        editor: editorSnapshotFromTabs(tabsRef.current, activeTabPathRef.current),
+        layout: {
+          sidebar_tab: sidebarTab,
+          sidebar_collapsed: sidebarCollapsed,
+          sidebar_width: sidebarWidth,
+          bottom_open: bottomOpen,
+          bottom_tab: bottomTab,
+          bottom_height: bottomHeight,
+        },
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    projectDir,
+    onWorkspacePatch,
+    tabs,
+    activeTabPath,
+    sidebarTab,
+    sidebarCollapsed,
+    sidebarWidth,
+    bottomOpen,
+    bottomTab,
+    bottomHeight,
+  ]);
 
   return (
     <div className="pond-ide" ref={ideRef}>

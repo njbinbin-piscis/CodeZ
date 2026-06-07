@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { listen } from "@tauri-apps/api/event";
 import { openFolderDialog } from "./services/tauri";
+import {
+  workspaceLoad,
+  workspaceSave,
+  workspaceCloseAck,
+  type EditorSnapshot,
+  type LayoutSnapshot,
+  type WorkspaceSnapshot,
+} from "./services/tauri/workspace";
 import { generateRepoWiki } from "./services/tauri/repoWiki";
 import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/codez/Terminal";
 import { getSettings } from "./services/tauri/settings";
@@ -73,6 +82,150 @@ export default function App() {
     null,
   );
   const [appearance, setAppearance] = useState<AppearanceTheme>(() => getAppearanceTheme());
+  const [exitToast, setExitToast] = useState(false);
+  const [workspaceRestore, setWorkspaceRestore] = useState<{
+    key: number;
+    editor: EditorSnapshot;
+    layout: LayoutSnapshot;
+  } | null>(null);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+
+  const editorPatchRef = useRef<EditorSnapshot>({
+    open_paths: [],
+    active_path: null,
+    dirty_buffers: {},
+  });
+  const ideLayoutPatchRef = useRef<
+    Pick<
+      LayoutSnapshot,
+      "sidebar_tab" | "sidebar_collapsed" | "sidebar_width" | "bottom_open" | "bottom_tab" | "bottom_height"
+    >
+  >({
+    sidebar_tab: "explorer",
+    sidebar_collapsed: false,
+    sidebar_width: 260,
+    bottom_open: false,
+    bottom_tab: "terminal",
+    bottom_height: 240,
+  });
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
+    return {
+      version: 1,
+      project_dir: projectDir,
+      editor: editorPatchRef.current,
+      layout: {
+        chat_open: chatOpen,
+        chat_width: chatWidth,
+        browser_open: browserOpen,
+        mode,
+        ...ideLayoutPatchRef.current,
+      },
+    };
+  }, [projectDir, chatOpen, chatWidth, browserOpen, mode]);
+
+  const persistWorkspace = useCallback(
+    async (snap?: WorkspaceSnapshot) => {
+      try {
+        await workspaceSave(snap ?? buildWorkspaceSnapshot());
+      } catch (e) {
+        console.error("workspace save failed:", e);
+      }
+    },
+    [buildWorkspaceSnapshot],
+  );
+
+  const scheduleWorkspaceSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void persistWorkspace();
+    }, 600);
+  }, [persistWorkspace]);
+
+  const handleWorkspacePatch = useCallback(
+    (patch: {
+      editor: EditorSnapshot;
+      layout: Pick<
+        LayoutSnapshot,
+        "sidebar_tab" | "sidebar_collapsed" | "sidebar_width" | "bottom_open" | "bottom_tab" | "bottom_height"
+      >;
+    }) => {
+      editorPatchRef.current = patch.editor;
+      ideLayoutPatchRef.current = patch.layout;
+      scheduleWorkspaceSave();
+    },
+    [scheduleWorkspaceSave],
+  );
+
+  // Restore last session on startup.
+  useEffect(() => {
+    let cancelled = false;
+    void workspaceLoad()
+      .then((snap) => {
+        if (cancelled || !snap?.project_dir) {
+          setWorkspaceReady(true);
+          return;
+        }
+        const layout = snap.layout ?? ({} as LayoutSnapshot);
+        if (layout.mode === "codez" || layout.mode === "workz") setMode(layout.mode);
+        if (typeof layout.chat_open === "boolean") setChatOpen(layout.chat_open);
+        if (layout.chat_width && layout.chat_width >= 340) setChatWidth(layout.chat_width);
+        if (layout.browser_open) setBrowserOpen(true);
+        ideLayoutPatchRef.current = {
+          sidebar_tab: layout.sidebar_tab || "explorer",
+          sidebar_collapsed: layout.sidebar_collapsed ?? false,
+          sidebar_width: layout.sidebar_width && layout.sidebar_width >= 220 ? layout.sidebar_width : 260,
+          bottom_open: layout.bottom_open ?? false,
+          bottom_tab: layout.bottom_tab || "terminal",
+          bottom_height: layout.bottom_height && layout.bottom_height >= 120 ? layout.bottom_height : 240,
+        };
+        editorPatchRef.current = snap.editor ?? editorPatchRef.current;
+        setWorkspaceRestore({
+          key: 1,
+          editor: snap.editor,
+          layout: {
+            chat_open: layout.chat_open ?? true,
+            chat_width: layout.chat_width ?? 380,
+            browser_open: layout.browser_open ?? false,
+            mode: layout.mode === "workz" ? "workz" : "codez",
+            ...ideLayoutPatchRef.current,
+          },
+        });
+        setProjectDir(snap.project_dir);
+        setWorkspaceReady(true);
+      })
+      .catch(() => setWorkspaceReady(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist layout prefs (mode, chat panel) and save on close.
+  useEffect(() => {
+    if (!workspaceReady) return;
+    scheduleWorkspaceSave();
+  }, [workspaceReady, mode, chatOpen, chatWidth, browserOpen, projectDir, scheduleWorkspaceSave]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen("app-before-close", () => {
+      setExitToast(true);
+      void (async () => {
+        try {
+          await persistWorkspace();
+          await workspaceCloseAck();
+        } catch (e) {
+          console.error("workspace close failed:", e);
+          setExitToast(false);
+        }
+      })();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [persistWorkspace]);
 
   useEffect(() => {
     const applyLanguage = () => {
@@ -102,11 +255,12 @@ export default function App() {
       }
       setIdeWikiOpenPath(null);
       setChatInsertElement(null);
+      await persistWorkspace();
       setProjectDir(dir);
     } catch (e) {
       console.error("pickFolder failed:", e);
     }
-  }, [projectDir, t]);
+  }, [projectDir, t, persistWorkspace]);
 
   const closeProject = useCallback(async () => {
     if (!projectDir) return;
@@ -118,11 +272,12 @@ export default function App() {
       setBrowserOpen(false);
       setChatInsertElement(null);
       void browserClose().catch(() => {});
+      await persistWorkspace();
       setProjectDir(null);
     } catch (e) {
       console.error("closeProject failed:", e);
     }
-  }, [projectDir, t]);
+  }, [projectDir, t, persistWorkspace]);
 
   const handleSendToChat = useCallback((paths: string[]) => {
     if (paths.length === 0) return;
@@ -353,6 +508,8 @@ export default function App() {
                 onBrowserOpenChange={setBrowserOpen}
                 onSendElementToChat={handleSendElementToChat}
                 onScreenshotToChat={handleScreenshotToChat}
+                workspaceRestore={workspaceRestore}
+                onWorkspacePatch={handleWorkspacePatch}
               />
             </div>
             <div
@@ -389,6 +546,12 @@ export default function App() {
         <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
       )}
       {marketOpen && <MarketplacePanel onClose={() => setMarketOpen(false)} />}
+
+      {exitToast && (
+        <div className="agentz-exit-toast" role="status" aria-live="polite">
+          {t("app.exiting")}
+        </div>
+      )}
     </div>
   );
 }

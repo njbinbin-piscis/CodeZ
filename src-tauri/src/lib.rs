@@ -65,6 +65,9 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
             }
+            let close_gate = commands::workspace::WorkspaceCloseGate::new();
+            commands::workspace::install_close_handler(app.handle(), close_gate.clone());
+            app.manage(close_gate);
             // Phase 5: install built-in agent/team packs on first run.
             commands::seed::seed_builtin_packs(app.handle());
             // Phase 0A: drive headless agent turns for inbound IM messages.
@@ -251,6 +254,10 @@ pub fn run() {
             // File journal — Review / Undo of a turn's edits
             commands::journal::journal_list_changes,
             commands::journal::journal_undo_turn,
+            // Workspace session restore (hot exit)
+            commands::workspace::workspace_load,
+            commands::workspace::workspace_save,
+            commands::workspace::workspace_close_ack,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the AgentZ desktop application");

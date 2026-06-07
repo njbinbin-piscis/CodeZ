@@ -1,6 +1,6 @@
 [package]
 name = "agentz-desktop"
-version = "0.4.1"
+version = "0.4.2"
 description = "AgentZ — Cursor-like AI IDE desktop host"
 authors = ["AgentZ"]
 license = "Apache-2.0"

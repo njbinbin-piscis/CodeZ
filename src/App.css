@@ -4,6 +4,23 @@
   height: 100%;
 }
 
+.agentz-exit-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  z-index: 10050;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(124, 106, 247, 0.35);
+  background: rgba(20, 20, 28, 0.96);
+  color: var(--text, #e8e8f0);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
 .agentz-titlebar {
   display: flex;
   align-items: center;

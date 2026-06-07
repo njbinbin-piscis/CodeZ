@@ -233,6 +233,7 @@ const en = {
     browserNeedsProject: "Open a project folder to use the embedded browser",
     settings: "Settings",
     settingsTitle: "LLM & agent configuration",
+    exiting: "Saving workspace and exiting…",
     extensions: "Extensions",
     extensionsTitle: "VS Code extensions (.vsix)",
     openFolder: "Open Folder",

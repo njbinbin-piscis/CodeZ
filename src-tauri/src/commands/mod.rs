@@ -31,3 +31,4 @@ pub mod user_tools;
 pub mod vsix;
 pub mod workbench;
 pub mod workflow;
+pub mod workspace;

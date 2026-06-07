@@ -233,6 +233,7 @@ const zh = {
     browserNeedsProject: "请先打开项目文件夹才能使用内置浏览器",
     settings: "设置",
     settingsTitle: "LLM 与 Agent 配置",
+    exiting: "正在保存工作区并退出…",
     extensions: "扩展",
     extensionsTitle: "VS Code 扩展（.vsix）",
     openFolder: "打开文件夹",
