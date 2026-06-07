@@ -933,6 +933,53 @@ export default function WorkZWorkspace({
           onToggleToolStep={toggleToolStep}
         />
 
+        <div className={`agentz-workz-changes${changesOpen ? " expanded" : ""}`}>
+          <div className="agentz-workz-changes-head">
+            <button
+              type="button"
+              className="agentz-workz-changes-toggle"
+              onClick={() => setChangesOpen((v) => !v)}
+              aria-expanded={changesOpen}
+            >
+              <span>
+                {t("agent.changes")}
+                {changes.length > 0 ? ` (${changes.length})` : ""}
+              </span>
+              <span className="agentz-workz-changes-chevron">{changesOpen ? "▾" : "▸"}</span>
+            </button>
+            <button
+              type="button"
+              className="agentz-workz-changes-refresh"
+              onClick={() => void refreshChanges()}
+              disabled={!projectDir}
+              title={t("agent.refreshGit")}
+            >
+              ⟳
+            </button>
+          </div>
+          {changesOpen && (
+            changes.length === 0 ? (
+              <div className="agentz-workz-changes-empty">{t("agent.noChanges")}</div>
+            ) : (
+              <div className="agentz-workz-changes-list">
+                {changes.map((c) => (
+                  <button
+                    key={c.path}
+                    type="button"
+                    className="agentz-workz-change"
+                    onClick={() => projectDir && setPreviewPath(c.path)}
+                  >
+                    <span className={`agentz-workz-change-badge ${c.status}`}>
+                      {c.status.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="agentz-workz-change-path">{c.path}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
         <div className="agentz-workz-isolate-bar">
           <div className="agentz-workz-bar-left">
             <label className="agentz-workz-isolate-toggle" title={t("agent.isolateHint")}>
@@ -1033,53 +1080,6 @@ export default function WorkZWorkspace({
               </button>
             )}
           </div>
-        </div>
-
-        <div className={`agentz-workz-changes${changesOpen ? " expanded" : ""}`}>
-          <div className="agentz-workz-changes-head">
-            <button
-              type="button"
-              className="agentz-workz-changes-toggle"
-              onClick={() => setChangesOpen((v) => !v)}
-              aria-expanded={changesOpen}
-            >
-              <span>
-                {t("agent.changes")}
-                {changes.length > 0 ? ` (${changes.length})` : ""}
-              </span>
-              <span className="agentz-workz-changes-chevron">{changesOpen ? "▾" : "▸"}</span>
-            </button>
-            <button
-              type="button"
-              className="agentz-workz-changes-refresh"
-              onClick={() => void refreshChanges()}
-              disabled={!projectDir}
-              title={t("agent.refreshGit")}
-            >
-              ⟳
-            </button>
-          </div>
-          {changesOpen && (
-            changes.length === 0 ? (
-              <div className="agentz-workz-changes-empty">{t("agent.noChanges")}</div>
-            ) : (
-              <div className="agentz-workz-changes-list">
-                {changes.map((c) => (
-                  <button
-                    key={c.path}
-                    type="button"
-                    className="agentz-workz-change"
-                    onClick={() => projectDir && setPreviewPath(c.path)}
-                  >
-                    <span className={`agentz-workz-change-badge ${c.status}`}>
-                      {c.status.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="agentz-workz-change-path">{c.path}</span>
-                  </button>
-                ))}
-              </div>
-            )
-          )}
         </div>
 
         <ChatComposer
