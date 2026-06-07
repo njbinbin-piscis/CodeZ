@@ -287,6 +287,108 @@
   color: var(--text-dim, #9a9ab0);
 }
 
+.agentz-llm-provider-flash {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+}
+
+.agentz-llm-provider-flash input {
+  margin: 0;
+}
+
+/* --- Fish tab ----------------------------------------------------------- */
+.agentz-fish-list,
+.agentz-fish-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.agentz-fish-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg-elev, #14141c);
+}
+
+.agentz-fish-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agentz-fish-info strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agentz-fish-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #2a2a38);
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-fish-badge.builtin {
+  border-color: color-mix(in srgb, var(--accent, #7c6af7) 50%, transparent);
+  color: var(--accent, #7c6af7);
+}
+
+.agentz-fish-meta {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+
+.agentz-fish-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.agentz-fish-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg-elev-2, #1b1b26);
+  margin-bottom: 10px;
+}
+
+.agentz-fish-form h4 {
+  margin: 0;
+}
+
+.agentz-fish-form textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.agentz-fish-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .agentz-llm-provider-actions {
   display: flex;
   gap: 6px;

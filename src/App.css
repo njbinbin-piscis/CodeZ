@@ -160,7 +160,8 @@
   min-width: 340px;
   flex-shrink: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: hidden;
 }
 
 .agentz-ide-chat[hidden] {

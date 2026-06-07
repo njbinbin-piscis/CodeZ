@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "agentz-desktop"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "aes",
  "anyhow",
@@ -83,6 +83,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tokio",
  "tokio-tungstenite",
+ "toml 0.8.2",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

@@ -660,6 +660,15 @@ fn build_tool_registry(
                 (db_for_delegate, settings_for_delegate, plan_for_delegate)
             {
                 registry.register(Box::new(crate::tools::delegate::DelegateTool {
+                    db: db.clone(),
+                    settings: settings.clone(),
+                    plan_store: plan.clone(),
+                    lsp_manager: lsp_manager.clone(),
+                    app: app.clone(),
+                }));
+                // Named, stateless Fish workers (Phase B). Like `delegate`, only
+                // the main agent gets `call_fish`; sub-agents omit it.
+                registry.register(Box::new(crate::tools::call_fish::CallFishTool {
                     db,
                     settings,
                     plan_store: plan,
@@ -745,9 +754,45 @@ pub(crate) async fn run_subagent_research(
     task: String,
     cancel: Arc<AtomicBool>,
 ) -> Result<String> {
+    let system_prompt = subagent_system_prompt(&workspace_root);
+    run_subagent_with_prompt(
+        app,
+        db,
+        settings,
+        plan_store,
+        lsp_manager,
+        workspace_root,
+        system_prompt,
+        task,
+        cancel,
+    )
+    .await
+}
+
+/// Core sub-agent runner shared by `delegate` (default research persona) and
+/// `call_fish` (named Fish personas). Runs a bounded, read-only kernel agent
+/// loop on the flash model and returns its final summary text.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subagent_with_prompt(
+    app: tauri::AppHandle,
+    db: Arc<Mutex<piscis_kernel::store::db::Database>>,
+    settings: Arc<Mutex<Settings>>,
+    plan_store: PlanStore,
+    lsp_manager: Arc<LspManager>,
+    workspace_root: String,
+    system_prompt: String,
+    task: String,
+    cancel: Arc<AtomicBool>,
+) -> Result<String> {
+    // Prefer the global "flash" provider for sub-agents when configured and
+    // still present; otherwise fall back to the main provider.
+    let flash_id = crate::commands::data_scope::resolve_global_config_dir(&app)
+        .ok()
+        .and_then(|dir| crate::commands::flash::load_flash_provider_id(&dir));
     let runtime = {
         let s = settings.lock().await;
-        resolve_llm_runtime(&s, None)?
+        let flash = flash_id.filter(|id| s.find_llm_provider(id).is_some());
+        resolve_llm_runtime(&s, flash.as_deref())?
     };
 
     let registry = build_subagent_registry(
@@ -796,8 +841,6 @@ pub(crate) async fn run_subagent_research(
         },
         read_timeout,
     );
-
-    let system_prompt = subagent_system_prompt(&workspace_root);
 
     let policy = Arc::new(PolicyGate::with_profile_and_flags(
         &workspace_root,

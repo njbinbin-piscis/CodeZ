@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
   getSettings,
   saveSettings,
+  getFlashProvider,
+  setFlashProvider,
   type LlmProviderConfig,
   type LlmSettings,
   type McpServerConfig,
@@ -15,6 +17,7 @@ import SkillsTab from "./settings/SkillsTab";
 import AssistantsTab from "./settings/AssistantsTab";
 import ConnectorsTab from "./settings/ConnectorsTab";
 import StudioTab from "./settings/StudioTab";
+import FishTab from "./settings/FishTab";
 import RulesTab from "./settings/RulesTab";
 import HooksTab from "./settings/HooksTab";
 import "./SettingsPanel.css";
@@ -24,6 +27,7 @@ type SettingsTab =
   | "skills"
   | "studio"
   | "assistants"
+  | "fish"
   | "connectors"
   | "extensions"
   | "rules"
@@ -157,6 +161,8 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
   const [llmEditForm, setLlmEditForm] = useState<LlmProviderConfig>(EMPTY_LLM_PROVIDER);
   const [llmShowKey, setLlmShowKey] = useState(false);
   const [widePanel, setWidePanel] = useState(false);
+  // Global "flash" (small/fast) model used by delegated sub-agents (Fish).
+  const [flashProviderId, setFlashProviderId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,6 +176,12 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
         setForm(next);
         if (next.language === "zh" || next.language === "en") {
           setLanguage(next.language);
+        }
+        try {
+          const flash = await getFlashProvider();
+          if (!cancelled) setFlashProviderId(flash);
+        } catch {
+          if (!cancelled) setFlashProviderId(null);
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -217,13 +229,23 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
       if (result.language === "zh" || result.language === "en") {
         setLanguage(result.language);
       }
+      // Persist the flash selection, dropping it if the provider was removed.
+      const validFlash =
+        flashProviderId && form.llm_providers.some((p) => p.id === flashProviderId)
+          ? flashProviderId
+          : null;
+      try {
+        await setFlashProvider(validFlash);
+      } catch {
+        /* non-fatal: flash selection is best-effort */
+      }
       onClose();
     } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
     }
-  }, [form, onClose]);
+  }, [form, onClose, flashProviderId]);
 
   const provider = form.provider || "anthropic";
   const apiKeyField = KEY_FIELDS[provider] ?? "anthropic_api_key";
@@ -263,6 +285,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
               ["skills", t("settings.tabSkills")],
               ["studio", t("settings.tabStudio")],
               ["assistants", t("settings.tabAssistants")],
+              ["fish", t("settings.tabFish")],
               ["connectors", t("settings.tabConnectors")],
               ["extensions", t("settings.tabExtensions")],
               ["rules", t("settings.tabRules")],
@@ -300,6 +323,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
             <AssistantsTab />
           </div>
         )}
+        {tab === "fish" && <FishTab />}
         {tab === "connectors" && (
           <div className="agentz-settings-body">
             <ConnectorsTab />
@@ -501,6 +525,19 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
                           <span className="agentz-llm-provider-meta">
                             {p.provider} · {p.model || "—"}
                           </span>
+                          <label
+                            className="agentz-llm-provider-flash"
+                            title={t("settings.flashModelHint")}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={flashProviderId === p.id}
+                              onChange={(e) =>
+                                setFlashProviderId(e.target.checked ? p.id : null)
+                              }
+                            />
+                            {t("settings.flashModel")}
+                          </label>
                         </div>
                         <div className="agentz-llm-provider-actions">
                           <button

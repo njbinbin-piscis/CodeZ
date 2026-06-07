@@ -167,6 +167,13 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::save_settings,
             commands::settings::is_configured,
+            // Flash (small/fast) model selection for sub-agents (Fish)
+            commands::flash::flash_get,
+            commands::flash::flash_set,
+            // Fish: named stateless sub-agent personas
+            commands::fish::fish_list,
+            commands::fish::fish_save,
+            commands::fish::fish_delete,
             // ClawHub skill marketplace
             commands::clawhub::clawhub_search,
             commands::clawhub::clawhub_install,

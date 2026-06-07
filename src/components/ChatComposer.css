@@ -5,7 +5,11 @@
   border-top: 1px solid var(--border, #2a2a38);
   flex-shrink: 0;
   position: relative;
-  overflow-x: hidden;
+  /* Keep vertical overflow visible so footer menus can open upward over the
+     message list. `overflow-x: hidden` alone forces overflow-y to `auto` and
+     clips popups — horizontal containment lives on the footer row instead. */
+  overflow: visible;
+  z-index: 20;
   min-width: 0;
 }
 
@@ -192,11 +196,11 @@
 
 .agentz-composer-footer {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 6px;
   padding: 4px 8px 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .agentz-composer-footer-left,
@@ -210,12 +214,15 @@
 .agentz-composer-footer-left {
   flex: 1 1 auto;
   flex-wrap: wrap;
+  align-content: flex-end;
   max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .agentz-composer-footer-right {
   flex-shrink: 0;
-  margin-left: auto;
+  align-self: flex-end;
 }
 
 .agentz-composer-menu {
@@ -285,7 +292,7 @@
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
-  z-index: 30;
+  z-index: 50;
   min-width: 200px;
   max-width: 280px;
   padding: 4px;

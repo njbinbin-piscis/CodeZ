@@ -14,6 +14,8 @@ pub mod connectors;
 pub mod data_scope;
 pub mod edit;
 pub mod ext_host;
+pub mod fish;
+pub mod flash;
 pub mod ide;
 pub mod interactive;
 pub mod journal;

@@ -58,3 +58,13 @@ export function isConfigured(): Promise<boolean> {
 export function saveSettings(updates: LlmSettings): Promise<SettingsResponse> {
   return invoke<SettingsResponse>("save_settings", { updates });
 }
+
+/** Get the provider id selected as the global "flash" (small/fast) model. */
+export function getFlashProvider(): Promise<string | null> {
+  return invoke<string | null>("flash_get");
+}
+
+/** Set (or clear with null) the global flash provider id. */
+export function setFlashProvider(providerId: string | null): Promise<void> {
+  return invoke<void>("flash_set", { providerId });
+}

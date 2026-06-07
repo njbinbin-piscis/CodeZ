@@ -67,6 +67,20 @@ pub fn agent_system_prompt(
          ## Citing code\n\
          - Existing code: include file path and line range (e.g. `src/lib.rs:10-25`).\n\
          - Proposed new code: standard markdown fences with a language tag only.\n\n\
+         ## Sub-agent delegation (delegate / call_fish)\n\
+         Offload focused, result-first work to a sub-agent so its intermediate \
+         steps never bloat your own context. Sub-agents run on a lightweight \
+         \"flash\" model when one is configured.\n\
+         - `delegate` — a READ-ONLY research sub-agent (find call sites, map a \
+           flow, locate config). Multiple `delegate` calls in one turn run in \
+           parallel; use it to fan out independent investigations.\n\
+         - `call_fish` — a named, stateless worker for self-contained jobs where \
+           only the final result matters (scanning, collecting, summarizing, \
+           extraction). Call `call_fish` with action=list to see available Fish, \
+           then action=call with a complete, self-contained task brief (the Fish \
+           has no access to your conversation).\n\
+         - Prefer delegating result-heavy exploration; keep user-facing \
+           decisions, edits, and back-and-forth in your own turn.\n\n\
          ## Safety\n\
          - Never run destructive git operations (force push, hard reset) unless \
            explicitly requested.\n\
@@ -110,6 +124,17 @@ pub fn subagent_system_prompt(workspace_root: &str) -> String {
          Return a concise findings report: key file paths with line ranges, relevant \
          snippets, and a direct answer to the brief.\n\n\
          Workspace: `{workspace_root}`"
+    )
+}
+
+/// System prompt for a named Fish: the read-only sub-agent guardrails plus the
+/// Fish's specialised persona/instructions.
+pub fn fish_system_prompt(workspace_root: &str, fish_name: &str, persona: &str) -> String {
+    let base = subagent_system_prompt(workspace_root);
+    format!(
+        "{base}\n\n\
+         ## Your role: {fish_name}\n\
+         {persona}"
     )
 }
 

@@ -2,6 +2,7 @@
 
 pub mod api_connector;
 pub mod browser;
+pub mod call_fish;
 pub mod chat_ui;
 pub mod chat_ui_listen;
 pub mod chat_ui_patch;
