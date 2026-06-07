@@ -21,6 +21,7 @@ import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask
 import { generateRepoWiki } from "../../services/tauri/repoWiki";
 import AgentTaskReview from "./AgentTaskReview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
+import DropdownSelect, { type DropdownOption } from "../../components/DropdownSelect";
 import {
   modelLabel,
   modelDisplayLabel,
@@ -799,6 +800,25 @@ export default function WorkZWorkspace({
     () => teams.find((tm) => tm.id === activeTeam),
     [teams, activeTeam],
   );
+
+  const teamOptions = useMemo((): DropdownOption[] => {
+    const opts: DropdownOption[] = [{ id: "", label: t("agent.teamNone") }];
+    for (const tm of teams) {
+      opts.push({ id: tm.id, label: tm.name });
+    }
+    return opts;
+  }, [teams, t]);
+
+  const agentOptions = useMemo((): DropdownOption[] => {
+    const opts: DropdownOption[] = [{ id: "", label: t("agent.agentGeneric") }];
+    for (const a of agents) {
+      opts.push({
+        id: a.id,
+        label: `${a.icon ? `${a.icon} ` : ""}${a.name}`,
+      });
+    }
+    return opts;
+  }, [agents, t]);
   const artifacts = useMemo(() => collectArtifacts(steps, changes), [steps, changes]);
 
   return (
@@ -1001,8 +1021,8 @@ export default function WorkZWorkspace({
             </label>
 
             {teams.length > 0 && (
-              <label
-                className="agentz-workz-pill-select"
+              <div
+                className="agentz-workz-pill-menu"
                 title={
                   activeTeam
                     ? selectedTeam?.mode === "workflow"
@@ -1012,38 +1032,29 @@ export default function WorkZWorkspace({
                 }
               >
                 <span className="agentz-workz-pill-label">{t("agent.team")}</span>
-                <select
+                <DropdownSelect
+                  variant="pill"
+                  placement="up"
                   value={activeTeam}
+                  options={teamOptions}
                   disabled={busy}
-                  onChange={(e) => setActiveTeam(e.target.value)}
-                >
-                  <option value="">{t("agent.teamNone")}</option>
-                  {teams.map((tm) => (
-                    <option key={tm.id} value={tm.id}>
-                      {tm.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setActiveTeam}
+                />
+              </div>
             )}
 
             {!activeTeam && agents.length > 0 && (
-              <label className="agentz-workz-pill-select" title={t("agent.agentHint")}>
+              <div className="agentz-workz-pill-menu" title={t("agent.agentHint")}>
                 <span className="agentz-workz-pill-label">{t("agent.agentLabel")}</span>
-                <select
+                <DropdownSelect
+                  variant="pill"
+                  placement="up"
                   value={activeAgentId}
+                  options={agentOptions}
                   disabled={busy}
-                  onChange={(e) => setActiveAgentId(e.target.value)}
-                >
-                  <option value="">{t("agent.agentGeneric")}</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.icon ? `${a.icon} ` : ""}
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setActiveAgentId}
+                />
+              </div>
             )}
           </div>
 

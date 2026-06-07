@@ -81,8 +81,8 @@
 }
 
 .agentz-settings-field input,
-.agentz-settings-field select,
-.agentz-settings-field textarea {
+.agentz-settings-field textarea,
+.agentz-settings-field .agentz-dropdown.field {
   width: 100%;
   box-sizing: border-box;
   background: var(--bg-elev-2, #1b1b26);
@@ -95,17 +95,6 @@
   font-family: inherit;
 }
 
-.agentz-settings-field select {
-  appearance: none;
-  -webkit-appearance: none;
-  min-height: 36px;
-  padding-right: 32px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239a9ab0' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
-
 .agentz-settings-field textarea {
   resize: vertical;
   min-height: 96px;
@@ -116,8 +105,8 @@
 }
 
 .agentz-settings-field input:focus,
-.agentz-settings-field select:focus,
-.agentz-settings-field textarea:focus {
+.agentz-settings-field textarea:focus,
+.agentz-settings-field .agentz-dropdown.field .agentz-dropdown-trigger:focus-visible {
   outline: none;
   border-color: var(--accent, #7c6af7);
 }

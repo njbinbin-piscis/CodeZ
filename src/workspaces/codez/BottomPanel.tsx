@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import DropdownSelect from "../../components/DropdownSelect";
 import TerminalPanel from "./Terminal";
 import { useExtensionUi } from "../../extensions/ui/useExtensionUi";
 import { extensionService } from "../../extensions/extensionService";
@@ -112,13 +113,13 @@ export default function BottomPanel({
           <div className="ide-bottom-pane scroll">
             {activeOutput ? (
               <div className="agentz-ext-output">
-                <select value={activeOutput.id} onChange={(e) => extensionUiStore.showOutput(e.target.value)}>
-                  {ui.outputChannels.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
+                <DropdownSelect
+                  variant="inline"
+                  placement="down"
+                  value={activeOutput.id}
+                  options={ui.outputChannels.map((c) => ({ id: c.id, label: c.label }))}
+                  onChange={(id) => extensionUiStore.showOutput(id)}
+                />
                 <pre>{activeOutput.content}</pre>
               </div>
             ) : (

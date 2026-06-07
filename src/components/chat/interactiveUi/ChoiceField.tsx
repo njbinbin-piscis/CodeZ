@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import DropdownSelect from "../../DropdownSelect";
 import type { UiBlock } from "./protocol";
 import { CUSTOM_OPTION_VALUE } from "./protocol";
 
@@ -65,22 +66,22 @@ export function ChoiceField({ block, mode, value, onChange, disabled, error }: C
       {block.description && <p className="ic-field-hint">{block.description}</p>}
 
       {mode === "select" ? (
-        <select
-          className="ic-select"
+        <DropdownSelect
+          variant="field"
+          placement="down"
           value={usingCustom ? CUSTOM_OPTION_VALUE : stringValue}
-          onChange={(e) => {
-            const v = e.target.value;
+          disabled={disabled}
+          placeholder={block.placeholder || t("chat.interactiveSelectPlaceholder", { defaultValue: "— Select —" })}
+          options={[
+            { id: "", label: block.placeholder || t("chat.interactiveSelectPlaceholder", { defaultValue: "— Select —" }) },
+            ...options.map((opt) => ({ id: opt.value, label: opt.label, hint: opt.description })),
+            ...(allowCustom ? [{ id: CUSTOM_OPTION_VALUE, label: customLabel }] : []),
+          ]}
+          onChange={(v) => {
             if (v === CUSTOM_OPTION_VALUE) onChange(CUSTOM_OPTION_VALUE);
             else onChange(v);
           }}
-          disabled={disabled}
-        >
-          <option value="">{block.placeholder || t("chat.interactiveSelectPlaceholder", { defaultValue: "— Select —" })}</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-          {allowCustom && <option value={CUSTOM_OPTION_VALUE}>{customLabel}</option>}
-        </select>
+        />
       ) : (
         <div className={mode === "radio" ? "ic-radio-group" : "ic-checkbox-group"}>
           {options.map((opt) => {

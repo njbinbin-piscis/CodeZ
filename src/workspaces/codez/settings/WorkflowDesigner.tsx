@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import DropdownSelect from "../../../components/DropdownSelect";
 import ReactFlow, {
   Background,
   ConnectionLineType,
@@ -547,17 +548,16 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                 <>
                   <div className="agentz-settings-field">
                     <label>{t("workflow.agent")}</label>
-                    <select
+                    <DropdownSelect
+                      variant="field"
                       value={active.agent_id ?? ""}
-                      onChange={(e) => updateNode(active.id, { agent_id: e.target.value })}
-                    >
-                      <option value="">—</option>
-                      {agents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.icon} {a.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="—"
+                      options={[
+                        { id: "", label: "—" },
+                        ...agents.map((a) => ({ id: a.id, label: `${a.icon} ${a.name}` })),
+                      ]}
+                      onChange={(v) => updateNode(active.id, { agent_id: v })}
+                    />
                   </div>
                   <div className="agentz-settings-field">
                     <label>{t("workflow.promptTemplate")}</label>
@@ -588,13 +588,15 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                   </div>
                   <div className="agentz-settings-field">
                     <label>{t("workflow.onError")}</label>
-                    <select
+                    <DropdownSelect
+                      variant="field"
                       value={active.on_error ?? "fail"}
-                      onChange={(e) => updateNode(active.id, { on_error: e.target.value })}
-                    >
-                      <option value="fail">{t("workflow.onErrorFail")}</option>
-                      <option value="skip">{t("workflow.onErrorSkip")}</option>
-                    </select>
+                      options={[
+                        { id: "fail", label: t("workflow.onErrorFail") },
+                        { id: "skip", label: t("workflow.onErrorSkip") },
+                      ]}
+                      onChange={(v) => updateNode(active.id, { on_error: v })}
+                    />
                     <p className="agentz-settings-hint">{t("workflow.onErrorHint")}</p>
                   </div>
                 </>
@@ -604,20 +606,22 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                 <>
                   <div className="agentz-settings-field">
                     <label>{t("workflow.evaluator")}</label>
-                    <select
+                    <DropdownSelect
+                      variant="field"
                       value={active.evaluator?.kind ?? "expr"}
-                      onChange={(e) =>
+                      options={[
+                        { id: "expr", label: t("workflow.evalExpr") },
+                        { id: "llm", label: t("workflow.evalLlm") },
+                      ]}
+                      onChange={(v) =>
                         updateNode(active.id, {
                           evaluator:
-                            e.target.value === "llm"
+                            v === "llm"
                               ? { kind: "llm", classifier_prompt: "", labels: [] }
                               : { kind: "expr", expr: "" },
                         })
                       }
-                    >
-                      <option value="expr">{t("workflow.evalExpr")}</option>
-                      <option value="llm">{t("workflow.evalLlm")}</option>
-                    </select>
+                    />
                   </div>
                   {active.evaluator?.kind === "expr" && (
                     <div className="agentz-settings-field">

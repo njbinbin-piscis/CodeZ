@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import DropdownSelect from "../../../components/DropdownSelect";
 import {
   connectGatewayChannels,
   disconnectGatewayChannels,
@@ -226,13 +227,15 @@ export default function AssistantsTab() {
             value={form.feishu_app_secret}
             onChange={(e) => set("feishu_app_secret", e.target.value)}
           />
-          <select
+          <DropdownSelect
+            variant="field"
             value={form.feishu_domain}
-            onChange={(e) => set("feishu_domain", e.target.value)}
-          >
-            <option value="feishu">feishu（飞书，国内）</option>
-            <option value="lark">lark（海外）</option>
-          </select>
+            options={[
+              { id: "feishu", label: "feishu（飞书，国内）" },
+              { id: "lark", label: "lark（海外）" },
+            ]}
+            onChange={(v) => set("feishu_domain", v)}
+          />
         </div>
 
         {/* 企业微信 */}
@@ -322,13 +325,15 @@ export default function AssistantsTab() {
           <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <strong>消息处理模式</strong>
           </label>
-          <select
+          <DropdownSelect
+            variant="field"
             value={form.im_message_mode || "queue"}
-            onChange={(e) => set("im_message_mode", e.target.value)}
-          >
-            <option value="queue">queue（排队：先完成当前任务）</option>
-            <option value="cancel">cancel（取消：新消息打断旧任务）</option>
-          </select>
+            options={[
+              { id: "queue", label: "queue（排队：先完成当前任务）" },
+              { id: "cancel", label: "cancel（取消：新消息打断旧任务）" },
+            ]}
+            onChange={(v) => set("im_message_mode", v)}
+          />
         </div>
 
         <div className="agentz-wb-actions" style={{ marginTop: 12 }}>

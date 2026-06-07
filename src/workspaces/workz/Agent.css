@@ -368,6 +368,9 @@
   border-top: 1px solid var(--border, #2a2a38);
   background: var(--bg-elev, #14141c);
   flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
 }
 
 /* Left = run config (isolate + execution selectors); right = action buttons.
@@ -378,6 +381,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  overflow: visible;
 }
 
 .agentz-workz-isolate-toggle {
@@ -391,8 +395,8 @@
   cursor: pointer;
 }
 
-/* Pill-style labelled select used for Team / Agent pickers. */
-.agentz-workz-pill-select {
+/* Pill-style labelled dropdown used for Team / Agent pickers. */
+.agentz-workz-pill-menu {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -402,10 +406,14 @@
   border-radius: 7px;
   background: var(--bg-elev-2, #1b1b26);
   font-size: 12px;
-  cursor: pointer;
+  position: relative;
 }
 
-.agentz-workz-pill-select:focus-within {
+.agentz-workz-pill-menu:focus-within {
+  z-index: 60;
+}
+
+.agentz-workz-pill-menu:focus-within {
   border-color: var(--accent, #7c6af7);
 }
 
@@ -414,15 +422,15 @@
   white-space: nowrap;
 }
 
-.agentz-workz-pill-select select {
-  height: 26px;
+.agentz-workz-pill-menu .agentz-dropdown.pill .agentz-dropdown-trigger {
+  max-width: 160px;
   border: 0;
   background: transparent;
-  color: var(--text, #e8e8f0);
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
-  max-width: 180px;
+  padding: 2px 4px;
+}
+
+.agentz-workz-pill-menu .agentz-dropdown.pill .agentz-dropdown-trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .agentz-workz-review-btn {

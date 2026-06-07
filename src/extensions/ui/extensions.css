@@ -101,13 +101,9 @@
   opacity: 0.6;
   padding: 4px 12px;
 }
-.agentz-ext-output select {
+.agentz-ext-output .agentz-dropdown {
   margin: 4px 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 6px;
+  max-width: 320px;
 }
 .agentz-ext-output pre, .agentz-ext-debug {
   margin: 0;

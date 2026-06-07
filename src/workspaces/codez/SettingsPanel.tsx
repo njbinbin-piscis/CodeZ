@@ -21,6 +21,7 @@ import StudioTab from "./settings/StudioTab";
 import FishTab from "./settings/FishTab";
 import RulesTab from "./settings/RulesTab";
 import HooksTab from "./settings/HooksTab";
+import DropdownSelect from "../../components/DropdownSelect";
 import "./SettingsPanel.css";
 
 type SettingsTab =
@@ -359,14 +360,16 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
               <section className="agentz-settings-section">
                 <div className="agentz-settings-field">
                   <label htmlFor="agentz-settings-language">{t("settings.language")}</label>
-                  <select
+                  <DropdownSelect
                     id="agentz-settings-language"
+                    variant="field"
                     value={form.language}
-                    onChange={(e) => update("language", e.target.value)}
-                  >
-                    <option value="zh">{t("settings.languageZh")}</option>
-                    <option value="en">{t("settings.languageEn")}</option>
-                  </select>
+                    options={[
+                      { id: "zh", label: t("settings.languageZh") },
+                      { id: "en", label: t("settings.languageEn") },
+                    ]}
+                    onChange={(v) => update("language", v)}
+                  />
                 </div>
               </section>
 
@@ -390,17 +393,13 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
 
                 <div className="agentz-settings-field">
                   <label htmlFor="agentz-settings-provider">{t("settings.provider")}</label>
-                  <select
+                  <DropdownSelect
                     id="agentz-settings-provider"
+                    variant="field"
                     value={provider}
-                    onChange={(e) => update("provider", e.target.value)}
-                  >
-                    {PROVIDER_KEYS.map((p) => (
-                      <option key={p} value={p}>
-                        {providerLabel(p)}
-                      </option>
-                    ))}
-                  </select>
+                    options={PROVIDER_KEYS.map((p) => ({ id: p, label: providerLabel(p) }))}
+                    onChange={(v) => update("provider", v)}
+                  />
                 </div>
 
                 <div className="agentz-settings-field">
@@ -481,15 +480,17 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
 
                 <div className="agentz-settings-field">
                   <label htmlFor="agentz-settings-policy">{t("settings.policyMode")}</label>
-                  <select
+                  <DropdownSelect
                     id="agentz-settings-policy"
+                    variant="field"
                     value={form.policy_mode}
-                    onChange={(e) => update("policy_mode", e.target.value)}
-                  >
-                    <option value="balanced">{t("settings.policyBalanced")}</option>
-                    <option value="strict">{t("settings.policyStrict")}</option>
-                    <option value="dev">{t("settings.policyDev")}</option>
-                  </select>
+                    options={[
+                      { id: "balanced", label: t("settings.policyBalanced") },
+                      { id: "strict", label: t("settings.policyStrict") },
+                      { id: "dev", label: t("settings.policyDev") },
+                    ]}
+                    onChange={(v) => update("policy_mode", v)}
+                  />
                 </div>
 
                 <div className="agentz-settings-field">
@@ -595,16 +596,12 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
                       </div>
                       <div className="agentz-settings-field">
                         <label>{t("settings.provider")}</label>
-                        <select
+                        <DropdownSelect
+                          variant="field"
                           value={llmEditForm.provider}
-                          onChange={(e) => setLlmEditForm((f) => ({ ...f, provider: e.target.value }))}
-                        >
-                          {PROVIDER_KEYS.map((p) => (
-                            <option key={p} value={p}>
-                              {providerLabel(p)}
-                            </option>
-                          ))}
-                        </select>
+                          options={PROVIDER_KEYS.map((p) => ({ id: p, label: providerLabel(p) }))}
+                          onChange={(v) => setLlmEditForm((f) => ({ ...f, provider: v }))}
+                        />
                       </div>
                       <div className="agentz-settings-field">
                         <label>{t("settings.model")}</label>
@@ -708,13 +705,15 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
                         onChange={(e) => updateMcp(idx, { name: e.target.value })}
                         placeholder={t("settings.mcpName")}
                       />
-                      <select
+                      <DropdownSelect
+                        variant="inline"
                         value={srv.transport}
-                        onChange={(e) => updateMcp(idx, { transport: e.target.value })}
-                      >
-                        <option value="stdio">stdio</option>
-                        <option value="sse">sse</option>
-                      </select>
+                        options={[
+                          { id: "stdio", label: "stdio" },
+                          { id: "sse", label: "sse" },
+                        ]}
+                        onChange={(v) => updateMcp(idx, { transport: v })}
+                      />
                       <label className="agentz-settings-checkbox">
                         <input
                           type="checkbox"

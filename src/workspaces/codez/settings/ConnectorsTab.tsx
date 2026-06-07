@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import DropdownSelect from "../../../components/DropdownSelect";
 import {
   createApiConnector,
   getConnectorCredentials,
@@ -231,19 +232,21 @@ export default function ConnectorsTab() {
             <p className="agentz-settings-hint">{t("connectors.apiHint")}</p>
             <div className="agentz-settings-field">
               <label>{t("connectors.apiPreset")}</label>
-              <select
-                defaultValue=""
-                onChange={(e) => {
-                  if (e.target.value) applyPreset(e.target.value);
+              <DropdownSelect
+                variant="field"
+                value=""
+                placeholder={t("connectors.apiPresetCustom")}
+                options={[
+                  { id: "", label: t("connectors.apiPresetCustom") },
+                  ...API_PRESETS.map((p) => ({
+                    id: p.id,
+                    label: `${p.icon} ${p.category.toUpperCase()}`,
+                  })),
+                ]}
+                onChange={(id) => {
+                  if (id) applyPreset(id);
                 }}
-              >
-                <option value="">{t("connectors.apiPresetCustom")}</option>
-                {API_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.icon} {p.category.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="agentz-studio-grid">
               <div className="agentz-settings-field">
@@ -281,14 +284,16 @@ export default function ConnectorsTab() {
             <div className="agentz-studio-grid">
               <div className="agentz-settings-field">
                 <label>{t("connectors.apiMethod")}</label>
-                <select
+                <DropdownSelect
+                  variant="field"
                   value={apiForm.method ?? "POST"}
-                  onChange={(e) => setApiForm({ ...apiForm, method: e.target.value })}
-                >
-                  <option value="POST">POST</option>
-                  <option value="GET">GET</option>
-                  <option value="PUT">PUT</option>
-                </select>
+                  options={[
+                    { id: "POST", label: "POST" },
+                    { id: "GET", label: "GET" },
+                    { id: "PUT", label: "PUT" },
+                  ]}
+                  onChange={(v) => setApiForm({ ...apiForm, method: v })}
+                />
               </div>
               <div className="agentz-settings-field">
                 <label>{t("connectors.apiCategory")}</label>

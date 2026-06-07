@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import TagMultiSelect from "../../../components/TagMultiSelect";
+import DropdownSelect from "../../../components/DropdownSelect";
 import {
   listAgents,
   getAgent,
@@ -346,19 +347,15 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
             </div>
             <div className="agentz-settings-field">
               <label>{t("studio.fieldModel")}</label>
-              <select
+              <DropdownSelect
+                variant="field"
                 value={agentForm.llm_provider_id ?? ""}
-                onChange={(e) =>
-                  setAgentForm({ ...agentForm, llm_provider_id: e.target.value || null })
-                }
-              >
-                <option value="">{t("studio.modelDefault")}</option>
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label || p.id}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { id: "", label: t("studio.modelDefault") },
+                  ...providers.map((p) => ({ id: p.id, label: p.label || p.id })),
+                ]}
+                onChange={(v) => setAgentForm({ ...agentForm, llm_provider_id: v || null })}
+              />
               {providers.length === 0 && (
                 <p className="agentz-settings-hint">{t("studio.modelProvidersHint")}</p>
               )}
@@ -522,22 +519,21 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
             </div>
             <div className="agentz-settings-field">
               <label>{t("workflow.fieldMode")}</label>
-              <select
+              <DropdownSelect
+                variant="field"
                 value={teamForm.mode ?? "swarm"}
-                onChange={(e) =>
+                onChange={(v) =>
                   setTeamForm({
                     ...teamForm,
-                    mode: e.target.value as "swarm" | "workflow",
-                    workflow:
-                      e.target.value === "workflow"
-                        ? teamForm.workflow ?? emptyGraph()
-                        : teamForm.workflow,
+                    mode: v as "swarm" | "workflow",
+                    workflow: v === "workflow" ? teamForm.workflow ?? emptyGraph() : teamForm.workflow,
                   })
                 }
-              >
-                <option value="swarm">{t("workflow.modeSwarm")}</option>
-                <option value="workflow">{t("workflow.modeWorkflow")}</option>
-              </select>
+                options={[
+                  { id: "swarm", label: t("workflow.modeSwarm") },
+                  { id: "workflow", label: t("workflow.modeWorkflow") },
+                ]}
+              />
             </div>
           </div>
 
@@ -574,16 +570,12 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
             <>
               <div className="agentz-settings-field">
                 <label>{t("studio.fieldWorkflow")}</label>
-                <select
+                <DropdownSelect
+                  variant="field"
                   value={teamForm.workflow_hint ?? "waves"}
-                  onChange={(e) => setTeamForm({ ...teamForm, workflow_hint: e.target.value })}
-                >
-                  {WORKFLOWS.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
-                    </option>
-                  ))}
-                </select>
+                  options={WORKFLOWS.map((w) => ({ id: w, label: w }))}
+                  onChange={(v) => setTeamForm({ ...teamForm, workflow_hint: v })}
+                />
               </div>
               <div className="agentz-settings-field">
                 <label>{t("studio.fieldOrgSpec")}</label>

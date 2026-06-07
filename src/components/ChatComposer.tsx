@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComposerChip } from "./composerChips";
 import { chipDisplayLabel } from "./composerChips";
 import type { ChatAttachment, ChatMode } from "../services/tauri/chat";
+import DropdownSelect, { DropdownMultiSelect, type DropdownOption } from "./DropdownSelect";
 import "./ChatComposer.css";
 
 function BrowserElementGlyph() {
@@ -80,19 +81,7 @@ function chipTitle(chip: ComposerChip): string | undefined {
   }
 }
 
-export interface ComposerMenuOption {
-  id: string;
-  label: string;
-  hint?: string;
-}
-
-function ChevronDown() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
-}
+export type ComposerMenuOption = DropdownOption;
 
 function ModeIcon({ mode }: { mode: ChatMode }) {
   if (mode === "plan") {
@@ -105,76 +94,6 @@ function ModeIcon({ mode }: { mode: ChatMode }) {
     );
   }
   return <span className="agentz-mode-infinity">∞</span>;
-}
-
-function ComposerMenu({
-  value,
-  options,
-  onChange,
-  variant,
-  modeIcon,
-  disabled,
-}: {
-  value: string;
-  options: ComposerMenuOption[];
-  onChange: (id: string) => void;
-  variant: "pill" | "text";
-  modeIcon?: ChatMode;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const selected = options.find((o) => o.id === value) ?? options[0];
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  return (
-    <div className={`agentz-composer-menu ${variant}`} ref={rootRef}>
-      <button
-        type="button"
-        className="agentz-composer-menu-trigger"
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {variant === "pill" && modeIcon && (
-          <span className="agentz-composer-menu-icon">
-            <ModeIcon mode={modeIcon} />
-          </span>
-        )}
-        <span className="agentz-composer-menu-label">{selected?.label}</span>
-        <ChevronDown />
-      </button>
-      {open && (
-        <div className="agentz-composer-menu-popup" role="listbox">
-          {options.map((opt) => (
-            <button
-              key={opt.id || "__default"}
-              type="button"
-              role="option"
-              aria-selected={opt.id === value}
-              className={opt.id === value ? "active" : ""}
-              onClick={() => {
-                onChange(opt.id);
-                setOpen(false);
-              }}
-            >
-              <span className="agentz-composer-menu-option-label">{opt.label}</span>
-              {opt.hint && <span className="agentz-composer-menu-option-hint">{opt.hint}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function SkillGlyph() {
@@ -191,75 +110,6 @@ export interface SkillSelector {
   onChange: (slugs: string[]) => void;
   label: string;
   emptyHint?: string;
-}
-
-function SkillsMenu({ selector, disabled }: { selector: SkillSelector; disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const { options, selected, onChange, label, emptyHint } = selector;
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  const toggle = (id: string) => {
-    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
-  };
-
-  const count = selected.length;
-  return (
-    <div className="agentz-composer-menu text" ref={rootRef}>
-      <button
-        type="button"
-        className={`agentz-composer-menu-trigger${count > 0 ? " has-skills" : ""}`}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        title={label}
-      >
-        <span className="agentz-composer-menu-icon">
-          <SkillGlyph />
-        </span>
-        <span className="agentz-composer-menu-label">{count > 0 ? `${label} · ${count}` : label}</span>
-        <ChevronDown />
-      </button>
-      {open && (
-        <div className="agentz-composer-menu-popup" role="listbox" aria-multiselectable="true">
-          {options.length === 0 ? (
-            <div className="agentz-composer-menu-empty">{emptyHint ?? "—"}</div>
-          ) : (
-            options.map((opt) => {
-              const active = selected.includes(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  className={`agentz-skill-option${active ? " active" : ""}`}
-                  onClick={() => toggle(opt.id)}
-                >
-                  <span className="agentz-skill-option-head">
-                    <span className="agentz-composer-menu-check" aria-hidden>
-                      {active ? "✓" : ""}
-                    </span>
-                    <span className="agentz-composer-menu-option-label">{opt.label}</span>
-                  </span>
-                  {opt.hint && <span className="agentz-composer-menu-option-hint">{opt.hint}</span>}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export interface ChatComposerProps {
@@ -433,32 +283,45 @@ export default function ChatComposer({
         <div className="agentz-composer-footer">
           <div className="agentz-composer-footer-left">
             {modeSelector && (
-              <ComposerMenu
+              <DropdownSelect
                 value={modeSelector.chatMode}
                 options={modeSelector.options}
                 onChange={(id) => modeSelector.onChange(id as ChatMode)}
                 variant="pill"
-                modeIcon={modeSelector.chatMode}
+                placement="up"
+                icon={<ModeIcon mode={modeSelector.chatMode} />}
                 disabled={busy || locked}
               />
             )}
-            <ComposerMenu
+            <DropdownSelect
               value={modelId}
               options={modelOptions}
               onChange={onModelChange}
               variant="text"
+              placement="up"
               disabled={busy || locked}
             />
             {agentSelector && agentSelector.options.length > 1 && (
-              <ComposerMenu
+              <DropdownSelect
                 value={agentSelector.value}
                 options={agentSelector.options}
                 onChange={agentSelector.onChange}
                 variant="text"
+                placement="up"
                 disabled={busy || locked}
               />
             )}
-            {skillSelector && <SkillsMenu selector={skillSelector} disabled={busy || locked} />}
+            {skillSelector && (
+              <DropdownMultiSelect
+                options={skillSelector.options}
+                selected={skillSelector.selected}
+                onChange={skillSelector.onChange}
+                label={skillSelector.label}
+                emptyHint={skillSelector.emptyHint}
+                icon={<SkillGlyph />}
+                disabled={busy || locked}
+              />
+            )}
             <button
               type="button"
               className="agentz-composer-icon-btn"

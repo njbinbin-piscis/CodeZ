@@ -5,6 +5,21 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-06-08
+
+Replace native `<select>` dropdowns with theme-aware `DropdownSelect` so popup
+lists match the dark UI (fixes unreadable white/gray OS menus in Tauri).
+
+### Changed
+
+- **WorkZ**: team and agent pickers above the goal input now use the same styled
+  menu as CodeZ composer (assistant / skills / model).
+- **CodeZ composer**: menu implementation consolidated into shared `DropdownSelect`.
+- **Settings, Studio, Workflow designer, Connectors, Hooks, IM assistants**:
+  all form selects migrated to `DropdownSelect`.
+- **`chat_ui` forms**, project picker, and bottom-panel output channel selector
+  also use the shared component.
+
 ## [0.4.3] - 2026-06-07
 
 Rich assistant message rendering aligned with OpenPiscis, plus CI clippy fix
@@ -87,6 +102,7 @@ Universal); see [`RELEASE.md`](RELEASE.md) for install notes.
   added Prettier config and `lint`/`format` scripts.
 - Hardened the swarm patrol against poisoned locks and single-round panics.
 
+[0.4.4]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.4
 [0.4.3]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.3
 [0.3.1]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.3.1
 [0.3.0]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.3.0

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import DropdownSelect from "../../DropdownSelect";
 import Markdown from "../../../workspaces/codez/Markdown";
 import type { UiBlock, UiButton } from "./protocol";
 
@@ -365,15 +366,19 @@ export function ProjectPickerBlock({
   return (
     <div className={`ic-field${error ? " ic-field-error" : ""}`}>
       {block.label && <label className="ic-label">{block.label}</label>}
-      <select className="ic-select" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-        <option value="">—</option>
-        {block.allow_new && <option value="__new__">+ New project</option>}
-        {options.map((p) => (
-          <option key={p.value} value={p.value}>
-            {p.label}
-          </option>
-        ))}
-      </select>
+      <DropdownSelect
+        variant="field"
+        placement="down"
+        value={value}
+        disabled={disabled}
+        placeholder="—"
+        options={[
+          { id: "", label: "—" },
+          ...(block.allow_new ? [{ id: "__new__", label: "+ New project" }] : []),
+          ...options.map((p) => ({ id: p.value, label: p.label, hint: p.description })),
+        ]}
+        onChange={onChange}
+      />
       {error && <span className="ic-error">{error}</span>}
     </div>
   );

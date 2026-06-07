@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import DropdownSelect from "../../../components/DropdownSelect";
 import {
   getHooks,
   runHook,
@@ -143,13 +144,12 @@ export default function HooksTab({ projectDir }: HooksTabProps) {
                     onChange={(e) => patch(idx, { name: e.target.value })}
                     placeholder={t("hooks.namePlaceholder")}
                   />
-                  <select value={h.event} onChange={(e) => patch(idx, { event: e.target.value as HookEvent })}>
-                    {EVENTS.map((ev) => (
-                      <option key={ev} value={ev}>
-                        {t(`hooks.event.${ev}`)}
-                      </option>
-                    ))}
-                  </select>
+                  <DropdownSelect
+                    variant="inline"
+                    value={h.event}
+                    options={EVENTS.map((ev) => ({ id: ev, label: t(`hooks.event.${ev}`) }))}
+                    onChange={(v) => patch(idx, { event: v as HookEvent })}
+                  />
                   <label className="agentz-settings-checkbox">
                     <input
                       type="checkbox"
