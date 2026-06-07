@@ -22,6 +22,7 @@ import {
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 import { listConnectors, type ConnectorInfo } from "../../../services/tauri/connectors";
 import { getSettings, type SettingsResponse } from "../../../services/tauri/settings";
+import { onSettingsRefresh } from "../../../services/settingsRefresh";
 import { emptyGraph, validateGraph } from "../../../services/tauri/workflow";
 import WorkflowDesigner from "./WorkflowDesigner";
 import "./StudioTab.css";
@@ -103,6 +104,7 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
 
   useEffect(() => {
     void refresh();
+    return onSettingsRefresh(() => void refresh());
   }, [refresh]);
 
   const workflowEditing =

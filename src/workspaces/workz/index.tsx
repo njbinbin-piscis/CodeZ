@@ -13,7 +13,8 @@ import {
   type PlanTodoItem,
   type SessionMeta,
 } from "../../services/tauri/chat";
-import { getSettings, type LlmProviderConfig, type SettingsResponse } from "../../services/tauri/settings";
+import { useAppSettings, pruneModelId } from "../../hooks/useAppSettings";
+import { useInputHistory } from "../../components/useInputHistory";
 import { ideApi } from "../../services/tauri/ide";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask";
@@ -23,7 +24,6 @@ import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComp
 import {
   modelLabel,
   modelDisplayLabel,
-  defaultModelDisplayLabel,
   pickChatAttachment,
   attachmentFromPath,
   blobToDataUrl,
@@ -91,9 +91,8 @@ export default function WorkZWorkspace({
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [wikiBusy, setWikiBusy] = useState(false);
   const [modelId, setModelId] = useState(() => localStorage.getItem("agentz-model-id") ?? "");
-  const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
-  const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
-  const [defaultModelLabel, setDefaultModelLabel] = useState("");
+  const { appSettings, llmProviders, defaultModelLabel } = useAppSettings();
+  const inputHistory = useInputHistory("agentz-input-history-workz");
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -168,18 +167,12 @@ export default function WorkZWorkspace({
   }, []);
 
   useEffect(() => {
-    getSettings()
-      .then((s) => {
-        setLlmProviders(s.llm_providers ?? []);
-        setAppSettings(s);
-        setDefaultModelLabel(defaultModelDisplayLabel(s.provider, s.model));
-      })
-      .catch(() => setLlmProviders([]));
-  }, []);
-
-  useEffect(() => {
     localStorage.setItem("agentz-model-id", modelId);
   }, [modelId]);
+
+  useEffect(() => {
+    setModelId((id) => pruneModelId(id, llmProviders));
+  }, [llmProviders]);
 
   useEffect(() => {
     listTeams()
@@ -528,6 +521,7 @@ export default function WorkZWorkspace({
       setError(t("agent.noProject"));
       return;
     }
+    if (text) inputHistory.push(text);
     // Workflow teams run a deterministic graph (no chat turn / coordinator).
     const teamInfo = teams.find((tm) => tm.id === activeTeam);
     if (activeTeam && teamInfo?.mode === "workflow") {
@@ -546,7 +540,7 @@ export default function WorkZWorkspace({
     setGoal("");
     clearAttachment();
     void runRef.current(text, pendingAttachment);
-  }, [goal, attachment, busy, projectDir, clearAttachment, t, teams, activeTeam]);
+  }, [goal, attachment, busy, projectDir, clearAttachment, inputHistory, t, teams, activeTeam]);
 
   const newTask = useCallback(() => {
     if (!projectDir) return;
@@ -645,6 +639,20 @@ export default function WorkZWorkspace({
   }, [wikiBuildNonce, buildWiki]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const next = inputHistory.navigate(e.key === "ArrowUp" ? "up" : "down", goal);
+      if (next !== null) {
+        e.preventDefault();
+        setGoal(next);
+        requestAnimationFrame(() => {
+          const ta = taRef.current;
+          if (!ta) return;
+          const pos = next.length;
+          ta.setSelectionRange(pos, pos);
+        });
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       run();

@@ -20,7 +20,8 @@ import {
   type PlanTodoItem,
   type SessionMeta,
 } from "../../services/tauri/chat";
-import { getSettings, type LlmProviderConfig, type SettingsResponse } from "../../services/tauri/settings";
+import { useAppSettings, pruneModelId } from "../../hooks/useAppSettings";
+import { useInputHistory } from "../../components/useInputHistory";
 import { listInstalledSkills, type InstalledSkill } from "../../services/tauri/workbench";
 import { listAgents, type AgentInfo } from "../../services/tauri/agents";
 import { ideApi } from "../../services/tauri/ide";
@@ -42,7 +43,6 @@ import {
   dataUrlToBase64,
   modelLabel,
   modelDisplayLabel,
-  defaultModelDisplayLabel,
   pickChatAttachment,
 } from "../../components/chatComposerUtils";
 import { visionCapable } from "../../components/visionUtils";
@@ -150,9 +150,8 @@ export default function AssistantPanel({
     return saved === "plan" ? "plan" : "agent";
   });
   const [modelId, setModelId] = useState(() => localStorage.getItem("agentz-model-id") ?? "");
-  const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
-  const [defaultModelLabel, setDefaultModelLabel] = useState("");
-  const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
+  const { appSettings, llmProviders, defaultModelLabel } = useAppSettings();
+  const inputHistory = useInputHistory("agentz-input-history-codez");
   const [toast, setToast] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanTodoItem[]>([]);
   const [review, setReview] = useState<{ turnId: string; changes: JournalChange[] } | null>(null);
@@ -215,17 +214,8 @@ export default function AssistantPanel({
   }, [projectDir, clearCards]);
 
   useEffect(() => {
-    getSettings()
-      .then((s) => {
-        setAppSettings(s);
-        setLlmProviders(s.llm_providers ?? []);
-        setDefaultModelLabel(defaultModelDisplayLabel(s.provider, s.model));
-      })
-      .catch(() => {
-        setAppSettings(null);
-        setLlmProviders([]);
-      });
-  }, []);
+    setModelId((id) => pruneModelId(id, llmProviders));
+  }, [llmProviders]);
 
   useEffect(() => {
     listInstalledSkills()
@@ -605,8 +595,9 @@ export default function AssistantPanel({
       setPlanResume({ text, attachment: pendingAttachment });
       return;
     }
+    inputHistory.push(text);
     doSend(text, pendingAttachment, true);
-  }, [input, composerChips, projectDir, planItems, doSend, t]);
+  }, [input, composerChips, projectDir, planItems, doSend, inputHistory, t]);
 
   const onModeChange = (mode: ChatMode) => {
     setChatMode(mode);
@@ -877,6 +868,21 @@ export default function AssistantPanel({
         return;
       }
     }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const next = inputHistory.navigate(e.key === "ArrowUp" ? "up" : "down", input);
+      if (next !== null) {
+        e.preventDefault();
+        setInput(next);
+        setMention(null);
+        requestAnimationFrame(() => {
+          const ta = taRef.current;
+          if (!ta) return;
+          const pos = next.length;
+          ta.setSelectionRange(pos, pos);
+        });
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -895,7 +901,9 @@ export default function AssistantPanel({
       ? t("chat.placeholderBusyQueue")
       : chatMode === "plan"
         ? t("chat.placeholderPlan")
-        : t("chat.placeholderFollowUp");
+        : messages.length === 0
+          ? t("chat.placeholder")
+          : t("chat.placeholderFollowUp");
 
   return (
     <div className="agentz-assistant" ref={panelRef}>

@@ -12,6 +12,7 @@ import {
   type SettingsResponse,
 } from "../../services/tauri/settings";
 import { setLanguage } from "../../i18n";
+import { notifySettingsRefresh } from "../../services/settingsRefresh";
 import ExtensionsManager from "./ExtensionsManager";
 import SkillsTab from "./settings/SkillsTab";
 import AssistantsTab from "./settings/AssistantsTab";
@@ -239,6 +240,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
       } catch {
         /* non-fatal: flash selection is best-effort */
       }
+      notifySettingsRefresh();
       onClose();
     } catch (e) {
       setError(String(e));
@@ -354,6 +356,20 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
             ) : (
           <>
             <div className="agentz-settings-body">
+              <section className="agentz-settings-section">
+                <div className="agentz-settings-field">
+                  <label htmlFor="agentz-settings-language">{t("settings.language")}</label>
+                  <select
+                    id="agentz-settings-language"
+                    value={form.language}
+                    onChange={(e) => update("language", e.target.value)}
+                  >
+                    <option value="zh">{t("settings.languageZh")}</option>
+                    <option value="en">{t("settings.languageEn")}</option>
+                  </select>
+                </div>
+              </section>
+
               <div className="agentz-settings-status">
                 <span
                   className={`agentz-settings-status-dot ${configured ? "ok" : "missing"}`}
@@ -371,18 +387,6 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
 
               <section className="agentz-settings-section">
                 <h3>{t("settings.aiProvider")}</h3>
-
-                <div className="agentz-settings-field">
-                  <label htmlFor="agentz-settings-language">{t("settings.language")}</label>
-                  <select
-                    id="agentz-settings-language"
-                    value={form.language}
-                    onChange={(e) => update("language", e.target.value)}
-                  >
-                    <option value="zh">{t("settings.languageZh")}</option>
-                    <option value="en">{t("settings.languageEn")}</option>
-                  </select>
-                </div>
 
                 <div className="agentz-settings-field">
                   <label htmlFor="agentz-settings-provider">{t("settings.provider")}</label>

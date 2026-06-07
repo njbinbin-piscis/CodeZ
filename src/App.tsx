@@ -5,6 +5,7 @@ import { generateRepoWiki } from "./services/tauri/repoWiki";
 import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/codez/Terminal";
 import { getSettings } from "./services/tauri/settings";
 import { setLanguage } from "./i18n";
+import { onSettingsRefresh } from "./services/settingsRefresh";
 import {
   getAppearanceTheme,
   toggleAppearanceTheme,
@@ -74,15 +75,19 @@ export default function App() {
   const [appearance, setAppearance] = useState<AppearanceTheme>(() => getAppearanceTheme());
 
   useEffect(() => {
-    getSettings()
-      .then((s) => {
-        if (s.language === "zh" || s.language === "en") {
-          setLanguage(s.language);
-        }
-      })
-      .catch(() => {
-        // config may not exist yet — keep browser-detected language
-      });
+    const applyLanguage = () => {
+      getSettings()
+        .then((s) => {
+          if (s.language === "zh" || s.language === "en") {
+            setLanguage(s.language);
+          }
+        })
+        .catch(() => {
+          // config may not exist yet — keep browser-detected language
+        });
+    };
+    applyLanguage();
+    return onSettingsRefresh(applyLanguage);
   }, []);
 
   const pickFolder = useCallback(async () => {
