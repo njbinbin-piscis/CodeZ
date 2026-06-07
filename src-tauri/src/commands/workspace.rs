@@ -121,9 +121,15 @@ fn sanitize_snapshot(mut snap: WorkspaceSnapshot) -> WorkspaceSnapshot {
 #[derive(Clone)]
 pub struct WorkspaceCloseGate(pub Arc<AtomicBool>);
 
+impl Default for WorkspaceCloseGate {
+    fn default() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+}
+
 impl WorkspaceCloseGate {
     pub fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
+        Self::default()
     }
 }
 
