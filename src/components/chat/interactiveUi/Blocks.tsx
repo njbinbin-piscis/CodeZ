@@ -1,16 +1,27 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import Markdown from "../../../workspaces/codez/Markdown";
 import type { UiBlock, UiButton } from "./protocol";
 
 export function TextBlock({ block }: { block: UiBlock }) {
-  return <p className="ic-text">{block.content || ""}</p>;
+  const content = block.content || "";
+  if (!content.trim()) return null;
+  return (
+    <div className="ic-text">
+      <Markdown content={content} compact />
+    </div>
+  );
 }
 
 export function SectionBlock({ block }: { block: UiBlock }) {
   return (
     <div className="ic-section">
       {block.label && <div className="ic-section-title">{block.label}</div>}
-      {block.description && <p className="ic-section-desc">{block.description}</p>}
+      {block.description && (
+        <div className="ic-section-desc">
+          <Markdown content={block.description} compact />
+        </div>
+      )}
     </div>
   );
 }

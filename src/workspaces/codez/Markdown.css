@@ -117,3 +117,99 @@
   background: rgba(124, 106, 247, 0.18);
   color: #fff;
 }
+
+.agentz-markdown-compact {
+  font-size: 12px;
+}
+
+.agentz-markdown-compact p {
+  margin: 0 0 4px;
+}
+
+.agentz-code-lang {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim, #9a9ab0);
+  margin-bottom: 4px;
+}
+
+.agentz-md-inline-code {
+  background: var(--bg-elev-2, #1b1b26);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.agentz-mermaid-block {
+  margin: 8px 0;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.agentz-mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.agentz-mermaid-error pre {
+  margin: 0;
+}
+
+.agentz-html-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  background: var(--bg-elev-1, #12121a);
+  overflow-x: auto;
+}
+
+.agentz-html-block table {
+  border-collapse: collapse;
+}
+
+.agentz-html-block th,
+.agentz-html-block td {
+  border: 1px solid var(--border, #2a2a38);
+  padding: 4px 8px;
+}
+
+.agentz-table-scroll {
+  overflow-x: auto;
+  margin: 6px 0;
+}
+
+.agentz-table-scroll table {
+  min-width: 100%;
+}
+
+.agentz-md-image {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 6px 0;
+  cursor: zoom-in;
+}
+
+.agentz-markdown-fallback {
+  margin: 0;
+  padding: 8px;
+  background: #0c0c12;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+/* KaTeX overflow in narrow chat bubbles */
+.agentz-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}

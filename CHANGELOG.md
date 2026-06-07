@@ -5,6 +5,26 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-06-07
+
+Rich assistant message rendering aligned with OpenPiscis, plus CI clippy fix
+from v0.4.2.
+
+### Added
+
+- Agent chat markdown: **Mermaid** diagrams (` ```mermaid `), **HTML** (inline or
+  ` ```html ` blocks, sanitized), **KaTeX** math (`$…$` / `$$…$$`), GFM tables
+  with horizontal scroll, and clickable images.
+- `chat_ui` card `text` / `section.description` blocks now render markdown
+  (mermaid, HTML, formulas) instead of plain text.
+- Render error boundary: malformed markdown falls back to a code block instead of
+  breaking the chat pane.
+
+### Fixed
+
+- `WorkspaceCloseGate`: implement `Default` so `cargo clippy -D warnings` passes
+  in CI (Desktop host job).
+
 ## [0.3.1] - 2026-06-07
 
 Production-readiness release: CI quality gates, test coverage, logging, and
@@ -67,5 +87,6 @@ Universal); see [`RELEASE.md`](RELEASE.md) for install notes.
   added Prettier config and `lint`/`format` scripts.
 - Hardened the swarm patrol against poisoned locks and single-round panics.
 
+[0.4.3]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.3
 [0.3.1]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.3.1
 [0.3.0]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.3.0
