@@ -5,6 +5,8 @@
   border-top: 1px solid var(--border, #2a2a38);
   flex-shrink: 0;
   position: relative;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .agentz-mode-notice {
@@ -190,10 +192,11 @@
 
 .agentz-composer-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 8px 8px;
+  flex-wrap: wrap;
 }
 
 .agentz-composer-footer-left,
@@ -204,8 +207,15 @@
   min-width: 0;
 }
 
+.agentz-composer-footer-left {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .agentz-composer-footer-right {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .agentz-composer-menu {
@@ -222,7 +232,8 @@
   font-size: 12px;
   color: var(--text-dim, #b0b0c0);
   white-space: nowrap;
-  max-width: 180px;
+  max-width: 96px;
+  min-width: 0;
 }
 
 .agentz-composer-menu-trigger:disabled {
@@ -236,6 +247,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text, #e8e8f0);
+  max-width: 80px;
 }
 
 .agentz-composer-menu.pill .agentz-composer-menu-trigger:hover:not(:disabled) {
@@ -266,6 +278,7 @@
 .agentz-composer-menu-label {
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .agentz-composer-menu-popup {

@@ -52,6 +52,18 @@ export function modelLabel(p: LlmProviderConfig): string {
   return p.label?.trim() || p.id;
 }
 
+/** Short label for the composer trigger — model name only, no provider prefix. */
+export function modelDisplayLabel(p: LlmProviderConfig): string {
+  if (p.model?.trim()) return p.model.trim();
+  return modelLabel(p);
+}
+
+/** Short label for the default-model menu entry (settings provider/model). */
+export function defaultModelDisplayLabel(provider: string, model: string): string {
+  if (model?.trim()) return model.trim();
+  return provider?.trim() || "default";
+}
+
 export async function pickChatAttachment(): Promise<{
   attachment: ChatAttachment;
   preview: string | null;

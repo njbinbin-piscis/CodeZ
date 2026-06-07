@@ -157,8 +157,10 @@
 
 .agentz-ide-chat {
   width: 380px;
+  min-width: 340px;
   flex-shrink: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .agentz-ide-chat[hidden] {

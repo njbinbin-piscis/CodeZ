@@ -41,6 +41,8 @@ import {
   blobToDataUrl,
   dataUrlToBase64,
   modelLabel,
+  modelDisplayLabel,
+  defaultModelDisplayLabel,
   pickChatAttachment,
 } from "../../components/chatComposerUtils";
 import { visionCapable } from "../../components/visionUtils";
@@ -217,8 +219,7 @@ export default function AssistantPanel({
       .then((s) => {
         setAppSettings(s);
         setLlmProviders(s.llm_providers ?? []);
-        const label = s.model?.trim() ? `${s.provider}/${s.model}` : s.provider || "default";
-        setDefaultModelLabel(label);
+        setDefaultModelLabel(defaultModelDisplayLabel(s.provider, s.model));
       })
       .catch(() => {
         setAppSettings(null);
@@ -795,7 +796,7 @@ export default function AssistantPanel({
     for (const p of llmProviders) {
       opts.push({
         id: p.id,
-        label: p.model || modelLabel(p),
+        label: modelDisplayLabel(p),
         hint: modelLabel(p),
       });
     }

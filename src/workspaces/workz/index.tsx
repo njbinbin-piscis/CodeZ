@@ -22,6 +22,8 @@ import AgentTaskReview from "./AgentTaskReview";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
 import {
   modelLabel,
+  modelDisplayLabel,
+  defaultModelDisplayLabel,
   pickChatAttachment,
   attachmentFromPath,
   blobToDataUrl,
@@ -170,8 +172,7 @@ export default function WorkZWorkspace({
       .then((s) => {
         setLlmProviders(s.llm_providers ?? []);
         setAppSettings(s);
-        const label = s.model?.trim() ? `${s.provider}/${s.model}` : s.provider || "default";
-        setDefaultModelLabel(label);
+        setDefaultModelLabel(defaultModelDisplayLabel(s.provider, s.model));
       })
       .catch(() => setLlmProviders([]));
   }, []);
@@ -772,7 +773,7 @@ export default function WorkZWorkspace({
     for (const p of llmProviders) {
       opts.push({
         id: p.id,
-        label: p.model || modelLabel(p),
+        label: modelDisplayLabel(p),
         hint: modelLabel(p),
       });
     }

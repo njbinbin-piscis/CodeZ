@@ -11,7 +11,8 @@ use std::process::Stdio;
 
 use serde::Serialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter, State};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
@@ -50,9 +51,10 @@ pub struct ExtHostStatus {
 
 /// Resolve the path to the bundled extension-host entry (`host.js`).
 ///
-/// Precedence: explicit arg → `$CODEZ_EXT_HOST_JS` → a set of candidate paths
-/// relative to the executable / workspace (dev builds).
-fn resolve_host_js(explicit: Option<String>) -> Result<PathBuf, String> {
+/// Precedence: explicit arg → `$CODEZ_EXT_HOST_JS` → Tauri resource bundle
+/// (`extension-host/host.js` from `tauri.conf.json`) → dev build path → legacy
+/// fallbacks relative to the executable / cwd.
+fn resolve_host_js(app: &AppHandle, explicit: Option<String>) -> Result<PathBuf, String> {
     if let Some(p) = explicit.filter(|s| !s.is_empty()) {
         let pb = PathBuf::from(p);
         if pb.exists() {
@@ -66,14 +68,35 @@ fn resolve_host_js(explicit: Option<String>) -> Result<PathBuf, String> {
             return Ok(pb);
         }
     }
+
     let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // Production bundle: tauri.conf.json maps dist/host.js → extension-host/host.js
+    if let Ok(p) = app
+        .path()
+        .resolve("extension-host/host.js", BaseDirectory::Resource)
+    {
+        candidates.push(p.clone());
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    // Dev build: extension-host/dist/host.js next to the crate.
+    let dev_host =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../extension-host/dist/host.js");
+    candidates.push(dev_host.clone());
+    if dev_host.exists() {
+        return Ok(dev_host);
+    }
+
     if let Ok(exe) = std::env::current_exe() {
         let mut dir = exe.parent().map(|p| p.to_path_buf());
-        // Walk a few ancestors looking for extension-host/dist/host.js.
         for _ in 0..6 {
             if let Some(d) = &dir {
                 candidates.push(d.join("extension-host/dist/host.js"));
                 candidates.push(d.join("resources/extension-host/host.js"));
+                candidates.push(d.join("extension-host/host.js"));
                 dir = d.parent().map(|p| p.to_path_buf());
             }
         }
@@ -110,7 +133,7 @@ pub async fn ext_host_start(
     project_dir: String,
     host_js: Option<String>,
 ) -> Result<ExtHostStatus, String> {
-    let host_js_path = resolve_host_js(host_js)?;
+    let host_js_path = resolve_host_js(&app, host_js)?;
     let mgr = state.ext_host.clone();
 
     // Tear down any prior instance first.
@@ -222,12 +245,17 @@ pub async fn ext_host_stop(state: State<'_, AppState>) -> Result<(), String> {
 
 /// Report whether the host is running.
 #[tauri::command]
-pub async fn ext_host_status(state: State<'_, AppState>) -> Result<ExtHostStatus, String> {
+pub async fn ext_host_status(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ExtHostStatus, String> {
     let mgr = state.ext_host.clone();
     let inner = mgr.inner.lock().await;
     Ok(ExtHostStatus {
         running: inner.child.is_some(),
         project_dir: inner.project_dir.clone(),
-        host_js: resolve_host_js(None).map(|p| p.display().to_string()).unwrap_or_default(),
+        host_js: resolve_host_js(&app, None)
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
     })
 }

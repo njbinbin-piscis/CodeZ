@@ -502,6 +502,7 @@ const zh = {
     placeholderBusyQueue: "Agent 正在执行 — 新消息将排队…",
     queue: "排队",
     modeWorkZ: "WorkZ",
+    modeAgent: "Agent",
     modePlan: "Plan",
     modeAgentHint: "Agent 模式：可读写文件并执行命令",
     modePlanHint: "Plan 模式：只读探索 + 计划待办列表，不修改文件",

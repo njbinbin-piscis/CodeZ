@@ -6,6 +6,7 @@
   background: var(--bg-elev, #14141c);
   border-left: 1px solid var(--border, #2a2a38);
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .agentz-assistant-header {

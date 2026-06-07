@@ -46,7 +46,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem("agentz-chat-width"));
-    return Number.isFinite(saved) && saved >= 280 ? Math.min(760, saved) : 380;
+    return Number.isFinite(saved) && saved >= 340 ? Math.min(760, saved) : 380;
   });
   const [chatInsert, setChatInsert] = useState<{ paths: string[]; nonce: number } | null>(null);
   const [chatInsertElement, setChatInsertElement] = useState<{
@@ -195,7 +195,7 @@ export default function App() {
       const startW = chatWidth;
       const onMove = (ev: MouseEvent) => {
         const delta = startX - ev.clientX;
-        setChatWidth(Math.min(760, Math.max(280, startW + delta)));
+        setChatWidth(Math.min(760, Math.max(340, startW + delta)));
       };
       const onUp = () => {
         window.removeEventListener("mousemove", onMove);
