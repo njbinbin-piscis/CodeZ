@@ -181,7 +181,9 @@ export class LspClient {
             }),
           );
 
-          console.log(`[LSP] Connected to ${this.url} for ${language}`);
+          if (import.meta.env.DEV) {
+            console.log(`[LSP] Connected to ${this.url} for ${language}`);
+          }
           resolve();
         } catch (err) {
           reject(err);
@@ -198,7 +200,9 @@ export class LspClient {
       };
 
       ws.onclose = () => {
-        console.log("[LSP] WebSocket closed");
+        if (import.meta.env.DEV) {
+          console.log("[LSP] WebSocket closed");
+        }
         this.ws = null;
       };
     });

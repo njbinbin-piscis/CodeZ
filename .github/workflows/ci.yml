@@ -24,7 +24,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build:exthost
       - run: npm --prefix extension-host run smoke
       - run: npm run build
@@ -45,6 +47,8 @@ jobs:
             librsvg2-dev \
             build-essential
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
@@ -53,5 +57,7 @@ jobs:
       - run: npm ci
       - run: npm run build:exthost
       - run: npm run build
-      - name: cargo check (workspace)
-        run: cargo check --workspace --all-targets
+      - name: cargo clippy (workspace, deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: cargo test (workspace)
+        run: cargo test --workspace

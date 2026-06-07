@@ -1,0 +1,6 @@
+dist
+dist-ssr
+node_modules
+src-tauri/target
+extension-host/dist
+extension-host/node_modules

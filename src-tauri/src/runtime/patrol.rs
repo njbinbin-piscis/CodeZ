@@ -39,6 +39,13 @@ fn registry() -> &'static Mutex<HashSet<String>> {
     REG.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+/// Lock the dedup registry, tolerating a poisoned mutex: a patrol round that
+/// panicked while holding the lock must not permanently wedge all future
+/// patrols, so we recover the inner set instead of unwrapping.
+fn lock_registry() -> std::sync::MutexGuard<'static, HashSet<String>> {
+    registry().lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Ensure a background patrol is running for `project_dir`. Idempotent: a second
 /// call while a patrol is already active for the same project is a no-op.
 pub fn ensure_pool_patrol(app: &AppHandle, project_dir: &str) {
@@ -47,7 +54,7 @@ pub fn ensure_pool_patrol(app: &AppHandle, project_dir: &str) {
         return;
     }
     {
-        let mut reg = registry().lock().unwrap();
+        let mut reg = lock_registry();
         if !reg.insert(dir.clone()) {
             return;
         }
@@ -55,20 +62,20 @@ pub fn ensure_pool_patrol(app: &AppHandle, project_dir: &str) {
     let app = app.clone();
     tokio::spawn(async move {
         run_patrol(app, dir.clone()).await;
-        registry().lock().unwrap().remove(&dir);
+        lock_registry().remove(&dir);
     });
 }
 
 async fn run_patrol(app: AppHandle, project_dir: String) {
     info!(target: "pool::patrol", project_dir = %project_dir, "swarm patrol started");
     // Startup sweep recovers anything left stale by a previous crash immediately.
-    run_round(&app, &project_dir, 0).await;
+    run_round_isolated(&app, &project_dir, 0).await;
 
     let mut empty_rounds = 0u32;
     loop {
         tokio::time::sleep(PATROL_INTERVAL).await;
-        match run_round(&app, &project_dir, STALE_BUSY_SECS).await {
-            Some(active_pools) if active_pools == 0 => {
+        match run_round_isolated(&app, &project_dir, STALE_BUSY_SECS).await {
+            Some(0) => {
                 empty_rounds += 1;
                 if empty_rounds >= EMPTY_ROUNDS_BEFORE_EXIT {
                     info!(target: "pool::patrol", project_dir = %project_dir, "swarm patrol retiring (no active pools)");
@@ -80,6 +87,27 @@ async fn run_patrol(app: AppHandle, project_dir: String) {
                 // DB could not be opened (project removed?) — retire.
                 return;
             }
+        }
+    }
+}
+
+/// Run one round inside its own task so a panic in DB/runtime code is contained
+/// to that round (logged + treated as a non-empty round) rather than killing
+/// the whole patrol loop.
+async fn run_round_isolated(app: &AppHandle, project_dir: &str, max_busy_secs: i64) -> Option<u32> {
+    let app = app.clone();
+    let dir = project_dir.to_string();
+    match tokio::spawn(async move { run_round(&app, &dir, max_busy_secs).await }).await {
+        Ok(outcome) => outcome,
+        Err(join_err) => {
+            warn!(
+                target: "pool::patrol",
+                project_dir = %project_dir,
+                "patrol round panicked, continuing: {join_err}"
+            );
+            // Treat a panicked round as "work present" so the patrol keeps going
+            // instead of prematurely retiring.
+            Some(1)
         }
     }
 }

@@ -168,10 +168,13 @@ Packaging (installers):
 npm run tauri build            # → src-tauri/target/release/bundle/{deb,appimage,rpm}
 ```
 
-CI builds the Linux `.deb` + `.AppImage` bundles via
-`.github/workflows/release.yml` (using `tauri-action`) on a pushed `v*` tag or
-manual dispatch, attaching them to a draft GitHub release and as workflow
-artifacts.
+CI builds bundles for Linux (`.deb` + `.AppImage`, x86_64 and aarch64),
+Windows (`.msi` + `.exe`, x86_64 and aarch64) and macOS (`.dmg` + `.app`,
+Apple Silicon and Universal) via `.github/workflows/release.yml` (using
+`tauri-action`) on a pushed `v*` tag or manual dispatch. Artifacts are attached
+to a **published** (non-draft) GitHub release and as workflow artifacts. This
+release line is **unsigned / manual download** — see [`RELEASE.md`](RELEASE.md)
+for install steps and the plan for code signing + auto-update.
 
 `cargo` fetches `piscis-engine` from GitHub and compiles the kernel. To develop
 the kernel and AgentZ together locally, add a `[patch]` pointing the git source

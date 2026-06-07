@@ -132,7 +132,7 @@ pub async fn dap_send(state: State<'_, AppState>, message: String) -> Result<(),
     let mgr = state.dap.clone();
     let mut inner = mgr.inner.lock().await;
     let stdin = inner.stdin.as_mut().ok_or("debug adapter is not running")?;
-    let header = format!("Content-Length: {}\r\n\r\n", message.as_bytes().len());
+    let header = format!("Content-Length: {}\r\n\r\n", message.len());
     stdin
         .write_all(header.as_bytes())
         .await

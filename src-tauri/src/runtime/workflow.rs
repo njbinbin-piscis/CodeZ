@@ -23,11 +23,70 @@ use piscis_core::host::{KoiTurnExit, KoiTurnHandle, KoiTurnRequest, SubagentRunt
 use crate::commands::agents::safe_id;
 use crate::commands::data_scope::open_project_kernel_state;
 use crate::commands::workflow::{
-    load_run, save_run, BranchEvaluator, StepRecord, WorkflowRun,
+    load_run, save_run, BranchEvaluator, StepRecord, WorkflowEdge, WorkflowNode, WorkflowRun,
 };
 use crate::runtime::koi::DesktopInProcessSubagentRuntime;
 
 const WORKFLOW_EVENT_CHANNEL: &str = "agentz:workflow-event";
+
+/// What to do with an agent node turn after it failed, given its retry budget
+/// and `on_error` policy. Pure decision so it can be unit-tested in isolation.
+#[derive(Debug, PartialEq, Eq)]
+enum FaultDecision {
+    Retry,
+    Skip,
+    Fail,
+}
+
+fn fault_decision(attempt: u32, max_retries: u32, on_error: Option<&str>) -> FaultDecision {
+    if attempt < max_retries {
+        FaultDecision::Retry
+    } else if on_error == Some("skip") {
+        FaultDecision::Skip
+    } else {
+        FaultDecision::Fail
+    }
+}
+
+/// The edge a branch node takes for a produced `label`: the first matching case
+/// (case-insensitive) else the node's `default_to`. `None` means dead end.
+fn branch_target(node: &WorkflowNode, label: &str) -> Option<String> {
+    node.cases
+        .iter()
+        .find(|c| c.label.eq_ignore_ascii_case(label))
+        .map(|c| c.to.clone())
+        .or_else(|| node.default_to.clone())
+}
+
+/// A loop node's next move: enter the body (bumping the iteration count) or take
+/// the exit edge (the single outgoing edge that is not the loop body).
+#[derive(Debug, PartialEq, Eq)]
+enum LoopDecision {
+    Enter { next_count: u32, body: Option<String> },
+    Exit { next: Option<String> },
+}
+
+fn loop_step(
+    body_to: Option<&str>,
+    count: u32,
+    max_iterations: u32,
+    exit_early: bool,
+    edges: &[WorkflowEdge],
+    cursor: &str,
+) -> LoopDecision {
+    if !exit_early && count < max_iterations && body_to.is_some() {
+        LoopDecision::Enter {
+            next_count: count + 1,
+            body: body_to.map(|s| s.to_string()),
+        }
+    } else {
+        let next = edges
+            .iter()
+            .find(|e| e.from == cursor && body_to != Some(e.to.as_str()))
+            .map(|e| e.to.clone());
+        LoopDecision::Exit { next }
+    }
+}
 
 /// Result of driving an agent node through its retry/skip policy.
 enum AgentOutcome {
@@ -181,22 +240,26 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                                 finish(&app, &mut run, "cancelled", Some(&cursor))?;
                                 return Ok(());
                             }
-                            if attempt < node.max_retries {
-                                attempt += 1;
-                                emit(
-                                    &app,
-                                    &run,
-                                    "retry",
-                                    Some(&cursor),
-                                    Some(&format!("attempt {}/{}: {}", attempt, node.max_retries, e)),
-                                );
-                                tokio::time::sleep(Duration::from_millis(400)).await;
-                                continue;
+                            match fault_decision(attempt, node.max_retries, node.on_error.as_deref())
+                            {
+                                FaultDecision::Retry => {
+                                    attempt += 1;
+                                    emit(
+                                        &app,
+                                        &run,
+                                        "retry",
+                                        Some(&cursor),
+                                        Some(&format!(
+                                            "attempt {}/{}: {}",
+                                            attempt, node.max_retries, e
+                                        )),
+                                    );
+                                    tokio::time::sleep(Duration::from_millis(400)).await;
+                                    continue;
+                                }
+                                FaultDecision::Skip => break AgentOutcome::Skipped(e),
+                                FaultDecision::Fail => return Err(e),
                             }
-                            if node.on_error.as_deref() == Some("skip") {
-                                break AgentOutcome::Skipped(e);
-                            }
-                            return Err(e);
                         }
                     }
                 };
@@ -233,12 +296,7 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                         return Err(e);
                     }
                 };
-                let target = node
-                    .cases
-                    .iter()
-                    .find(|c| c.label.eq_ignore_ascii_case(&label))
-                    .map(|c| c.to.clone())
-                    .or_else(|| node.default_to.clone());
+                let target = branch_target(&node, &label);
                 if target.is_none() {
                     run.error = Some(format!(
                         "branch '{}' produced label '{}' with no matching case",
@@ -267,26 +325,33 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                     .as_deref()
                     .map(|e| eval_expr(e, &run))
                     .unwrap_or(false);
-                if !exit_early && count < guard.max_iterations && node.body_to.is_some() {
-                    run.iter_counts
-                        .insert(node.id.clone(), json!(count + 1));
-                    run.cursor = node.body_to.clone();
-                    record(&mut run, &node, None, Some(format!("iteration {}", count + 1)));
-                    save_run(&app, &run)?;
-                    emit(&app, &run, "loop", Some(&cursor), Some(&format!("iter {}", count + 1)));
-                } else {
-                    // Exit edge = the outgoing edge that is NOT the loop body.
-                    run.cursor = run
-                        .graph
-                        .edges
-                        .iter()
-                        .find(|e| {
-                            e.from == cursor && node.body_to.as_deref() != Some(e.to.as_str())
-                        })
-                        .map(|e| e.to.clone());
-                    record(&mut run, &node, None, Some("loop exit".into()));
-                    save_run(&app, &run)?;
-                    emit(&app, &run, "loop_exit", Some(&cursor), None);
+                match loop_step(
+                    node.body_to.as_deref(),
+                    count,
+                    guard.max_iterations,
+                    exit_early,
+                    &run.graph.edges,
+                    &cursor,
+                ) {
+                    LoopDecision::Enter { next_count, body } => {
+                        run.iter_counts.insert(node.id.clone(), json!(next_count));
+                        run.cursor = body;
+                        record(&mut run, &node, None, Some(format!("iteration {}", next_count)));
+                        save_run(&app, &run)?;
+                        emit(
+                            &app,
+                            &run,
+                            "loop",
+                            Some(&cursor),
+                            Some(&format!("iter {}", next_count)),
+                        );
+                    }
+                    LoopDecision::Exit { next } => {
+                        run.cursor = next;
+                        record(&mut run, &node, None, Some("loop exit".into()));
+                        save_run(&app, &run)?;
+                        emit(&app, &run, "loop_exit", Some(&cursor), None);
+                    }
                 }
             }
             other => {
@@ -684,5 +749,85 @@ mod tests {
         let out = truncate("hello world", 5);
         assert_eq!(out.chars().count(), 6); // 5 + ellipsis
         assert!(out.ends_with('…'));
+    }
+
+    fn node_from(v: serde_json::Value) -> WorkflowNode {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn edges_from(v: serde_json::Value) -> Vec<WorkflowEdge> {
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn fault_decision_respects_budget_then_policy() {
+        // Within budget -> retry, regardless of on_error.
+        assert_eq!(fault_decision(0, 2, None), FaultDecision::Retry);
+        assert_eq!(fault_decision(1, 3, Some("skip")), FaultDecision::Retry);
+        // Budget exhausted -> policy decides.
+        assert_eq!(fault_decision(2, 2, None), FaultDecision::Fail);
+        assert_eq!(fault_decision(2, 2, Some("skip")), FaultDecision::Skip);
+        // No budget, default policy fails immediately; skip short-circuits.
+        assert_eq!(fault_decision(0, 0, None), FaultDecision::Fail);
+        assert_eq!(fault_decision(0, 0, Some("skip")), FaultDecision::Skip);
+        assert_eq!(fault_decision(0, 0, Some("fail")), FaultDecision::Fail);
+    }
+
+    #[test]
+    fn branch_target_matches_case_then_default() {
+        let node = node_from(serde_json::json!({
+            "id": "b", "type": "branch",
+            "cases": [{ "label": "approved", "to": "merge" }],
+            "default_to": "rework"
+        }));
+        // Case-insensitive case match.
+        assert_eq!(branch_target(&node, "APPROVED").as_deref(), Some("merge"));
+        // Unknown label falls back to default_to.
+        assert_eq!(branch_target(&node, "changes").as_deref(), Some("rework"));
+    }
+
+    #[test]
+    fn branch_target_dead_end_without_default() {
+        let node = node_from(serde_json::json!({
+            "id": "b", "type": "branch",
+            "cases": [{ "label": "yes", "to": "a" }]
+        }));
+        assert_eq!(branch_target(&node, "no"), None);
+    }
+
+    #[test]
+    fn loop_step_enters_body_within_budget() {
+        let edges = edges_from(serde_json::json!([
+            { "from": "lp", "to": "body" },
+            { "from": "lp", "to": "done" }
+        ]));
+        let d = loop_step(Some("body"), 0, 3, false, &edges, "lp");
+        assert_eq!(
+            d,
+            LoopDecision::Enter { next_count: 1, body: Some("body".into()) }
+        );
+    }
+
+    #[test]
+    fn loop_step_exits_on_budget_early_exit_or_no_body() {
+        let edges = edges_from(serde_json::json!([
+            { "from": "lp", "to": "body" },
+            { "from": "lp", "to": "done" }
+        ]));
+        // Count reached max -> exit, picking the non-body edge.
+        assert_eq!(
+            loop_step(Some("body"), 3, 3, false, &edges, "lp"),
+            LoopDecision::Exit { next: Some("done".into()) }
+        );
+        // exit_when true -> exit even with budget left.
+        assert_eq!(
+            loop_step(Some("body"), 0, 3, true, &edges, "lp"),
+            LoopDecision::Exit { next: Some("done".into()) }
+        );
+        // No body edge configured -> exit.
+        assert!(matches!(
+            loop_step(None, 0, 3, false, &edges, "lp"),
+            LoopDecision::Exit { .. }
+        ));
     }
 }

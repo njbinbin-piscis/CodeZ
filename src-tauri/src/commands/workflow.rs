@@ -222,15 +222,17 @@ fn runs_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(resolve_global_config_dir(app)?.join("workflow-runs"))
 }
 
-pub fn save_run(app: &AppHandle, run: &WorkflowRun) -> Result<(), String> {
-    let dir = runs_dir(app)?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+// ── `&Path` cores (pure file ops; unit-testable with a tempdir) ──
+
+fn save_run_to(dir: &Path, run: &WorkflowRun) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let pretty = serde_json::to_string_pretty(run).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{}.json", run.run_id)), pretty).map_err(|e| e.to_string())
+    std::fs::write(dir.join(format!("{}.json", safe_run_id(&run.run_id))), pretty)
+        .map_err(|e| e.to_string())
 }
 
-pub fn load_run(app: &AppHandle, run_id: &str) -> Result<WorkflowRun, String> {
-    let path = runs_dir(app)?.join(format!("{}.json", safe_run_id(run_id)));
+fn load_run_from(dir: &Path, run_id: &str) -> Result<WorkflowRun, String> {
+    let path = dir.join(format!("{}.json", safe_run_id(run_id)));
     let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     serde_json::from_str(&text).map_err(|e| format!("invalid workflow run: {e}"))
 }
@@ -251,6 +253,53 @@ fn load_all_runs(dir: &Path) -> Vec<WorkflowRun> {
     }
     out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     out
+}
+
+/// True when a run is still advancing and so must not be deleted out from under
+/// the driver.
+fn is_active_status(status: &str) -> bool {
+    status == "running" || status == "waiting_human"
+}
+
+/// Delete one run file. Refuses to delete an active run. Returns `Ok(false)`
+/// when the file did not exist.
+fn delete_run_in(dir: &Path, run_id: &str) -> Result<bool, String> {
+    if let Ok(run) = load_run_from(dir, run_id) {
+        if is_active_status(&run.status) {
+            return Err("cannot delete an active run; cancel it first".to_string());
+        }
+    }
+    let path = dir.join(format!("{}.json", safe_run_id(run_id)));
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// Delete every finished run (completed / failed / cancelled). Returns the count
+/// removed; active runs are left untouched.
+fn clear_finished_in(dir: &Path) -> Result<u32, String> {
+    let mut removed = 0u32;
+    for run in load_all_runs(dir) {
+        if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
+            let path = dir.join(format!("{}.json", safe_run_id(&run.run_id)));
+            if std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
+// ── AppHandle wrappers ──
+
+pub fn save_run(app: &AppHandle, run: &WorkflowRun) -> Result<(), String> {
+    save_run_to(&runs_dir(app)?, run)
+}
+
+pub fn load_run(app: &AppHandle, run_id: &str) -> Result<WorkflowRun, String> {
+    load_run_from(&runs_dir(app)?, run_id)
 }
 
 fn safe_run_id(id: &str) -> String {
@@ -387,33 +436,14 @@ pub async fn workflow_cancel(app: AppHandle, run_id: String) -> Result<(), Strin
 /// file delete out from under itself.
 #[tauri::command]
 pub async fn workflow_delete_run(app: AppHandle, run_id: String) -> Result<(), String> {
-    if let Ok(run) = load_run(&app, &run_id) {
-        if run.status == "running" || run.status == "waiting_human" {
-            return Err("cannot delete an active run; cancel it first".to_string());
-        }
-    }
-    let path = runs_dir(&app)?.join(format!("{}.json", safe_run_id(&run_id)));
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    delete_run_in(&runs_dir(&app)?, &run_id).map(|_| ())
 }
 
 /// Delete every finished run (completed / failed / cancelled), leaving active
 /// runs untouched. Returns how many were removed.
 #[tauri::command]
 pub async fn workflow_clear_finished(app: AppHandle) -> Result<u32, String> {
-    let dir = runs_dir(&app)?;
-    let mut removed = 0u32;
-    for run in load_all_runs(&dir) {
-        if matches!(run.status.as_str(), "completed" | "failed" | "cancelled") {
-            let path = dir.join(format!("{}.json", safe_run_id(&run.run_id)));
-            if std::fs::remove_file(&path).is_ok() {
-                removed += 1;
-            }
-        }
-    }
-    Ok(removed)
+    clear_finished_in(&runs_dir(&app)?)
 }
 
 #[cfg(test)]
@@ -499,6 +529,79 @@ mod tests {
         assert_eq!(g.next_of("start").as_deref(), Some("a"));
         assert_eq!(g.next_of("a").as_deref(), Some("end"));
         assert_eq!(g.next_of("end"), None);
+    }
+
+    // ── Persistence (&Path cores) ──
+
+    fn temp_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("agentz-wf-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn run_fixture(run_id: &str, status: &str) -> WorkflowRun {
+        let now = "2026-01-01T00:00:00Z".to_string();
+        WorkflowRun {
+            run_id: run_id.into(),
+            team_id: "team".into(),
+            team_name: "Team".into(),
+            pool_id: "pool".into(),
+            project_dir: "/tmp/proj".into(),
+            status: status.into(),
+            cursor: None,
+            blackboard: Map::new(),
+            iter_counts: Map::new(),
+            steps: 0,
+            history: Vec::new(),
+            error: None,
+            graph: agent_graph(),
+            created_at: now.clone(),
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn save_load_round_trip() {
+        let dir = temp_dir();
+        let run = run_fixture("wf-1", "completed");
+        save_run_to(&dir, &run).unwrap();
+        let loaded = load_run_from(&dir, "wf-1").unwrap();
+        assert_eq!(loaded.run_id, "wf-1");
+        assert_eq!(loaded.status, "completed");
+        assert_eq!(loaded.graph.entry, run.graph.entry);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_refuses_active_run() {
+        let dir = temp_dir();
+        save_run_to(&dir, &run_fixture("wf-run", "running")).unwrap();
+        save_run_to(&dir, &run_fixture("wf-wait", "waiting_human")).unwrap();
+        save_run_to(&dir, &run_fixture("wf-done", "completed")).unwrap();
+
+        assert!(delete_run_in(&dir, "wf-run").is_err());
+        assert!(delete_run_in(&dir, "wf-wait").is_err());
+        assert_eq!(delete_run_in(&dir, "wf-done"), Ok(true));
+        // Deleting a missing run is a no-op success.
+        assert_eq!(delete_run_in(&dir, "wf-missing"), Ok(false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clear_finished_only_removes_terminal_runs() {
+        let dir = temp_dir();
+        save_run_to(&dir, &run_fixture("a", "completed")).unwrap();
+        save_run_to(&dir, &run_fixture("b", "failed")).unwrap();
+        save_run_to(&dir, &run_fixture("c", "cancelled")).unwrap();
+        save_run_to(&dir, &run_fixture("d", "running")).unwrap();
+        save_run_to(&dir, &run_fixture("e", "waiting_human")).unwrap();
+
+        assert_eq!(clear_finished_in(&dir).unwrap(), 3);
+        // The two active runs survive.
+        let remaining = load_all_runs(&dir);
+        assert_eq!(remaining.len(), 2);
+        assert!(remaining.iter().all(|r| is_active_status(&r.status)));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

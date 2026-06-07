@@ -548,21 +548,6 @@ fn normalize_chrome_path(path: &Path) -> Option<PathBuf> {
     None
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn launch_with_unique_profile() {
-        let mgr = BrowserManager::new();
-        mgr.set_viewport(800, 600).await.unwrap();
-        mgr.ensure_launch_for_test().await.expect("browser should launch");
-        assert!(mgr.is_open().await);
-        mgr.close().await.unwrap();
-        assert!(!mgr.is_open().await);
-    }
-}
-
 impl BrowserManager {
     #[cfg(test)]
     async fn ensure_launch_for_test(&self) -> Result<()> {
@@ -584,5 +569,20 @@ fn chrome_path_is_executable(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn launch_with_unique_profile() {
+        let mgr = BrowserManager::new();
+        mgr.set_viewport(800, 600).await.unwrap();
+        mgr.ensure_launch_for_test().await.expect("browser should launch");
+        assert!(mgr.is_open().await);
+        mgr.close().await.unwrap();
+        assert!(!mgr.is_open().await);
     }
 }

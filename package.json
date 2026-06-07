@@ -1,6 +1,6 @@
 {
   "name": "agentz",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,10 @@
     "build": "tsc && vite build",
     "build:exthost": "npm --prefix extension-host install && npm --prefix extension-host run build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -31,11 +35,20 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@tauri-apps/cli": "^2.1.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "typescript-eslint": "^8.60.1",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
   }
 }

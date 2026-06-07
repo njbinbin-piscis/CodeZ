@@ -120,7 +120,7 @@ pub async fn ext_host_start(
         inner.child = None;
     }
 
-    let mut child = piscis_kernel::proc::tokio_command(&node_bin())
+    let mut child = piscis_kernel::proc::tokio_command(node_bin())
         .arg(&host_js_path)
         .current_dir(&project_dir)
         .stdin(Stdio::piped())

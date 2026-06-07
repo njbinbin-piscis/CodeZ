@@ -528,7 +528,7 @@ async fn get_stream_connection(http: &Client, config: &DingtalkConfig) -> Result
                     "topic": "/v1.0/im/bot/messages/get"
                 }
             ],
-            "ua": "openpiscis/1.0",
+            "ua": "agentz/1.0",
             "localIp": ""
         }))
         .send()

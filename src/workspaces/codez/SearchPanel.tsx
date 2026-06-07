@@ -114,7 +114,6 @@ export default function SearchPanel({ projectDir, onResultClick }: SearchPanelPr
           onKeyDown={(e) => {
             if (e.key === "Enter") void doSearch();
           }}
-          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
         <div className="search-toggles">

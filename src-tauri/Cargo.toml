@@ -1,6 +1,6 @@
 [package]
 name = "agentz-desktop"
-version = "0.3.0"
+version = "0.3.1"
 description = "AgentZ — Cursor-like AI IDE desktop host"
 authors = ["AgentZ"]
 license = "Apache-2.0"
@@ -64,6 +64,7 @@ anyhow = "1"
 async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # Match piscis-kernel — used for checkpoint restore via Database.conn.
 rusqlite = { version = "0.31", features = ["bundled"] }

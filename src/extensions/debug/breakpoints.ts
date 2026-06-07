@@ -48,7 +48,7 @@ export function attachBreakpointGutter(
   monacoNs: typeof monaco,
   path: string,
 ): monaco.IDisposable {
-  let collection = editor.createDecorationsCollection([]);
+  const collection = editor.createDecorationsCollection([]);
 
   const render = () => {
     const lines = breakpointStore.get(path);

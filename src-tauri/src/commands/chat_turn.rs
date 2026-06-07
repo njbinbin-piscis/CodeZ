@@ -932,7 +932,7 @@ pub(crate) fn load_installed_skills(config_dir: &std::path::Path) -> Vec<SkillMa
             body: strip_frontmatter(&content).trim().to_string(),
         });
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|m| m.name.to_lowercase());
     out
 }
 

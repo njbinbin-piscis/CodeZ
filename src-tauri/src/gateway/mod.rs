@@ -118,6 +118,12 @@ impl InboundMessage {
     }
 }
 
+impl Default for GatewayManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GatewayManager {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::channel(256);
