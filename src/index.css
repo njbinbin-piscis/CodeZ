@@ -71,3 +71,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
 }
+
+/* ── Monaco editor hover / tooltip — keep above side panels ───────────── */
+.monaco-editor .monaco-hover,
+.monaco-editor .hover-row,
+.monaco-editor .contentWidgets,
+.monaco-editor .overlayWidgets {
+  z-index: 9999 !important;
+}

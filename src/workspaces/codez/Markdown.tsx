@@ -18,7 +18,6 @@ import rehypeParse from "rehype-parse";
 import rehypeStringify from "rehype-stringify";
 import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
-import { editorApplyBus } from "./editorApplyBus";
 import "./Markdown.css";
 
 const sanitizeSchema = {
@@ -177,14 +176,11 @@ function HtmlBlock({ code }: { code: string }) {
 function CodeBlock({
   children,
   lang,
-  enableApply,
 }: {
   children?: ReactNode;
   lang?: string;
-  enableApply?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const [applied, setApplied] = useState(false);
   const copy = () => {
     const text = extractText(children);
     void navigator.clipboard?.writeText(text).then(() => {
@@ -192,28 +188,13 @@ function CodeBlock({
       setTimeout(() => setCopied(false), 1200);
     });
   };
-  const apply = () => {
-    const text = extractText(children);
-    const ok = editorApplyBus.apply(text);
-    if (ok) {
-      setApplied(true);
-      setTimeout(() => setApplied(false), 1200);
-    }
-  };
   return (
     <div className="agentz-codeblock">
-      <div className="agentz-codeblock-actions">
-        {enableApply && (
-          <button className="agentz-codeblock-apply" onClick={apply} title="Apply to active editor">
-            {applied ? "Applied" : "Apply"}
-          </button>
-        )}
-        <button className="agentz-codeblock-copy" onClick={copy} title="Copy">
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
       {lang && <span className="agentz-code-lang">{lang}</span>}
       <pre>{children}</pre>
+      <button className="agentz-codeblock-copy" onClick={copy} title="Copy code">
+        {copied ? "✓" : "📋"}
+      </button>
     </div>
   );
 }
@@ -231,12 +212,9 @@ function extractText(node: ReactNode): string {
 /** Renders assistant text as rich markdown (GFM, mermaid, HTML, KaTeX). */
 export default function Markdown({
   content,
-  enableApply,
   compact,
 }: {
   content: string;
-  /** Show an "Apply" button on code blocks (IDE chat only). */
-  enableApply?: boolean;
   /** Tighter spacing for embedded surfaces (e.g. chat_ui text blocks). */
   compact?: boolean;
 }) {
@@ -284,7 +262,7 @@ export default function Markdown({
                   return <HtmlBlock code={text} />;
                 }
                 return (
-                  <CodeBlock lang={lang} enableApply={enableApply}>
+                  <CodeBlock lang={lang}>
                     <code className={className} {...props}>
                       {children}
                     </code>

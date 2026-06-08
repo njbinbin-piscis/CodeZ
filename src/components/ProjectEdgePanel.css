@@ -21,39 +21,42 @@
   pointer-events: auto;
 }
 
-.agentz-edge-tab {
+/* ── Compact badge (number circle only — no label text) ────────────── */
+.agentz-edge-badge {
   position: absolute;
   right: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
-  border-right: 0;
-  border-radius: 6px 0 0 6px;
-  padding: 5px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim, #9a9ab0);
-  cursor: default;
   display: flex;
   align-items: center;
-  gap: 6px;
-  white-space: nowrap;
+  justify-content: center;
+  cursor: default;
   pointer-events: auto;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.agentz-edge-zone.open .agentz-edge-tab,
-.agentz-edge-zone.pinned .agentz-edge-tab {
-  color: var(--accent, #7c6af7);
+.agentz-edge-zone.open .agentz-edge-badge,
+.agentz-edge-zone.pinned .agentz-edge-badge {
   border-color: var(--accent, #7c6af7);
-}
-
-.agentz-edge-tab-count {
   background: var(--accent, #7c6af7);
-  color: #fff;
-  border-radius: 8px;
-  padding: 1px 5px;
-  font-size: 9px;
 }
 
+.agentz-edge-badge-count {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-edge-zone.open .agentz-edge-badge-count,
+.agentz-edge-zone.pinned .agentz-edge-badge-count {
+  color: #fff;
+}
+
+/* ── Drawer ─────────────────────────────────────────────────────────── */
 .agentz-edge-drawer {
   position: absolute;
   top: 0;
@@ -88,6 +91,25 @@
   color: var(--text-dim, #9a9ab0);
   border-bottom: 1px solid var(--border, #2a2a38);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agentz-edge-drawer-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.agentz-edge-drawer-close:hover {
+  background: var(--bg-elev-2, #1b1b26);
+  color: inherit;
 }
 
 .agentz-edge-drawer-body {
@@ -96,6 +118,22 @@
   min-height: 0;
 }
 
+/* ── Section title (inside combined drawer) ─────────────────────────── */
+.agentz-edge-section-title {
+  padding: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim, #9a9ab0);
+  opacity: 0.7;
+}
+
+.agentz-edge-section-title + .agentz-edge-changes-toolbar {
+  margin-top: 0;
+}
+
+/* ── Review banner ──────────────────────────────────────────────────── */
 .agentz-edge-review {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border, #2a2a38);
@@ -135,6 +173,7 @@
   cursor: default;
 }
 
+/* ── Changes toolbar ────────────────────────────────────────────────── */
 .agentz-edge-changes-toolbar {
   display: flex;
   justify-content: flex-end;
@@ -156,6 +195,7 @@
   color: var(--text-dim, #9a9ab0);
 }
 
+/* ── Changes list ───────────────────────────────────────────────────── */
 .agentz-edge-changes-list {
   list-style: none;
   margin: 0;
@@ -213,46 +253,40 @@
   white-space: nowrap;
 }
 
-.agentz-edge-artifacts-list {
+/* ── Flat artifacts list (no tree) ──────────────────────────────────── */
+.agentz-edge-artifacts-flat {
   list-style: none;
   margin: 0;
-  padding: 6px;
+  padding: 6px 8px 8px;
 }
 
-.agentz-edge-artifacts-item,
-.agentz-edge-artifacts-dir-btn {
+.agentz-edge-artifact-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 8px;
+  gap: 6px;
+  padding: 5px 8px;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   color: inherit;
   cursor: pointer;
   text-align: left;
   font-size: 12px;
+  overflow: hidden;
 }
 
-.agentz-edge-artifacts-item:hover,
-.agentz-edge-artifacts-dir-btn:hover,
-.agentz-edge-artifacts-item.active {
+.agentz-edge-artifact-item:hover {
   background: var(--bg-elev-2, #1b1b26);
 }
 
-.agentz-edge-artifacts-item.active {
+.agentz-edge-artifact-item.active {
+  background: var(--bg-elev-2, #1b1b26);
   color: var(--accent, #7c6af7);
 }
 
-.agentz-edge-artifacts-children {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.agentz-edge-artifacts-chevron {
-  width: 10px;
-  flex-shrink: 0;
-  font-size: 10px;
+.agentz-edge-artifact-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

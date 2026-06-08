@@ -19,6 +19,7 @@ use piscis_kernel::agent::tool::{
     new_tool_registry_handle, ToolContext, ToolRegistry, ToolRegistryHandleExt,
 };
 
+use tauri::Emitter;
 use crate::browser::BrowserManager;
 use crate::lsp::manager::LspManager;
 use piscis_kernel::headless::KernelState;
@@ -1950,10 +1951,30 @@ pub async fn run_agentz_turn(
     let (tx, mut rx) = mpsc::channel::<AgentEvent>(1024);
     let collector_sink = event_sink.clone();
     let collector_session = session_id.clone();
+    let collector_app = app.clone();
+    let collector_workspace = workspace_root.clone();
     let collector = tokio::spawn(async move {
         let mut text = String::new();
         let mut errored: Option<String> = None;
         while let Some(event) = rx.recv().await {
+            // Bridge file-modifying tools → ide-file-changed so the frontend
+            // file watcher / git status refresh picks them up even when the
+            // inotify event is delayed or missed.
+            if let AgentEvent::ToolEnd { ref name, .. } = event {
+                if matches!(
+                    name.as_str(),
+                    "file_write" | "file_edit" | "shell" | "code_run"
+                ) {
+                    let _ = collector_app.emit(
+                        "ide-file-changed",
+                        serde_json::json!({
+                            "project_dir": collector_workspace,
+                            "path": ".",
+                            "kind": "modified",
+                        }),
+                    );
+                }
+            }
             if let Ok(payload) = serde_json::to_value(&event) {
                 collector_sink.emit_session(&collector_session, "agent_event", payload);
             }

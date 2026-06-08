@@ -27,11 +27,13 @@ export default function ContextUsageRing({ usage }: { usage: ContextUsageSnapsho
   const { t } = useTranslation();
   if (!usage || usage.triggerThreshold <= 0) return null;
 
-  const pct = Math.min(100, (usage.estimatedInputTokens / usage.triggerThreshold) * 100);
+  // Both the ring stroke and the label use totalInputBudget as the denominator
+  // so they stay in sync. triggerThreshold is only used for color thresholds.
   const budgetPct =
     usage.totalInputBudget > 0
       ? Math.round((usage.estimatedInputTokens / usage.totalInputBudget) * 100)
       : 0;
+  const pct = Math.min(100, budgetPct);
 
   let color = "var(--accent, #6c63ff)";
   if (pct >= 100) color = "var(--danger, #e5484d)";

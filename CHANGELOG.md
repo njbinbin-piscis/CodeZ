@@ -5,6 +5,23 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-06-09
+
+Edge drawer polish, explorer expand/collapse, and faster git refresh after agent edits.
+
+### Changed
+
+- **Global edge drawer**: compact number badge (no label overlap with title bar);
+  changes and artifacts merged into one panel with explicit close; flat artifact list.
+- **CodeZ chat**: code blocks show copy only — removed Apply-to-editor button.
+- **Context ring**: progress ring and percentage both use `totalInputBudget`.
+
+### Added
+
+- **Explorer**: expand-all / collapse-all toolbar buttons.
+- **Agent turns**: emit `ide-file-changed` after file-modifying tools so git status
+  and the file tree refresh even when inotify is delayed.
+
 ## [0.4.5] - 2026-06-08
 
 WorkZ-first startup, per-mode model memory, and quieter composer placeholders.

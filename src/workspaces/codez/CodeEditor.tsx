@@ -11,7 +11,6 @@ import {
 } from "../../services/tauri/lsp";
 import { inlineEdit, aiInlineCompletion } from "../../services/tauri/edit";
 import { diffLines } from "./lineDiff";
-import { editorApplyBus } from "./editorApplyBus";
 import { registerPersistedSnippets } from "./extensionStore";
 import { attachBreakpointGutter } from "../../extensions/debug/breakpoints";
 import "./InlineEdit.css";
@@ -266,11 +265,14 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
   // Register this editor as the active Apply target while it is mounted.
   useEffect(() => {
     const handler = (code: string) => applyProposedRef.current(code);
-    editorApplyBus.setHandler(handler);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__agentz_apply_handler = handler;
     return () => {
-      // Only clear if we're still the registered handler (avoid races on
-      // fast tab switches where the next editor already registered).
-      editorApplyBus.setHandler(null);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).__agentz_apply_handler === handler) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__agentz_apply_handler = null;
+      }
     };
   }, [tab.path]);
 

@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 interface EdgeBookmarkDrawerProps {
+  /** Short label shown in the drawer header (the tab itself no longer displays text). */
   label: string;
   count: number;
   top: number;
   pinned?: boolean;
   hidden?: boolean;
   children: ReactNode;
+  /** Called when the user clicks the explicit close button. */
+  onClose?: () => void;
 }
 
-/** Right-edge hover tab that slides open a drawer (shared by Changes / Artifacts). */
+/**
+ * Right-edge hover tab that slides open a drawer.
+ *
+ * The tab is now a compact number badge — no label text — so it never overlaps
+ * title-bar controls. A close button appears inside the drawer header when
+ * `pinned` is true so users can dismiss it explicitly.
+ */
 export default function EdgeBookmarkDrawer({
   label,
   count,
@@ -17,6 +26,7 @@ export default function EdgeBookmarkDrawer({
   pinned = false,
   hidden = false,
   children,
+  onClose,
 }: EdgeBookmarkDrawerProps) {
   const [open, setOpen] = useState(false);
   const hideTimer = useRef<number | null>(null);
@@ -40,6 +50,11 @@ export default function EdgeBookmarkDrawer({
     setOpen(true);
   }, [clearHideTimer]);
 
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    onClose?.();
+  }, [onClose]);
+
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
   if (hidden) return null;
@@ -52,12 +67,23 @@ export default function EdgeBookmarkDrawer({
       onMouseEnter={show}
       onMouseLeave={scheduleHide}
     >
-      <div className="agentz-edge-tab" title={label}>
-        <span className="agentz-edge-tab-label">{label}</span>
-        {count > 0 && <span className="agentz-edge-tab-count">{count}</span>}
+      <div className="agentz-edge-badge" title={label}>
+        <span className="agentz-edge-badge-count">{count}</span>
       </div>
       <div className="agentz-edge-drawer">
-        <div className="agentz-edge-drawer-head">{label}</div>
+        <div className="agentz-edge-drawer-head">
+          <span>{label}</span>
+          {pinned && (
+            <button
+              type="button"
+              className="agentz-edge-drawer-close"
+              onClick={handleClose}
+              title="Close"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         <div className="agentz-edge-drawer-body">{children}</div>
       </div>
     </div>

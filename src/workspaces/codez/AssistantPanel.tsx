@@ -1111,7 +1111,7 @@ export default function AssistantPanel({
           return (
             <div key={m.id ?? `msg-${i}`} className="agentz-msg assistant">
               {m.text ? (
-                <Markdown content={m.text} enableApply />
+                <Markdown content={m.text} />
               ) : isStreamingLast ? (
                 <div className="agentz-msg-text agentz-thinking">{t("chat.thinking")}</div>
               ) : null}

@@ -1,11 +1,17 @@
 import {
-  useState, useCallback, useRef, useEffect, useMemo,
+  useState, useCallback, useRef, useEffect, useMemo, createContext, useContext,
   type Ref, type MutableRefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { ideApi } from "../../services/tauri/ide";
 import type { FileNode } from "./types";
 import FileIcon from "./FileIcon";
+
+/** Context for expand-all / collapse-all control. */
+const ExpandAllCtx = createContext<{ version: number; expand: boolean }>({
+  version: 0,
+  expand: true,
+});
 
 /** Right-click context menu position + the path that was right-clicked. */
 export interface FileTreeContextMenu {
@@ -162,7 +168,17 @@ function TreeNode({
 }) {
   const isCreateTarget = creating != null && creating.parentPath === node.path;
   const isRenaming = renaming?.path === node.path;
+  const { version: expandVersion, expand: expandDefault } = useContext(ExpandAllCtx);
   const [expanded, setExpanded] = useState(depth < 2 || !!isCreateTarget);
+
+  // Sync with expand-all / collapse-all signal from parent.
+  const lastExpandVersion = useRef(expandVersion);
+  useEffect(() => {
+    if (expandVersion !== lastExpandVersion.current) {
+      lastExpandVersion.current = expandVersion;
+      if (node.is_dir) setExpanded(expandDefault);
+    }
+  }, [expandVersion, expandDefault, node.is_dir]);
 
   useEffect(() => {
     if (isCreateTarget) setExpanded(true);
@@ -310,6 +326,10 @@ export default function FileTree({
   const [creating, setCreating] = useState<CreatingState | null>(null);
   const [renaming, setRenaming] = useState<RenamingState | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const [expandSignal, setExpandSignal] = useState({ version: 0, expand: true });
+
+  const expandAll = useCallback(() => setExpandSignal((s) => ({ version: s.version + 1, expand: true })), []);
+  const collapseAll = useCallback(() => setExpandSignal((s) => ({ version: s.version + 1, expand: false })), []);
 
   /** Determine the target parent directory for a new file/folder based on
    *  the currently selected path. If a directory is selected, create inside
@@ -497,6 +517,24 @@ export default function FileTree({
         <div className="ide-sidebar-header-actions">
           <button
             type="button"
+            onClick={expandAll}
+            disabled={!projectDir}
+            title={t("ide.expandAll") || "Expand All"}
+            aria-label={t("ide.expandAll") || "Expand All"}
+          >
+            ⬇
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            disabled={!projectDir}
+            title={t("ide.collapseAll") || "Collapse All"}
+            aria-label={t("ide.collapseAll") || "Collapse All"}
+          >
+            ⬆
+          </button>
+          <button
+            type="button"
             onClick={() => startCreate(false)}
             disabled={!projectDir}
             title={t("ide.newFile") || "New File"}
@@ -529,6 +567,7 @@ export default function FileTree({
         </div>
       ) : (
         <div className="file-tree-root" ref={rootRef} tabIndex={0}>
+          <ExpandAllCtx.Provider value={expandSignal}>
           {isRootCreate && (
             <InlineInput
               depth={0}
@@ -558,6 +597,7 @@ export default function FileTree({
               onCancelRename={cancelRename}
             />
           ))}
+          </ExpandAllCtx.Provider>
         </div>
       )}
     </>

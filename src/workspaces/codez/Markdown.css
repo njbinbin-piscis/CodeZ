@@ -77,45 +77,25 @@
   padding: 0;
 }
 
-.agentz-codeblock-actions {
+/* Copy button — always visible, no hover animation */
+.agentz-codeblock-copy {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  display: flex;
-  gap: 6px;
-  opacity: 0;
-  transition: opacity 0.12s;
-  z-index: 1;
-}
-
-.agentz-codeblock:hover .agentz-codeblock-actions {
-  opacity: 1;
-}
-
-.agentz-codeblock-copy,
-.agentz-codeblock-apply {
+  top: 8px;
+  right: 8px;
   background: var(--bg-elev-2, #1b1b26);
   border: 1px solid var(--border, #2a2a38);
   color: var(--text-dim, #9a9ab0);
   border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 3px 8px;
+  font-size: 12px;
   cursor: pointer;
+  z-index: 2;
+  transition: none; /* prevent flicker */
 }
 
 .agentz-codeblock-copy:hover {
   color: var(--text, #e8e8f0);
   border-color: var(--accent, #7c6af7);
-}
-
-.agentz-codeblock-apply {
-  color: #7c6af7;
-  border-color: #7c6af7;
-}
-
-.agentz-codeblock-apply:hover {
-  background: rgba(124, 106, 247, 0.18);
-  color: #fff;
 }
 
 .agentz-markdown-compact {
