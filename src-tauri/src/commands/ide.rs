@@ -256,6 +256,9 @@ pub async fn ide_read_file(path: String) -> Result<FileContent, String> {
     }
 
     let metadata = std::fs::metadata(&file_path).map_err(|e| e.to_string())?;
+    if metadata.is_dir() {
+        return Err(format!("Cannot preview directory: {}", path));
+    }
     let size = metadata.len();
 
     let raw = std::fs::read(&file_path).map_err(|e| e.to_string())?;
@@ -330,6 +333,7 @@ fn preview_mime_for_path(path: &Path) -> Option<&'static str> {
         "bmp" => Some("image/bmp"),
         "ico" => Some("image/x-icon"),
         "svg" => Some("image/svg+xml"),
+        "pdf" => Some("application/pdf"),
         _ => None,
     }
 }

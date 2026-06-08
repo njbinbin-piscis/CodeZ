@@ -1,0 +1,126 @@
+.agentz-file-diff-card {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg, #0f0f16);
+  font-family: var(--font-mono, Consolas, "Liberation Mono", monospace);
+  font-size: 12px;
+}
+
+.agentz-file-diff-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: var(--bg-elev-2, #1b1b26);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agentz-file-diff-tag {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentz-file-diff-tag.new {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.agentz-file-diff-tag.mod {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
+.agentz-file-diff-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentz-file-diff-stats {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.agentz-file-diff-stats .add {
+  color: #4ade80;
+}
+
+.agentz-file-diff-stats .del {
+  color: #f87171;
+}
+
+.agentz-file-diff-chevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.agentz-file-diff-body {
+  margin: 0;
+  padding: 6px 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg, #0f0f16);
+}
+
+.agentz-file-diff-line {
+  display: flex;
+  gap: 0;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.agentz-file-diff-gutter {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  opacity: 0.55;
+  user-select: none;
+}
+
+.agentz-file-diff-line.add {
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.agentz-file-diff-line.del {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.agentz-file-diff-line.ctx {
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-file-diff-open {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border, #2a2a38);
+  background: transparent;
+  color: var(--accent, #7c6af7);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agentz-file-diff-open:hover {
+  background: var(--bg-elev-2, #1b1b26);
+}

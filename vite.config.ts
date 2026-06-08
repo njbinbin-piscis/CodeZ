@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const host = process.env.TAURI_DEV_HOST;
+const pkg = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
+) as { version: string };
 
 export default defineConfig({
   // Relative asset paths so a future Tauri desktop build can load bundled
@@ -9,6 +13,10 @@ export default defineConfig({
   base: "./",
   plugins: [react()],
   clearScreen: false,
+  // Expose the app version so the title bar can show which build is running.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   build: {
     rollupOptions: {
       output: {

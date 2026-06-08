@@ -28,6 +28,9 @@ use piscis_kernel::headless::{run_piscis_turn_cancellable, HeadlessDeps};
 use piscis_kernel::store::settings::Settings;
 use piscis_kernel::tools::{register_mcp_tools, register_neutral_into, NeutralToolsConfig};
 
+use crate::commands::chat_turn::{
+    materialize_headless_llm_settings, resolve_koi_llm_provider_for_turn,
+};
 use crate::commands::data_scope::{open_project_kernel_state, resolve_global_config_dir};
 
 /// Same channel the IDE chat streams over, so a Koi turn's tokens/tools can be
@@ -244,10 +247,17 @@ async fn run_in_process_koi_turn(
         return Ok(cancelled_outcome(handle, "cancelled before dispatch"));
     }
 
-    // Resolve the project directory: the coordinator-provided workspace, else
-    // the global default workspace from settings.
+    // Resolve the project directory: coordinator-provided workspace first.
+    // Pool turns must carry the pool's project_dir (or worktree); never
+    // fall back to the global settings workspace_root for those.
     let project_dir = match request.workspace.clone().filter(|w| !w.trim().is_empty()) {
         Some(w) => w,
+        None if !request.pool_id.trim().is_empty() => {
+            return Ok(crashed_outcome(
+                handle,
+                "pool Koi turn missing workspace (pool project_dir was not passed)",
+            ));
+        }
         None => resolve_global_config_dir(&app)
             .ok()
             .and_then(|dir| Settings::load(&dir.join("config.json")).ok())
@@ -266,6 +276,26 @@ async fn run_in_process_koi_turn(
         Ok(state) => state,
         Err(e) => return Ok(crashed_outcome(handle, &e)),
     };
+
+    // Headless turns only read legacy `settings.provider/model`; map the Koi's
+    // bound provider (or flash / first llm_providers entry) before dispatch.
+    let koi_llm_provider_id = {
+        let guard = db.lock().await;
+        resolve_global_config_dir(&app)
+            .ok()
+            .and_then(|dir| resolve_koi_llm_provider_for_turn(&guard, &dir, &request.koi_id))
+            .or_else(|| {
+                guard
+                    .get_koi(&request.koi_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|k| k.llm_provider_id)
+            })
+    };
+    {
+        let mut s = settings.lock().await;
+        materialize_headless_llm_settings(&mut s, &app, koi_llm_provider_id.as_deref());
+    }
 
     let sink: Arc<dyn EventSink> = Arc::new(PoolTurnEventSink { app: app.clone() });
     let registry = build_koi_registry(&app, db.clone(), settings.clone(), sink.clone()).await;

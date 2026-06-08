@@ -69,11 +69,18 @@
 
 .agentz-wfrun-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   padding: 14px 16px;
-  overflow-y: auto;
+  overflow: hidden;
   flex: 1;
+  min-height: 0;
+}
+
+.agentz-wfrun-col {
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .agentz-wfrun-col h4 {
@@ -130,7 +137,10 @@
   font-size: 11px;
   color: var(--text, #e8e8f0);
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 180px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -142,10 +152,15 @@
 
 .agentz-wfrun-hrow {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px;
   font-size: 11px;
   color: var(--text, #e8e8f0);
+  padding: 6px 8px;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 6px;
+  background: var(--bg-elev, #14141c);
 }
 
 .agentz-wfrun-hrow.skipped {
@@ -161,10 +176,15 @@
 }
 
 .agentz-wfrun-hsummary {
+  flex: 1 1 100%;
   color: var(--text-dim, #9a9ab0);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  line-height: 1.45;
 }
 
 .agentz-wfrun-bb {
@@ -193,7 +213,10 @@
   font-size: 11px;
   color: var(--text, #e8e8f0);
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 160px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

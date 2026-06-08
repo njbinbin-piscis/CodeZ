@@ -7,10 +7,23 @@ import {
   browserNavigate,
   browserPickAt,
   browserScreenshot,
+  browserScrollBy,
+  browserScrollInfo,
+  browserScrollTo,
   browserSetViewport,
   type PickedElement,
+  type ScrollInfo,
 } from "../../services/tauri/browser";
 import "./BrowserPanel.css";
+
+const EMPTY_SCROLL: ScrollInfo = {
+  scroll_x: 0,
+  scroll_y: 0,
+  scroll_width: 0,
+  scroll_height: 0,
+  client_width: 0,
+  client_height: 0,
+};
 
 interface BrowserPanelProps {
   onClose: () => void;
@@ -52,6 +65,9 @@ export default function BrowserPanel({
   const [pickMode, setPickMode] = useState(false);
   const [hovered, setHovered] = useState<PickedElement | null>(null);
   const [selected, setSelected] = useState<PickedElement | null>(null);
+  const [scroll, setScroll] = useState<ScrollInfo>(EMPTY_SCROLL);
+  const scrollRef = useRef<ScrollInfo>(EMPTY_SCROLL);
+  scrollRef.current = scroll;
 
   const viewRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -60,6 +76,10 @@ export default function BrowserPanel({
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inspectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewportReady = useRef(false);
+  // Accumulated wheel deltas, flushed to the page on a short timer so a burst
+  // of wheel events becomes one scroll + one screenshot refresh.
+  const wheelAccum = useRef({ dx: 0, dy: 0 });
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshShot = useCallback(async () => {
     try {
@@ -71,44 +91,117 @@ export default function BrowserPanel({
     }
   }, []);
 
-  const syncViewport = useCallback(async () => {
-    const el = viewRef.current ?? canvasRef.current;
-    if (!el) return;
-    const w = Math.max(320, Math.round(el.clientWidth));
-    const h = Math.max(200, Math.round(el.clientHeight));
-    if (w < 8 || h < 8) return;
+  const refreshScrollInfo = useCallback(async () => {
     try {
-      await browserSetViewport(w, h);
-      viewportReady.current = true;
+      setScroll(await browserScrollInfo());
+    } catch {
+      // Page not ready yet.
+    }
+  }, []);
+
+  const flushWheel = useCallback(async () => {
+    const { dx, dy } = wheelAccum.current;
+    wheelAccum.current = { dx: 0, dy: 0 };
+    if (dx === 0 && dy === 0) return;
+    try {
+      const info = await browserScrollBy(dx, dy);
+      setScroll(info);
       await refreshShot();
     } catch (e) {
       setError(String(e));
     }
   }, [refreshShot]);
+  const flushWheelRef = useRef(flushWheel);
+  flushWheelRef.current = flushWheel;
+  const pickModeRef = useRef(pickMode);
+  pickModeRef.current = pickMode;
+
+  const measureViewport = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    // clientWidth/Height = the painted box (excludes scrollbar gutter).
+    let w = canvas.clientWidth;
+    let h = canvas.clientHeight;
+    const si = scrollRef.current;
+    if (si.scroll_height > si.client_height + 1) w = Math.max(0, w - 12);
+    if (si.scroll_width > si.client_width + 1) h = Math.max(0, h - 12);
+    w = Math.max(320, w);
+    h = Math.max(200, h);
+    if (w < 8 || h < 8) return null;
+    return { w, h };
+  }, []);
+
+  const syncViewport = useCallback(async () => {
+    const dims = measureViewport();
+    if (!dims) return;
+    const { w, h } = dims;
+    try {
+      await browserSetViewport(w, h);
+      viewportReady.current = true;
+      await refreshShot();
+      await refreshScrollInfo();
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [measureViewport, refreshShot, refreshScrollInfo]);
 
   useEffect(() => {
-    const el = viewRef.current;
-    if (!el) return;
+    const canvas = canvasRef.current;
+    const view = viewRef.current;
+    if (!canvas && !view) return;
 
-    void syncViewport();
+    // Wait two frames so flex layout (sidebar, chat panel) has settled before
+    // the first measurement — avoids a transient wide width that relayouts the page.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => void syncViewport());
+    });
 
-    const ro = new ResizeObserver(() => {
+    const onResize = () => {
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       resizeTimer.current = setTimeout(() => void syncViewport(), 120);
-    });
-    ro.observe(el);
+    };
+    const ro = new ResizeObserver(onResize);
+    if (canvas) ro.observe(canvas);
+    if (view && view !== canvas) ro.observe(view);
+    window.addEventListener("resize", onResize);
 
     pollRef.current = setInterval(() => {
       if (viewportReady.current) void refreshShot();
     }, 1200);
 
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       ro.disconnect();
+      window.removeEventListener("resize", onResize);
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+      wheelTimer.current = null;
     };
   }, [syncViewport, refreshShot]);
+
+  // Native, non-passive wheel listener so we can preventDefault and forward the
+  // delta to the page (React's synthetic onWheel is passive — can't cancel).
+  useEffect(() => {
+    const el = viewRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (pickModeRef.current) return;
+      e.preventDefault();
+      wheelAccum.current.dx += e.deltaX;
+      wheelAccum.current.dy += e.deltaY;
+      if (wheelTimer.current) return;
+      wheelTimer.current = setTimeout(() => {
+        wheelTimer.current = null;
+        void flushWheelRef.current();
+      }, 40);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Inspector sidebar steals horizontal space — re-sync viewport after layout.
   useEffect(() => {
@@ -128,12 +221,13 @@ export default function BrowserPanel({
       const finalUrl = await browserNavigate(url);
       setAddress(finalUrl || url);
       await refreshShot();
+      await refreshScrollInfo();
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  }, [address, refreshShot, syncViewport]);
+  }, [address, refreshShot, refreshScrollInfo, syncViewport]);
 
   const toPageCoords = (e: React.MouseEvent<HTMLDivElement>) => {
     const img = imgRef.current;
@@ -143,6 +237,66 @@ export default function BrowserPanel({
     const y = ((e.clientY - rect.top) / rect.height) * img.naturalHeight;
     return { x: Math.round(x), y: Math.round(y) };
   };
+
+  const scrollTo = useCallback(
+    async (x: number, y: number) => {
+      try {
+        const info = await browserScrollTo(x, y);
+        setScroll(info);
+        await refreshShot();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refreshShot],
+  );
+
+  // Drag a synthetic scrollbar thumb. Maps the pointer position within the
+  // track to an absolute page scroll offset, throttled to one call per frame.
+  const startScrollDrag = useCallback(
+    (axis: "x" | "y") => (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const track = e.currentTarget.parentElement;
+      if (!track) return;
+      track.setPointerCapture?.(e.pointerId);
+
+      let raf = 0;
+      let pending: { x: number; y: number } | null = null;
+      const flush = () => {
+        raf = 0;
+        if (pending) {
+          void scrollTo(pending.x, pending.y);
+          pending = null;
+        }
+      };
+      const move = (ev: PointerEvent) => {
+        const rect = track.getBoundingClientRect();
+        const info = scrollRef.current;
+        if (axis === "y") {
+          const frac = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
+          const max = Math.max(0, info.scroll_height - info.client_height);
+          pending = { x: info.scroll_x, y: frac * max };
+        } else {
+          const frac = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+          const max = Math.max(0, info.scroll_width - info.client_width);
+          pending = { x: frac * max, y: info.scroll_y };
+        }
+        if (!raf) raf = requestAnimationFrame(flush);
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        track.releasePointerCapture?.(ev.pointerId);
+        if (raf) cancelAnimationFrame(raf);
+        flush();
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      move(e.nativeEvent);
+    },
+    [scrollTo],
+  );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -174,13 +328,16 @@ export default function BrowserPanel({
           if (el) setSelected(el);
         } else {
           await browserClickAt(pt.x, pt.y);
-          setTimeout(() => void refreshShot(), 350);
+          setTimeout(() => {
+            void refreshShot();
+            void refreshScrollInfo();
+          }, 350);
         }
       } catch (err) {
         setError(String(err));
       }
     },
-    [pickMode, refreshShot],
+    [pickMode, refreshShot, refreshScrollInfo],
   );
 
   const screenshotToChat = useCallback(async () => {
@@ -213,6 +370,23 @@ export default function BrowserPanel({
 
   const hoverBox = hovered && imgRef.current ? rectStyle(hovered, imgRef.current) : null;
   const selectBox = selected && imgRef.current ? rectStyle(selected, imgRef.current) : null;
+
+  // Synthetic scrollbar geometry (screenshot view has no native scrollbar).
+  const MIN_THUMB = 24;
+  const showVScroll = scroll.scroll_height > scroll.client_height + 1 && scroll.client_height > 0;
+  const showHScroll = scroll.scroll_width > scroll.client_width + 1 && scroll.client_width > 0;
+  const vThumb = showVScroll
+    ? {
+        height: `max(${MIN_THUMB}px, ${(scroll.client_height / scroll.scroll_height) * 100}%)`,
+        top: `${(scroll.scroll_y / scroll.scroll_height) * 100}%`,
+      }
+    : null;
+  const hThumb = showHScroll
+    ? {
+        width: `max(${MIN_THUMB}px, ${(scroll.client_width / scroll.scroll_width) * 100}%)`,
+        left: `${(scroll.scroll_x / scroll.scroll_width) * 100}%`,
+      }
+    : null;
 
   return (
     <div className="agentz-browser">
@@ -289,6 +463,25 @@ export default function BrowserPanel({
               <div className="agentz-browser-empty">{t("browser.empty")}</div>
             )}
           </div>
+
+          {vThumb && (
+            <div className="agentz-browser-scrollbar vertical">
+              <div
+                className="agentz-browser-scrollthumb"
+                style={vThumb}
+                onPointerDown={startScrollDrag("y")}
+              />
+            </div>
+          )}
+          {hThumb && (
+            <div className="agentz-browser-scrollbar horizontal">
+              <div
+                className="agentz-browser-scrollthumb"
+                style={hThumb}
+                onPointerDown={startScrollDrag("x")}
+              />
+            </div>
+          )}
         </div>
 
         {selected && (

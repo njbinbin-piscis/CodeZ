@@ -334,7 +334,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
         )}
         {tab === "extensions" && (
           <div className="agentz-settings-body">
-            <ExtensionsManager />
+            <ExtensionsManager projectDir={projectDir} />
           </div>
         )}
         {tab === "rules" && (

@@ -197,6 +197,22 @@
 .agentz-ext-market-header {
   padding: 10px 12px 4px;
 }
+.agentz-ext-host-msg {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--accent-hover, #8b83ff);
+  background: color-mix(in srgb, var(--accent, #6c63ff) 12%, transparent);
+  border-radius: 6px;
+}
+
+.agentz-ext-market-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .agentz-ext-market-title {
   font-size: 13px;
   font-weight: 700;

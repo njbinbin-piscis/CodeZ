@@ -29,6 +29,31 @@ export function browserSetViewport(width: number, height: number): Promise<[numb
   return invoke<[number, number]>("browser_set_viewport", { width, height });
 }
 
+/** Page scroll geometry, used to drive the synthetic scrollbars. */
+export interface ScrollInfo {
+  scroll_x: number;
+  scroll_y: number;
+  scroll_width: number;
+  scroll_height: number;
+  client_width: number;
+  client_height: number;
+}
+
+/** Scroll the shared page by a wheel delta (CSS pixels); returns new geometry. */
+export function browserScrollBy(x: number, y: number): Promise<ScrollInfo> {
+  return invoke<ScrollInfo>("browser_scroll_by", { x, y });
+}
+
+/** Scroll the shared page to an absolute offset (CSS pixels). */
+export function browserScrollTo(x: number, y: number): Promise<ScrollInfo> {
+  return invoke<ScrollInfo>("browser_scroll_to", { x, y });
+}
+
+/** Read the page's current scroll position + content extents. */
+export function browserScrollInfo(): Promise<ScrollInfo> {
+  return invoke<ScrollInfo>("browser_scroll_info");
+}
+
 /** Capture the current page as a base64-encoded PNG (no data: prefix). */
 export function browserScreenshot(): Promise<string> {
   return invoke<string>("browser_screenshot");

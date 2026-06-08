@@ -13,6 +13,7 @@ import { registerMainThreads, type MainThreadContext, type MainThreadHandles } f
 import * as conv from "./typeConverters";
 import { extensionUiStore } from "./extensionUiStore";
 import { compatStore } from "./compatStore";
+import { composerDbg } from "../utils/composerDebug";
 
 interface InstalledExtensionRaw {
   id: string;
@@ -53,16 +54,46 @@ export class ExtensionService {
   private handles: MainThreadHandles | undefined;
   private disposables: monaco.IDisposable[] = [];
   private started = false;
+  /** Serializes start/stop so React effect cleanups cannot race startup. */
+  private opChain: Promise<void> = Promise.resolve();
   projectDir = "";
 
   get isRunning(): boolean {
     return this.started;
   }
 
+  private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.opChain.then(fn, fn);
+    this.opChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
   /** Boot the extension host for a project and activate startup extensions. */
-  async start(projectDir: string): Promise<void> {
-    if (this.started) await this.stop();
-    this.projectDir = projectDir;
+  async start(projectDir: string, opts?: { force?: boolean }): Promise<void> {
+    return this.runExclusive(async () => {
+      // Skip redundant restart — a stop+wireDocumentSync during an active chat
+      // turn was freezing the renderer (black screen).
+      if (
+        !opts?.force &&
+        this.started &&
+        this.projectDir === projectDir &&
+        this.rpc
+      ) {
+        composerDbg("extensionService.start skipped (already running)", { projectDir });
+        return;
+      }
+      composerDbg("extensionService.start", {
+        projectDir,
+        alreadyStarted: this.started,
+        currentDir: this.projectDir,
+      });
+      // Keep the latest project dir visible to UI actions (manual restart, etc.)
+      // even while a prior stop is still draining on the op chain.
+      this.projectDir = projectDir;
+      await this.stopInternal();
 
     const [extensionsDir, installed] = await Promise.all([
       invoke<string>("vsix_extensions_dir").catch(() => ""),
@@ -80,24 +111,33 @@ export class ExtensionService {
         main: e.main ?? undefined,
         extensionPath: e.extension_path,
         activationEvents: e.activation_events,
-        contributes: (e.contributes as Record<string, unknown>) ?? undefined,
+        // Host reads package.json from extensionPath; omit huge contributes blobs.
       }));
 
-    // No enabled extensions → don't pay the cost of booting the Node sidecar
-    // (and don't surface a spurious "host error" on a fresh install). The host
-    // is started lazily the next time a project opens with extensions present.
     if (extensions.length === 0) {
       extensionUiStore.setRunning(false);
+      extensionUiStore.setHostError("no_enabled_extensions");
       return;
     }
 
     this.transport = new TauriExtHostTransport((line) => extensionUiStore.appendHostLog(line));
     await this.transport.connect();
 
-    // Launch the Node sidecar (must happen after we listen for its output).
+    // Register the ready waiter *before* spawning — the host can log "ready"
+    // within milliseconds and we must not miss that line.
+    const readyWait = this.transport.waitForReady();
     await invoke("ext_host_start", { projectDir });
+    await readyWait;
+    // Process is up — reflect that immediately so manual start / status bar
+    // don't look like a no-op while $initialize is still in flight.
+    extensionUiStore.setRunning(true);
 
     this.rpc = new RPCProtocol(this.transport);
+    this.transport.onConnectionLost((reason) => {
+      this.rpc?.failAllPending(reason);
+      extensionUiStore.setRunning(false);
+      extensionUiStore.setHostError(reason);
+    });
     compatStore.reset();
     this.rpc.onMissingApi((nid, method) => compatStore.recordMissing(nid, method));
 
@@ -112,29 +152,51 @@ export class ExtensionService {
     };
     this.handles = registerMainThreads(ctx, initData);
 
+    const extHost = this.rpc.getProxy(ExtHostContext.ExtHostExtensionService);
+    try {
+      const report = await extHost.$initialize(initData);
+      compatStore.setReport(report);
+      extensionUiStore.setHostError(null);
+    } catch (e) {
+      extensionUiStore.setHostError(String(e));
+      throw e;
+    }
+
+    // Sync open editors only after the handshake — flooding RPC before
+    // $initialize was causing 45s timeouts when many models were open.
     this.wireDocumentSync();
 
-    const extHost = this.rpc.getProxy(ExtHostContext.ExtHostExtensionService);
-    const report = await extHost.$initialize(initData);
-    compatStore.setReport(report);
-
     this.started = true;
-    extensionUiStore.setRunning(true);
+    });
   }
 
   /** Push currently-open Monaco models to the host and keep them in sync. */
   private wireDocumentSync(): void {
     const extHostDocs = this.rpc!.getProxy(ExtHostContext.ExtHostDocuments);
+    const MAX_SYNC_LINES = 2000;
+    const MAX_SYNC_CHARS = 512_000;
 
     const openModel = (model: monaco.editor.ITextModel) => {
       if (model.uri.scheme === "inmemory") return;
-      extHostDocs.$acceptModelOpened({
-        uri: conv.uriToDto(model.uri),
-        languageId: model.getLanguageId(),
-        versionId: model.getVersionId(),
-        lines: model.getLinesContent(),
-        eol: model.getEOL(),
-      });
+      // Defer heavy getLinesContent() so extension-host restarts during an
+      // agent turn don't synchronously block the renderer (black-screen freeze).
+      const rpc = this.rpc!;
+      window.setTimeout(() => {
+        if (this.rpc !== rpc) return;
+        const lines = model.getLinesContent();
+        let syncLines = lines;
+        const totalChars = lines.reduce((n, l) => n + l.length, 0);
+        if (lines.length > MAX_SYNC_LINES || totalChars > MAX_SYNC_CHARS) {
+          syncLines = lines.slice(0, MAX_SYNC_LINES);
+        }
+        void extHostDocs.$acceptModelOpened({
+          uri: conv.uriToDto(model.uri),
+          languageId: model.getLanguageId(),
+          versionId: model.getVersionId(),
+          lines: syncLines,
+          eol: model.getEOL(),
+        });
+      }, 0);
       const changeSub = model.onDidChangeContent((e) => {
         const event: ModelChangedEventDto = {
           uri: conv.uriToDto(model.uri),
@@ -142,7 +204,7 @@ export class ExtensionService {
           eol: model.getEOL(),
           changes: e.changes.map((c) => ({ range: conv.fromMonacoRange(c.range), text: c.text })),
         };
-        extHostDocs.$acceptModelChanged(event);
+        void extHostDocs.$acceptModelChanged(event);
       });
       this.disposables.push(changeSub);
     };
@@ -212,6 +274,19 @@ export class ExtensionService {
   }
 
   async stop(): Promise<void> {
+    return this.runExclusive(() => this.stopInternal());
+  }
+
+  private async stopInternal(): Promise<void> {
+    if (!this.started && !this.rpc && !this.transport) {
+      composerDbg("extensionService.stopInternal skipped (not running)");
+      return;
+    }
+    composerDbg("extensionService.stopInternal", {
+      started: this.started,
+      projectDir: this.projectDir,
+      stack: new Error().stack?.split("\n").slice(1, 6).join(" | "),
+    });
     for (const d of this.disposables) d.dispose();
     this.disposables = [];
     this.rpc?.dispose();

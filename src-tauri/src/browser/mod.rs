@@ -24,6 +24,18 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+/// Page scroll geometry, returned to the panel so it can drive a synthetic
+/// scrollbar (the screenshot-based view has no native one).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub struct ScrollInfo {
+    pub scroll_x: f64,
+    pub scroll_y: f64,
+    pub scroll_width: f64,
+    pub scroll_height: f64,
+    pub client_width: f64,
+    pub client_height: f64,
+}
+
 /// A picked / inspected DOM element returned to the frontend / agent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PickedElement {
@@ -181,20 +193,42 @@ impl BrowserManager {
     /// Resize the Chromium viewport to match the IDE browser panel (CSS pixels).
     /// Keeps screenshot coordinates 1:1 with the panel for accurate clicks/picks.
     pub async fn set_viewport(&self, width: u32, height: u32) -> Result<(u32, u32)> {
-        use chromiumoxide::cdp::browser_protocol::emulation::SetDeviceMetricsOverrideParams;
+        use chromiumoxide::cdp::browser_protocol::emulation::{
+            ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
+        };
 
         let w = width.clamp(320, 3840);
         let h = height.clamp(200, 2160);
         *self.viewport.lock().await = (w, h);
         self.with_page(|page| async move {
-            page.execute(SetDeviceMetricsOverrideParams::new(
-                w as i64,
-                h as i64,
-                1.0,
-                false,
-            ))
-            .await
-            .context("set viewport failed")?;
+            // Keep screen.width/height in sync with innerWidth/innerHeight — otherwise
+            // CSS media queries and min-width layouts still assume a desktop screen
+            // (~1280px) and the page overflows the panel by ~1/3.
+            let params = SetDeviceMetricsOverrideParams::builder()
+                .width(w as i64)
+                .height(h as i64)
+                .screen_width(w as i64)
+                .screen_height(h as i64)
+                .device_scale_factor(1.0)
+                .mobile(false)
+                .screen_orientation(ScreenOrientation {
+                    angle: 0,
+                    r#type: ScreenOrientationType::LandscapePrimary,
+                })
+                .build()
+                .map_err(|e| anyhow::anyhow!(e))?;
+            page.execute(params)
+                .await
+                .context("set viewport failed")?;
+            // Force landscape orientation so sites that check orientation.type
+            // don't fall back to mobile layout.
+            let _ = page
+                .evaluate(r#"(() => {
+                    Object.defineProperty(screen.orientation, 'type', { value: 'landscape-primary', configurable: true });
+                    Object.defineProperty(screen.orientation, 'angle', { value: 0, configurable: true });
+                    window.dispatchEvent(new Event('resize'));
+                })()"#)
+                .await;
             Ok(())
         })
         .await?;
@@ -204,6 +238,30 @@ impl BrowserManager {
     /// Current viewport size (width, height) in CSS pixels.
     pub async fn viewport_size(&self) -> (u32, u32) {
         *self.viewport.lock().await
+    }
+
+    /// Read the page's current scroll position and content/viewport extents.
+    pub async fn scroll_info(&self) -> Result<ScrollInfo> {
+        let val = self.eval(SCROLL_INFO_JS).await?;
+        Ok(serde_json::from_value(val).unwrap_or_default())
+    }
+
+    /// Scroll the page by a wheel delta (CSS pixels) and report new geometry.
+    pub async fn scroll_by(&self, dx: f64, dy: f64) -> Result<ScrollInfo> {
+        let js = format!(
+            "(() => {{ window.scrollBy({dx}, {dy}); {SCROLL_INFO_JS_BODY} }})()"
+        );
+        let val = self.eval(&js).await?;
+        Ok(serde_json::from_value(val).unwrap_or_default())
+    }
+
+    /// Scroll the page to an absolute offset (CSS pixels) and report geometry.
+    pub async fn scroll_to(&self, x: f64, y: f64) -> Result<ScrollInfo> {
+        let js = format!(
+            "(() => {{ window.scrollTo({x}, {y}); {SCROLL_INFO_JS_BODY} }})()"
+        );
+        let val = self.eval(&js).await?;
+        Ok(serde_json::from_value(val).unwrap_or_default())
     }
 
     /// Navigate to `url` and wait for the load to settle. Returns the final URL.
@@ -364,6 +422,34 @@ impl BrowserManager {
         Ok(())
     }
 }
+
+/// Body that returns the page's scroll geometry as a plain object.
+const SCROLL_INFO_JS_BODY: &str = r#"
+    const se = document.scrollingElement || document.documentElement || document.body;
+    if (!se) return { scroll_x: 0, scroll_y: 0, scroll_width: 0, scroll_height: 0, client_width: 0, client_height: 0 };
+    return {
+        scroll_x: se.scrollLeft || 0,
+        scroll_y: se.scrollTop || 0,
+        scroll_width: se.scrollWidth || 0,
+        scroll_height: se.scrollHeight || 0,
+        client_width: se.clientWidth || window.innerWidth || 0,
+        client_height: se.clientHeight || window.innerHeight || 0,
+    };
+"#;
+
+/// Full expression form of [`SCROLL_INFO_JS_BODY`].
+const SCROLL_INFO_JS: &str = r#"(() => {
+    const se = document.scrollingElement || document.documentElement || document.body;
+    if (!se) return { scroll_x: 0, scroll_y: 0, scroll_width: 0, scroll_height: 0, client_width: 0, client_height: 0 };
+    return {
+        scroll_x: se.scrollLeft || 0,
+        scroll_y: se.scrollTop || 0,
+        scroll_width: se.scrollWidth || 0,
+        scroll_height: se.scrollHeight || 0,
+        client_width: se.clientWidth || window.innerWidth || 0,
+        client_height: se.clientHeight || window.innerHeight || 0,
+    };
+})()"#;
 
 fn fresh_profile_dir() -> PathBuf {
     std::env::temp_dir().join(format!("agentz-browser-{}", uuid::Uuid::new_v4()))

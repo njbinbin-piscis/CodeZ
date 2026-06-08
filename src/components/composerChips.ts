@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { PickedElement } from "../services/tauri/browser";
 import { browserElementChipLabel, browserElementPlaceholder } from "../services/tauri/browser";
 import type { ChatAttachment } from "../services/tauri/chat";
@@ -113,14 +114,33 @@ export function hasImageAttachment(chips: ComposerChip[]): boolean {
 
 /** Serialize chips + free text into the prompt sent to the agent. */
 export function composePromptWithChips(chips: ComposerChip[], body: string): string {
-  const refs = chips
+  const tokens = chips
     .filter((c) => c.kind !== "image-attachment")
-    .map(chipToPromptToken)
+    .map((c) => ({ chip: c, token: chipToPromptToken(c) }));
+  const refs = tokens
+    .map((t) => t.token)
     .filter(Boolean)
     .join(" ");
   const text = body.trim();
-  if (refs && text) return `${refs} ${text}`;
-  return refs || text;
+  const out = refs && text ? `${refs} ${text}` : refs || text;
+  if (import.meta.env.DEV && chips.length > 0) {
+    const payload = {
+      chipCount: chips.length,
+      tokens: tokens.map((t) =>
+        t.chip.kind === "file-ref"
+          ? { kind: t.chip.kind, path: t.chip.path, isDir: t.chip.isDir, token: t.token }
+          : { kind: t.chip.kind, token: t.token },
+      ),
+      bodyLen: body.length,
+      outLen: out.length,
+      preview: out.length > 200 ? `${out.slice(0, 200)}…` : out,
+    };
+    console.log("[AgentZ:composer] composePromptWithChips", payload);
+    void invoke("composer_debug_log", {
+      line: `[AgentZ:composer] composePromptWithChips ${JSON.stringify(payload)}`,
+    }).catch(() => {});
+  }
+  return out;
 }
 
 export function fileRefChipLabel(path: string, isDir: boolean): string {

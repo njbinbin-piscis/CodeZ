@@ -230,6 +230,21 @@ pub async fn save_settings(
     }
     settings.llm_providers = providers;
 
+    // Keep legacy provider/model in sync when the user only maintains the
+    // multi-provider list — headless Koi / IM turns read these fields.
+    if settings.model.trim().is_empty() {
+        if let Some(first) = settings.llm_providers.first() {
+            settings.provider = first.provider.clone();
+            settings.model = first.model.clone();
+            if !first.base_url.trim().is_empty() {
+                settings.custom_base_url = first.base_url.clone();
+            }
+            if first.max_tokens > 0 {
+                settings.max_tokens = first.max_tokens;
+            }
+        }
+    }
+
     settings.mcp_servers = updates
         .mcp_servers
         .into_iter()

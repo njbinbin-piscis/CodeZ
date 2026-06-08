@@ -5,22 +5,24 @@ import {
   chatCancel,
   onChatEvent,
   listSessions,
+  SESSION_SOURCE_CODEZ,
   getMessages,
   forkSession,
   deleteSession,
   restoreCheckpoint,
   journalListChanges,
-  journalUndoTurn,
+  journalGetTurnDiffs,
   type AgentEvent,
+  type JournalFileDiff,
   type ChatAttachment,
   type ChatEventEnvelope,
   type ChatMode,
-  type JournalChange,
   type MessageDto,
   type PlanTodoItem,
   type SessionMeta,
 } from "../../services/tauri/chat";
 import { useAppSettings, pruneModelId } from "../../hooks/useAppSettings";
+import { loadScopedModelId, saveScopedModelId } from "../../utils/modelPrefs";
 import { useInputHistory } from "../../components/useInputHistory";
 import { listInstalledSkills, type InstalledSkill } from "../../services/tauri/workbench";
 import { listAgents, type AgentInfo } from "../../services/tauri/agents";
@@ -48,22 +50,28 @@ import {
 import { visionCapable } from "../../components/visionUtils";
 import ContextUsageRing, { type ContextUsageSnapshot } from "../../components/ContextUsageRing";
 import { formatUserMessageDisplay } from "../../components/chatFileRefs";
-import UserMessage from "../../components/UserMessage";
+import TaskCard from "../../components/TaskCard";
+import FileDiffCard from "../../components/FileDiffCard";
 import TaskPanel, {
   mergePlanItems,
   parsePlanFromToolInput,
+  upsertToolStep,
   type ToolStep,
 } from "../../components/TaskPanel";
 import type { FileNode } from "./types";
 import Markdown from "./Markdown";
 import InteractiveCard from "../../components/chat/InteractiveCard";
 import { useInteractiveCards } from "../../hooks/useInteractiveCards";
+import { chipsSnapshot, composerDbg, composerDbgMark, promptPreview } from "../../utils/composerDebug";
+import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
 import "./AssistantPanel.css";
 
 interface ChatMessage {
   id?: string;
   role: "user" | "assistant";
   text: string;
+  /** Journal turn id — used to attach inline diff cards (current session only). */
+  turnId?: string;
 }
 
 function messageFromDto(m: MessageDto): ChatMessage {
@@ -84,6 +92,8 @@ interface AssistantPanelProps {
   insertTerminalRequest?: { snippetId: string; text: string; nonce: number } | null;
   /** External request to set an attachment (e.g. a browser screenshot). */
   attachRequest?: { attachment: ChatAttachment; preview: string | null; nonce: number } | null;
+  /** Called after an external attachRequest has been applied to the composer. */
+  onAttachRequestHandled?: () => void;
 }
 
 interface QueuedTurn {
@@ -134,9 +144,13 @@ export default function AssistantPanel({
   insertElementRequest,
   insertTerminalRequest,
   attachRequest,
+  onAttachRequestHandled,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
+  const { setPendingReview, setArtifacts, gitChanges, refreshGitChanges, onSelectPath } =
+    useProjectEdge();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [turnDiffsByTurnId, setTurnDiffsByTurnId] = useState<Record<string, JournalFileDiff[]>>({});
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,13 +163,11 @@ export default function AssistantPanel({
     const saved = localStorage.getItem("agentz-chat-mode");
     return saved === "plan" ? "plan" : "agent";
   });
-  const [modelId, setModelId] = useState(() => localStorage.getItem("agentz-model-id") ?? "");
-  const { appSettings, llmProviders, defaultModelLabel } = useAppSettings();
+  const [modelId, setModelId] = useState(() => loadScopedModelId("codez"));
+  const { appSettings, llmProviders, defaultModelLabel, defaultModelHint } = useAppSettings();
   const inputHistory = useInputHistory("agentz-input-history-codez");
   const [toast, setToast] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanTodoItem[]>([]);
-  const [review, setReview] = useState<{ turnId: string; changes: JournalChange[] } | null>(null);
-  const [undoing, setUndoing] = useState(false);
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
   const [taskPanelOpen, setTaskPanelOpen] = useState(true);
   const [taskPanelTab, setTaskPanelTab] = useState<"todo" | "tools">("todo");
@@ -178,6 +190,16 @@ export default function AssistantPanel({
     () => localStorage.getItem("agentz-active-agent") ?? "",
   );
 
+  useEffect(() => {
+    const paths = new Set<string>();
+    for (const step of toolSteps) {
+      const input = step.input as { path?: string } | null;
+      if (input?.path) paths.add(input.path.replace(/\\/g, "/"));
+    }
+    for (const c of gitChanges) paths.add(c.path);
+    setArtifacts([...paths].sort((a, b) => a.localeCompare(b)));
+  }, [toolSteps, gitChanges, setArtifacts]);
+
   const {
     pendingCards,
     handleAgentEvent,
@@ -194,12 +216,16 @@ export default function AssistantPanel({
   const taRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const runTurnRef = useRef<(turn: QueuedTurn) => Promise<void>>(async () => {});
+  /** Bumped on send/clear so in-flight paste/attach callbacks cannot re-add chips. */
+  const composerGenRef = useRef(0);
+  const handledAttachNonceRef = useRef<number | null>(null);
 
   useEffect(() => {
     sessionRef.current = null;
     queueRef.current = [];
     setQueuedView([]);
     setMessages([]);
+    setTurnDiffsByTurnId({});
     setSessions([]);
     setPlanItems([]);
     setToolSteps([]);
@@ -207,6 +233,8 @@ export default function AssistantPanel({
     setShowSessions(false);
     setContextUsage(null);
     clearCards();
+    composerGenRef.current += 1;
+    handledAttachNonceRef.current = null;
     setComposerChips((cur) => {
       revokeImageChipPreviews(cur);
       return [];
@@ -245,7 +273,7 @@ export default function AssistantPanel({
   }, [chatMode]);
 
   useEffect(() => {
-    localStorage.setItem("agentz-model-id", modelId);
+    saveScopedModelId("codez", modelId);
   }, [modelId]);
 
   useEffect(() => {
@@ -258,13 +286,23 @@ export default function AssistantPanel({
 
   useEffect(() => {
     if (!insertRequest?.paths.length) return;
+    composerDbg("insertRequest from explorer", {
+      nonce: insertRequest.nonce,
+      rawPaths: insertRequest.paths,
+    });
     const newChips = insertRequest.paths.map((p) => {
       const isDir = /[/\\]$/.test(p);
       const rel = p.replace(/^[/\\]+/, "");
       const path = isDir ? `${rel.replace(/[/\\]+$/, "")}/` : rel;
-      return createFileRefChip(path, isDir);
+      const chip = createFileRefChip(path, isDir);
+      composerDbg("insertRequest → file-ref chip", { raw: p, rel, path, isDir, chipId: chip.id });
+      return chip;
     });
-    setComposerChips((cur) => [...cur, ...newChips]);
+    setComposerChips((cur) => {
+      const next = [...cur, ...newChips];
+      composerDbg("composerChips after insert", chipsSnapshot(next));
+      return next;
+    });
     requestAnimationFrame(() => taRef.current?.focus());
   }, [insertRequest?.nonce, insertRequest?.paths]);
 
@@ -287,6 +325,7 @@ export default function AssistantPanel({
 
   useEffect(() => {
     if (!attachRequest?.attachment) return;
+    if (handledAttachNonceRef.current === attachRequest.nonce) return;
     if (attachRequest.attachment.media_type.startsWith("image/")) {
       if (!appSettings || !visionCapable(appSettings, modelId, llmProviders)) {
         setToast(t("chat.visionRequired"));
@@ -299,26 +338,33 @@ export default function AssistantPanel({
         ? `data:${attachRequest.attachment.media_type};base64,${attachRequest.attachment.data}`
         : "");
     if (!preview) return;
+    handledAttachNonceRef.current = attachRequest.nonce;
+    const gen = composerGenRef.current;
     setComposerChips((cur) => {
+      if (gen !== composerGenRef.current) return cur;
       revokeImageChipPreviews(cur.filter((c) => c.kind === "image-attachment"));
       return [
         ...cur.filter((c) => c.kind !== "image-attachment"),
         createImageAttachmentChip(attachRequest.attachment, preview),
       ];
     });
+    onAttachRequestHandled?.();
     requestAnimationFrame(() => taRef.current?.focus());
-  }, [
-    attachRequest?.nonce,
-    attachRequest?.attachment,
-    attachRequest?.preview,
-    appSettings,
-    modelId,
-    llmProviders,
-    t,
-  ]);
+  }, [attachRequest?.nonce, attachRequest, appSettings, modelId, llmProviders, onAttachRequestHandled, t]);
 
-  const addImageChip = useCallback((attachment: ChatAttachment, preview: string) => {
+  const clearComposer = useCallback(() => {
+    composerGenRef.current += 1;
+    setInput("");
+    setMention(null);
     setComposerChips((cur) => {
+      revokeImageChipPreviews(cur);
+      return [];
+    });
+  }, []);
+
+  const addImageChip = useCallback((attachment: ChatAttachment, preview: string, gen?: number) => {
+    setComposerChips((cur) => {
+      if (gen !== undefined && gen !== composerGenRef.current) return cur;
       revokeImageChipPreviews(cur.filter((c) => c.kind === "image-attachment"));
       return [
         ...cur.filter((c) => c.kind !== "image-attachment"),
@@ -339,7 +385,21 @@ export default function AssistantPanel({
   }, [projectDir]);
 
   const applyEvent = useCallback((env: ChatEventEnvelope) => {
-    if (!busyRef.current) return;
+    if (env.channel === "session_title" && env.sessionId) {
+      const title = (env.payload as { title?: string }).title;
+      if (title) {
+        setSessions((prev) => {
+          const idx = prev.findIndex((s) => s.id === env.sessionId);
+          if (idx < 0) return prev;
+          const next = prev.slice();
+          next[idx] = { ...next[idx], title };
+          return next;
+        });
+      }
+      return;
+    }
+    // Terminal events must be handled even if `busy` state hasn't committed yet
+    // (React batches setState; the backend can finish before re-render).
     if (env.channel === "agent_final") {
       const fin = env.payload as { ok: boolean; error?: string };
       if (!fin.ok && fin.error) setError(fin.error);
@@ -347,6 +407,12 @@ export default function AssistantPanel({
     }
     if (env.channel !== "agent_event") return;
     const evt = env.payload as AgentEvent;
+
+    if (evt.type === "error") {
+      setError(evt.message);
+      return;
+    }
+    if (!busyRef.current) return;
 
     switch (evt.type) {
       case "text_delta":
@@ -370,16 +436,7 @@ export default function AssistantPanel({
             setTaskPanelTab("todo");
           }
         }
-        setToolSteps((prev) => [
-          ...prev,
-          {
-            id: evt.id,
-            name: evt.name,
-            input: evt.input,
-            completed: false,
-            expanded: false,
-          },
-        ]);
+        setToolSteps((prev) => upsertToolStep(prev, evt));
         break;
       case "tool_end": {
         setToolSteps((prev) =>
@@ -411,9 +468,6 @@ export default function AssistantPanel({
           rollingSummaryVersion: evt.rolling_summary_version,
           autoCompactThreshold: evt.auto_compact_threshold,
         });
-        break;
-      case "error":
-        setError(evt.message);
         break;
       default:
         handleAgentEvent(evt);
@@ -488,6 +542,14 @@ export default function AssistantPanel({
   }, [messages, queuedView]);
 
   runTurnRef.current = async (turn: QueuedTurn) => {
+    const done = composerDbgMark("runTurn");
+    composerDbg("runTurn start", {
+      promptLen: turn.text.length,
+      promptPreview: promptPreview(turn.text),
+      hasAttachment: Boolean(turn.attachment),
+      clearPlan: turn.clearPlan,
+      sessionId: sessionRef.current,
+    });
     setError(null);
     const displayText =
       turn.attachment && !turn.text.trim()
@@ -495,11 +557,14 @@ export default function AssistantPanel({
         : turn.attachment
           ? `${turn.text}${turn.text.trim() ? "\n" : ""}📎 ${turn.attachment.filename ?? turn.attachment.path ?? t("chat.attachment")}`
           : turn.text;
+    composerDbg("runTurn → setMessages (user bubble)");
     setMessages((m) => [...m, { role: "user", text: displayText }, { role: "assistant", text: "" }]);
     setToolSteps([]);
     if (turn.clearPlan) setPlanItems([]);
+    busyRef.current = true;
     setBusy(true);
     try {
+      composerDbg("runTurn → chatSend invoke");
       const res = await chatSend({
         prompt: turn.text,
         displayPrompt: displayText,
@@ -511,34 +576,67 @@ export default function AssistantPanel({
         clearPlan: turn.clearPlan,
         enabledSkills: enabledSkills.length > 0 ? enabledSkills : null,
         agentId: activeAgent || null,
+        sessionSource: SESSION_SOURCE_CODEZ,
+      });
+      composerDbg("runTurn ← chatSend ok", {
+        sessionId: res.session_id,
+        turnId: res.turn_id,
+        responseLen: res.response_text.length,
       });
       sessionRef.current = res.session_id;
+      const turnId = res.turn_id ?? undefined;
       setMessages((m) => {
         const copy = m.slice();
         const last = copy[copy.length - 1];
         if (last?.role === "assistant" && !last.text.trim()) {
-          copy[copy.length - 1] = { ...last, text: res.response_text };
+          copy[copy.length - 1] = { ...last, text: res.response_text, turnId };
         }
         return copy;
       });
-      // Surface this turn's file edits in the Review bar (Undo All / Keep).
-      if (res.turn_id && projectDir) {
+      // Surface this turn's file edits in the global edge drawer + inline diff cards.
+      if (turnId && projectDir) {
         try {
-          const changes = await journalListChanges(projectDir, res.session_id, res.turn_id);
-          setReview(changes.length > 0 ? { turnId: res.turn_id, changes } : null);
+          const [changes, diffs] = await Promise.all([
+            journalListChanges(projectDir, res.session_id, turnId),
+            journalGetTurnDiffs(projectDir, res.session_id, turnId),
+          ]);
+          setPendingReview(
+            changes.length > 0
+              ? { sessionId: res.session_id, turnId, changes }
+              : null,
+          );
+          if (diffs.length > 0) {
+            setTurnDiffsByTurnId((prev) => ({ ...prev, [turnId]: diffs }));
+          }
         } catch {
           // journal is best-effort; ignore listing failures
         }
       }
     } catch (e) {
-      setError(String(e));
+      const msg = String(e);
+      composerDbg("runTurn ← chatSend error", { error: promptPreview(msg, 500) });
+      if (msg.includes("402") || msg.toLowerCase().includes("insufficient_balance")) {
+        setError(t("chat.llmBalanceError"));
+      } else {
+        setError(msg);
+      }
     } finally {
+      busyRef.current = false;
       setBusy(false);
       if (sessionRef.current && queueRef.current.length === 0) {
         try {
+          composerDbg("runTurn → syncMessagesFromDb");
           await syncMessagesFromDb(sessionRef.current);
-        } catch {
+          composerDbg("runTurn ← syncMessagesFromDb ok");
+        } catch (syncErr) {
+          composerDbg("runTurn ← syncMessagesFromDb failed", String(syncErr));
           // keep in-memory messages if reload fails
+        }
+        if (projectDir) {
+          listSessions(projectDir, [SESSION_SOURCE_CODEZ])
+            .then(setSessions)
+            .catch(() => setSessions([]));
+          refreshGitChanges();
         }
       }
       const next = queueRef.current.shift();
@@ -546,6 +644,7 @@ export default function AssistantPanel({
         setQueuedView(queueRef.current.map((q) => q.text));
         void runTurnRef.current(next);
       }
+      done();
     }
   };
 
@@ -561,43 +660,47 @@ export default function AssistantPanel({
     [busy],
   );
 
-  const undoTurn = useCallback(async () => {
-    if (!review || !projectDir || !sessionRef.current) return;
-    setUndoing(true);
-    try {
-      await journalUndoTurn(projectDir, sessionRef.current, review.turnId);
-      // The file watcher reloads affected tabs and refreshes git status.
-      setReview(null);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setUndoing(false);
-    }
-  }, [review, projectDir]);
-
   const submit = useCallback(() => {
+    const done = composerDbgMark("submit");
+    composerDbg("submit click", {
+      chips: chipsSnapshot(composerChips),
+      inputLen: input.length,
+      inputPreview: promptPreview(input, 120),
+      busy,
+      mentionActive: Boolean(mention),
+    });
     const text = composePromptWithChips(composerChips, input);
     const pendingAttachment = extractImageAttachment(composerChips);
-    if (!text && !pendingAttachment) return;
-    if (!projectDir) {
-      setError(t("chat.noProject"));
+    composerDbg("submit composed", {
+      textLen: text.length,
+      textPreview: promptPreview(text),
+      hasImageAttachment: Boolean(pendingAttachment),
+    });
+    if (!text && !pendingAttachment) {
+      composerDbg("submit aborted: empty");
+      done();
       return;
     }
-    setInput("");
-    setComposerChips((cur) => {
-      revokeImageChipPreviews(cur);
-      return [];
-    });
-    setMention(null);
+    if (!projectDir) {
+      setError(t("chat.noProject"));
+      done();
+      return;
+    }
+    composerDbg("submit → clear input & chips");
+    clearComposer();
 
     const unfinished = planItems.filter((i) => i.status === "pending" || i.status === "in_progress");
     if (unfinished.length > 0) {
+      composerDbg("submit → planResume (unfinished todos)", { count: unfinished.length });
       setPlanResume({ text, attachment: pendingAttachment });
+      done();
       return;
     }
     inputHistory.push(text);
+    composerDbg("submit → doSend");
     doSend(text, pendingAttachment, true);
-  }, [input, composerChips, projectDir, planItems, doSend, inputHistory, t]);
+    done();
+  }, [input, composerChips, projectDir, planItems, doSend, inputHistory, t, busy, mention, clearComposer]);
 
   const onModeChange = (mode: ChatMode) => {
     setChatMode(mode);
@@ -610,14 +713,24 @@ export default function AssistantPanel({
       setSessions([]);
       return;
     }
-    listSessions(projectDir).then(setSessions).catch(() => setSessions([]));
+    listSessions(projectDir, [SESSION_SOURCE_CODEZ]).then(setSessions).catch(() => setSessions([]));
   }, [projectDir]);
 
   const syncMessagesFromDb = useCallback(
     async (sessionId: string) => {
       if (!projectDir) return;
       const history = await getMessages(sessionId, projectDir);
-      setMessages(history.map(messageFromDto));
+      setMessages((prev) => {
+        const turnById = new Map<string, string>();
+        for (const m of prev) {
+          if (m.id && m.turnId) turnById.set(m.id, m.turnId);
+        }
+        return history.map((dto) => {
+          const msg = messageFromDto(dto);
+          const turnId = msg.id ? turnById.get(msg.id) : undefined;
+          return turnId ? { ...msg, turnId } : msg;
+        });
+      });
     },
     [projectDir],
   );
@@ -631,6 +744,7 @@ export default function AssistantPanel({
     queueRef.current = [];
     setQueuedView([]);
     setMessages([]);
+    setTurnDiffsByTurnId({});
     setPlanItems([]);
     setToolSteps([]);
     setError(null);
@@ -642,6 +756,7 @@ export default function AssistantPanel({
     async (id: string) => {
       try {
         sessionRef.current = id;
+        setTurnDiffsByTurnId({});
         await syncMessagesFromDb(id);
         setPlanItems([]);
         setToolSteps([]);
@@ -759,8 +874,10 @@ export default function AssistantPanel({
         }
         const file = item.getAsFile();
         if (!file) return;
+        const gen = composerGenRef.current;
         try {
           const dataUrl = await blobToDataUrl(file);
+          if (gen !== composerGenRef.current) return;
           const data = dataUrlToBase64(dataUrl);
           addImageChip(
             {
@@ -770,6 +887,7 @@ export default function AssistantPanel({
               path: null,
             },
             dataUrl,
+            gen,
           );
         } catch (err) {
           setError(String(err));
@@ -782,7 +900,11 @@ export default function AssistantPanel({
 
   const modelOptions = useMemo(() => {
     const opts: ComposerMenuOption[] = [
-      { id: "", label: defaultModelLabel || t("chat.modelDefault"), hint: t("chat.modelDefault") },
+      {
+        id: "",
+        label: defaultModelLabel || t("chat.modelDefault"),
+        hint: defaultModelHint || t("chat.modelDefault"),
+      },
     ];
     for (const p of llmProviders) {
       opts.push({
@@ -792,7 +914,7 @@ export default function AssistantPanel({
       });
     }
     return opts;
-  }, [llmProviders, defaultModelLabel, t]);
+  }, [llmProviders, defaultModelLabel, defaultModelHint, t]);
 
   const modeOptions = useMemo(
     (): ComposerMenuOption[] => [
@@ -905,6 +1027,13 @@ export default function AssistantPanel({
           ? t("chat.placeholder")
           : t("chat.placeholderFollowUp");
 
+  const lastUserMessageIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user" && messages[i].text.trim()) return i;
+    }
+    return -1;
+  }, [messages]);
+
   return (
     <div className="agentz-assistant" ref={panelRef}>
       <div className="agentz-assistant-header">
@@ -967,21 +1096,32 @@ export default function AssistantPanel({
       <div className="agentz-assistant-messages" ref={scrollRef}>
         {messages.length === 0 && <div className="agentz-assistant-empty">{t("chat.empty")}</div>}
         {messages.map((m, i) => {
-          const isStreamingLast = m.role === "assistant" && busy && i === messages.length - 1;
-          const showCheckpoint =
-            m.role === "assistant" && m.id && m.text.trim() && !isStreamingLast;
+          if (m.role === "user") {
+            return (
+              <div key={m.id ?? `msg-${i}`} className="agentz-turn-user">
+                <TaskCard text={m.text} sticky={i === lastUserMessageIndex} />
+              </div>
+            );
+          }
+
+          const isStreamingLast = busy && i === messages.length - 1;
+          const showCheckpoint = m.id && m.text.trim() && !isStreamingLast;
+          const diffs = m.turnId ? turnDiffsByTurnId[m.turnId] : undefined;
+
           return (
-            <div key={m.id ?? `msg-${i}`} className={`agentz-msg ${m.role}`}>
-              <div className="agentz-msg-role">{m.role === "user" ? t("chat.you") : t("chat.agentRole")}</div>
+            <div key={m.id ?? `msg-${i}`} className="agentz-msg assistant">
               {m.text ? (
-                m.role === "assistant" ? (
-                  <Markdown content={m.text} enableApply />
-                ) : (
-                  <UserMessage text={m.text} />
-                )
+                <Markdown content={m.text} enableApply />
               ) : isStreamingLast ? (
                 <div className="agentz-msg-text agentz-thinking">{t("chat.thinking")}</div>
               ) : null}
+              {diffs && diffs.length > 0 && (
+                <div className="agentz-turn-diffs">
+                  {diffs.map((d) => (
+                    <FileDiffCard key={d.id} diff={d} onOpen={onSelectPath} />
+                  ))}
+                </div>
+              )}
               {showCheckpoint && (
                 <div className="agentz-checkpoint">
                   <span className="agentz-checkpoint-label">{t("chat.checkpoint")}</span>
@@ -1007,14 +1147,12 @@ export default function AssistantPanel({
           );
         })}
         {queuedView.map((q, i) => (
-          <div key={`q-${i}`} className="agentz-msg user queued">
-            <div className="agentz-msg-role">{t("chat.queued")}</div>
-            <div className="agentz-msg-text">{q}</div>
+          <div key={`q-${i}`} className="agentz-turn-user queued">
+            <TaskCard text={q} />
           </div>
         ))}
         {pendingCards.map((card) => (
           <div key={card.requestId} className="agentz-msg assistant">
-            <div className="agentz-msg-role">{t("chat.agentRole")}</div>
             <InteractiveCard
               requestId={card.requestId}
               uiDefinition={card.uiDefinition}
@@ -1029,46 +1167,6 @@ export default function AssistantPanel({
 
       {error && <div className="agentz-assistant-error">{error}</div>}
 
-      {review && (
-        <div className="agentz-review-bar">
-          <div className="agentz-review-head">
-            <span className="agentz-review-title">
-              {t("chat.reviewChanges", { count: review.changes.length })}
-            </span>
-            <div className="agentz-review-actions">
-              <button
-                type="button"
-                className="agentz-review-btn danger"
-                disabled={undoing}
-                onClick={() => void undoTurn()}
-                title={t("chat.undoAll")}
-              >
-                {undoing ? t("chat.undoing") : t("chat.undoAll")}
-              </button>
-              <button
-                type="button"
-                className="agentz-review-btn"
-                disabled={undoing}
-                onClick={() => setReview(null)}
-                title={t("chat.keepAll")}
-              >
-                {t("chat.keepAll")}
-              </button>
-            </div>
-          </div>
-          <ul className="agentz-review-files">
-            {review.changes.map((c) => (
-              <li key={c.id} className="agentz-review-file" title={c.rel_path}>
-                <span className={`agentz-review-tag ${c.existed ? "edit" : "new"}`}>
-                  {c.existed ? "M" : "A"}
-                </span>
-                <span className="agentz-review-path">{c.rel_path}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <ChatComposer
         value={input}
         onChange={onInputChange}
@@ -1082,10 +1180,13 @@ export default function AssistantPanel({
         onRemoveChip={(id) =>
           setComposerChips((cur) => {
             const removed = cur.find((c) => c.id === id);
+            composerDbg("chip removed", { id, removed: removed ? chipsSnapshot([removed])[0] : null });
             if (removed?.kind === "image-attachment" && removed.preview.startsWith("blob:")) {
               URL.revokeObjectURL(removed.preview);
             }
-            return cur.filter((c) => c.id !== id);
+            const next = cur.filter((c) => c.id !== id);
+            composerDbg("composerChips after remove", chipsSnapshot(next));
+            return next;
           })
         }
         textareaRef={taRef}

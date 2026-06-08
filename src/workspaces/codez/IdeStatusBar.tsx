@@ -5,6 +5,7 @@ import { extensionUiStore } from "../../extensions/extensionUiStore";
 import type { BottomTab } from "./BottomPanel";
 
 interface IdeStatusBarProps {
+  projectDir: string | null;
   onOpenPanel: (tab: BottomTab) => void;
   /** Open the Extensions sidebar (marketplace + enable/disable). */
   onOpenExtensions: () => void;
@@ -14,7 +15,7 @@ interface IdeStatusBarProps {
  * Full-width application status bar. Extension indicator opens the marketplace
  * when the host is off, or extension output when running.
  */
-export default function IdeStatusBar({ onOpenPanel, onOpenExtensions }: IdeStatusBarProps) {
+export default function IdeStatusBar({ projectDir, onOpenPanel, onOpenExtensions }: IdeStatusBarProps) {
   const { t } = useTranslation();
   const { statusBar, running, scm, hostError } = useExtensionUi();
   const left = statusBar.filter((s) => s.alignment === 1);
@@ -35,9 +36,16 @@ export default function IdeStatusBar({ onOpenPanel, onOpenExtensions }: IdeStatu
   const handleExtClick = () => {
     if (running) {
       onOpenPanel("output");
-    } else {
-      onOpenExtensions();
+      return;
     }
+    if (projectDir) {
+      void extensionService.start(projectDir).then(() => {
+        if (extensionService.isRunning) onOpenPanel("output");
+        else onOpenExtensions();
+      }).catch(() => onOpenExtensions());
+      return;
+    }
+    onOpenExtensions();
   };
 
   return (

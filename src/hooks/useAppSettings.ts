@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { defaultModelDisplayLabel } from "../components/chatComposerUtils";
+import { globalDefaultModelLabel } from "../components/chatComposerUtils";
 import { onSettingsRefresh } from "../services/settingsRefresh";
 import {
   getSettings,
@@ -12,18 +12,22 @@ export function useAppSettings() {
   const [appSettings, setAppSettings] = useState<SettingsResponse | null>(null);
   const [llmProviders, setLlmProviders] = useState<LlmProviderConfig[]>([]);
   const [defaultModelLabel, setDefaultModelLabel] = useState("");
+  const [defaultModelHint, setDefaultModelHint] = useState("");
 
   const reload = useCallback(() => {
     getSettings()
       .then((s) => {
         setAppSettings(s);
         setLlmProviders(s.llm_providers ?? []);
-        setDefaultModelLabel(defaultModelDisplayLabel(s.provider, s.model));
+        const global = globalDefaultModelLabel(s.provider, s.model, s.llm_providers ?? []);
+        setDefaultModelLabel(global.label);
+        setDefaultModelHint(global.hint);
       })
       .catch(() => {
         setAppSettings(null);
         setLlmProviders([]);
         setDefaultModelLabel("");
+        setDefaultModelHint("");
       });
   }, []);
 
@@ -32,7 +36,13 @@ export function useAppSettings() {
     return onSettingsRefresh(reload);
   }, [reload]);
 
-  return { appSettings, llmProviders, defaultModelLabel, reloadSettings: reload };
+  return {
+    appSettings,
+    llmProviders,
+    defaultModelLabel,
+    defaultModelHint,
+    reloadSettings: reload,
+  };
 }
 
 /** Drop a model id that no longer exists after settings change. */

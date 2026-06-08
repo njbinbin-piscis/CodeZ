@@ -177,7 +177,7 @@ export default function FishTab() {
                   <input
                     value={editing.name}
                     onChange={(e) => setEditing((f) => f && { ...f, name: e.target.value })}
-                    placeholder="My Fish"
+                    placeholder="My sub-agent"
                   />
                 </div>
                 <div className="agentz-settings-field">

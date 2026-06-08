@@ -1,0 +1,22 @@
+.agentz-task-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #2a2a38);
+  background: color-mix(in srgb, var(--bg-elev-2, #1b1b26) 88%, var(--bg, #0f0f16));
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text, #e8e8f0);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.agentz-task-card.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg-elev, #14141c) 92%, transparent);
+}
+
+.agentz-task-card .agentz-user-message {
+  font-size: 13px;
+}

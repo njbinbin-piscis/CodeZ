@@ -103,6 +103,33 @@ async fn current_branch(project: &Path) -> Result<String, String> {
     Ok(out.trim().to_string())
 }
 
+async fn has_git_head(project: &Path) -> bool {
+    run_git(project, &["rev-parse", "HEAD"])
+        .await
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Ensure the project is a git repo with at least one commit so `git worktree add`
+/// can fork a task branch. Runs `git init` automatically when `.git` is missing.
+async fn ensure_git_repo(project: &Path) -> Result<(), String> {
+    if !project.join(".git").exists() {
+        run_git(project, &["init"])
+            .await
+            .map_err(|e| format!("git init failed: {e}"))?;
+    }
+    if !has_git_head(project).await {
+        // Worktree creation needs a valid base ref; allow-empty covers fresh repos.
+        run_git(
+            project,
+            &["commit", "-m", "Initial commit", "--allow-empty"],
+        )
+        .await
+        .map_err(|e| format!("failed to create initial commit: {e}"))?;
+    }
+    Ok(())
+}
+
 fn status_char_to_string(c: char) -> String {
     match c {
         'M' => "modified",
@@ -125,9 +152,7 @@ pub async fn agent_task_create(
 ) -> Result<AgentTaskInfo, String> {
     let project = require_project_dir(project_dir.as_deref())?;
     let project = PathBuf::from(project);
-    if !project.join(".git").exists() {
-        return Err("Agent task isolation requires a git repository. Run `git init` first.".into());
-    }
+    ensure_git_repo(&project).await?;
 
     let id_safe: String = task_id
         .chars()

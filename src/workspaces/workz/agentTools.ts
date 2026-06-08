@@ -2,16 +2,18 @@ import type { AgentEvent } from "../../services/tauri/chat";
 import { pathFromToolEvent, type AgentToolEvent } from "./agentArtifacts";
 
 export function applyToolStart(tools: AgentToolEvent[], evt: Extract<AgentEvent, { type: "tool_start" }>): AgentToolEvent[] {
-  return [
-    ...tools,
-    {
-      id: evt.id,
-      name: evt.name,
-      status: "running",
-      input: evt.input,
-      path: pathFromToolEvent(evt.name, evt.input),
-    },
-  ];
+  const idx = tools.findIndex((t) => t.id === evt.id);
+  const next = {
+    id: evt.id,
+    name: evt.name,
+    status: "running" as const,
+    input: evt.input,
+    path: pathFromToolEvent(evt.name, evt.input),
+  };
+  if (idx >= 0) {
+    return tools.map((t, i) => (i === idx ? { ...t, ...next } : t));
+  }
+  return [...tools, next];
 }
 
 export function applyToolEnd(tools: AgentToolEvent[], evt: Extract<AgentEvent, { type: "tool_end" }>): AgentToolEvent[] {

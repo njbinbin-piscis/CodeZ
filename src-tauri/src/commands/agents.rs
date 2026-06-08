@@ -62,7 +62,7 @@ pub struct AgentManifest {
 }
 
 impl AgentManifest {
-    fn load(path: &Path) -> Result<Self, String> {
+    pub(crate) fn load(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
         serde_json::from_str(&text).map_err(|e| format!("invalid agent.json: {e}"))
     }

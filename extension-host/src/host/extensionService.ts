@@ -189,7 +189,11 @@ export class ExtHostExtensionService implements ExtHostExtensionServiceShape {
     this.logger(
       `[ext] initialized with ${all.length} extension(s); ${incompatible.length} incompatible`,
     );
-    await this.activateStartup();
+    // Activate in the background — awaiting startup extensions (e.g. Python)
+    // here used to block $initialize indefinitely and freeze the UI op chain.
+    void this.activateStartup().catch((err) =>
+      this.logger(`[ext] startup activation error: ${err instanceof Error ? err.stack : String(err)}`),
+    );
     return { hostVersion: HOST_VSCODE_VERSION, extensions: [...this.compat.values()] };
   }
 

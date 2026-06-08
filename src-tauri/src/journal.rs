@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-pub use piscis_kernel::agent::file_journal::{FileJournal, JournalChange};
+pub use piscis_kernel::agent::file_journal::{FileJournal, JournalChange, JournalFileDiff};
 
 /// Open the project-scoped journal at `{project}/.agentz/journal.db`.
 pub fn open_project_journal(project_dir: &str) -> Result<FileJournal, String> {

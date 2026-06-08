@@ -4,7 +4,7 @@
 
 use tauri::State;
 
-use crate::browser::PickedElement;
+use crate::browser::{PickedElement, ScrollInfo};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -65,6 +65,29 @@ pub async fn browser_set_viewport(
         .set_viewport(width, height)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn browser_scroll_by(
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+) -> Result<ScrollInfo, String> {
+    state.browser.scroll_by(x, y).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn browser_scroll_to(
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+) -> Result<ScrollInfo, String> {
+    state.browser.scroll_to(x, y).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn browser_scroll_info(state: State<'_, AppState>) -> Result<ScrollInfo, String> {
+    state.browser.scroll_info().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

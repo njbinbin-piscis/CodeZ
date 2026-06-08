@@ -77,8 +77,23 @@ export class RPCProtocol implements IRPCProtocol {
   private remoteCall(nid: number, method: string, args: unknown[]): Promise<unknown> {
     if (this.disposed) return Promise.reject(new Error("RPCProtocol disposed"));
     const id = ++this.lastMessageId;
+    const timeoutMs = method === "$initialize" ? 45_000 : 30_000;
     return new Promise<unknown>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = window.setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        reject(new Error(`RPC timeout: ${method} (${timeoutMs}ms)`));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (v) => {
+          window.clearTimeout(timer);
+          resolve(v);
+        },
+        reject: (err) => {
+          window.clearTimeout(timer);
+          reject(err);
+        },
+      });
       this.transport.send({ t: MessageType.Request, i: id, p: nid, m: method, a: args });
     });
   }
@@ -142,11 +157,16 @@ export class RPCProtocol implements IRPCProtocol {
     }
   }
 
-  dispose(): void {
-    this.disposed = true;
+  /** Fail every in-flight remote call (host exit, broken stdin pipe, etc.). */
+  failAllPending(reason: string): void {
     for (const pending of this.pending.values()) {
-      pending.reject(new Error("RPCProtocol disposed"));
+      pending.reject(new Error(reason));
     }
     this.pending.clear();
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.failAllPending("RPCProtocol disposed");
   }
 }

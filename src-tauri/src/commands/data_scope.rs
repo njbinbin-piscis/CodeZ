@@ -16,7 +16,7 @@ use piscis_kernel::store::settings::Settings;
 /// Project-local directory for AgentZ session data.
 pub const PROJECT_DATA_DIR: &str = ".agentz";
 
-/// Session source tag written into `piscis.db` (shared by IDE + Agent).
+/// Legacy session source (pre v0.4.5); new sessions use [`session_sources`] constants.
 pub const SESSION_SOURCE: &str = "agentz";
 
 /// Global directory holding `config.json`.

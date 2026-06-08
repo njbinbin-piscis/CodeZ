@@ -5,6 +5,39 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-06-08
+
+WorkZ-first startup, per-mode model memory, and quieter composer placeholders.
+
+### Changed
+
+- **First launch** opens **WorkZ** by default; later launches restore the mode you
+  exited in (saved in workspace layout).
+- **CodeZ / WorkZ** title-bar toggle: WorkZ is listed before CodeZ.
+- **Model picker** selections are saved independently for CodeZ and WorkZ and
+  restored on the next app start.
+- **Composer placeholder** text is smaller and closer to the background so it is
+  less distracting.
+
+### Added
+
+- **WorkZ**: full artifact preview (images, PDF, Markdown, HTML, code), tree-style
+  artifacts drawer, worktree path resolution, three-tab task view (main / Koi
+  chatroom / coordination log), task-bound team mode, and sidebar status fixes.
+- **CodeZ**: global edge drawer for git changes and artifacts; inline file diff
+  cards after agent turns; task-card composer layout; Flash LLM session titles for
+  CodeZ and WorkZ.
+- **Extension host**: dev build sync, ready-handshake race fix, and more reliable
+  `$initialize` startup.
+
+### Fixed
+
+- CodeZ black screen from `UserMessage` / `chatFileRefs` parse bugs and duplicate
+  React keys in tool steps.
+- Composer image chips persisting after send (async paste + attach replay).
+- Extension host RPC timeouts and stale `host.js` in dev builds.
+- Browser viewport CDP API for chromiumoxide 0.9.
+
 ## [0.4.4] - 2026-06-08
 
 Replace native `<select>` dropdowns with theme-aware `DropdownSelect` so popup
@@ -102,6 +135,7 @@ Universal); see [`RELEASE.md`](RELEASE.md) for install notes.
   added Prettier config and `lint`/`format` scripts.
 - Hardened the swarm patrol against poisoned locks and single-round panics.
 
+[0.4.5]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.5
 [0.4.4]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.4
 [0.4.3]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.4.3
 [0.3.1]: https://github.com/njbinbin-piscis/AgentZ/releases/tag/v0.3.1

@@ -51,6 +51,17 @@
   flex-shrink: 0;
 }
 
+.agentz-brand-ver {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--text-dim, #8a8a9a);
+  opacity: 0.8;
+  user-select: none;
+}
+
 .agentz-titlebar-folder {
   flex-shrink: 0;
 }

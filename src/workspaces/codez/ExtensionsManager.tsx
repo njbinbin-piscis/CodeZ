@@ -33,11 +33,15 @@ function themeId(ext: VsixManifest, t: VsixTheme): string {
   return `vsix-${ext.name}-${t.label}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
 }
 
+interface ExtensionsManagerProps {
+  projectDir?: string | null;
+}
+
 /**
  * VS Code extension manager: Open VSX marketplace + runtime host extensions,
  * plus a secondary section for theme/snippet-only .vsix imports.
  */
-export default function ExtensionsManager() {
+export default function ExtensionsManager({ projectDir = null }: ExtensionsManagerProps) {
   const { t: tr } = useTranslation();
   const monaco = useMonaco();
   const [extensions, setExtensions] = useState<VsixManifest[]>(() => loadExtensions());
@@ -53,6 +57,8 @@ export default function ExtensionsManager() {
   const [engines, setEngines] = useState<Record<string, string | undefined>>({});
   const [searching, setSearching] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
+  const [hostBusy, setHostBusy] = useState(false);
+  const [hostMsg, setHostMsg] = useState<string | null>(null);
   const compat = useSyncExternalStore(compatStore.subscribe, compatStore.getSnapshot);
 
   const refreshInstalled = useCallback(async () => {
@@ -68,14 +74,40 @@ export default function ExtensionsManager() {
   }, [refreshInstalled]);
 
   const restartHost = useCallback(async () => {
-    if (extensionService.projectDir) {
-      try {
-        await extensionService.start(extensionService.projectDir);
-      } catch (e) {
-        setError(String(e));
-      }
+    const dir = extensionService.projectDir;
+    if (!dir) return;
+    try {
+      await extensionService.start(dir, { force: true });
+    } catch (e) {
+      setError(String(e));
     }
   }, []);
+
+  const startHostManual = useCallback(async () => {
+    const dir = projectDir ?? extensionService.projectDir;
+    if (!dir) {
+      setError(tr("extensions.hostNeedsProject"));
+      return;
+    }
+    setError(null);
+    setHostMsg(tr("extensions.hostStarting"));
+    setHostBusy(true);
+    try {
+      await extensionService.start(dir);
+      if (extensionService.isRunning) {
+        setHostMsg(tr("extensions.hostStarted"));
+      } else {
+        setError(tr("extensions.hostNoEnabled"));
+        setHostMsg(null);
+      }
+    } catch (e) {
+      setError(String(e));
+      setHostMsg(null);
+    } finally {
+      setHostBusy(false);
+      window.setTimeout(() => setHostMsg((m) => (m === tr("extensions.hostStarted") ? null : m)), 4000);
+    }
+  }, [projectDir, tr]);
 
   const doSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -154,12 +186,14 @@ export default function ExtensionsManager() {
       try {
         await vsixSetEnabled(ext.id, !ext.enabled);
         await refreshInstalled();
-        await restartHost();
       } catch (e) {
         setError(String(e));
       } finally {
         setWorking(null);
       }
+      // Restart in the background — don't keep buttons disabled while the host
+      // reboots (can take several seconds or appear hung).
+      void restartHost();
     },
     [refreshInstalled, restartHost],
   );
@@ -170,12 +204,12 @@ export default function ExtensionsManager() {
       try {
         await vsixUninstall(ext.id);
         await refreshInstalled();
-        await restartHost();
       } catch (e) {
         setError(String(e));
       } finally {
         setWorking(null);
       }
+      void restartHost();
     },
     [refreshInstalled, restartHost],
   );
@@ -295,11 +329,23 @@ export default function ExtensionsManager() {
   return (
     <div className="agentz-ext-manager">
       {error && <div className="agentz-ext-error">{error}</div>}
+      {hostMsg && <div className="agentz-ext-host-msg">{hostMsg}</div>}
 
       {/* ── Open VSX marketplace (primary) ─────────────────────────────── */}
       <div className="agentz-ext-marketplace">
         <div className="agentz-ext-market-header">
-          <div className="agentz-ext-market-title">{tr("extensions.marketTitle")}</div>
+          <div className="agentz-ext-market-title-row">
+            <div className="agentz-ext-market-title">{tr("extensions.marketTitle")}</div>
+            <button
+              type="button"
+              className="agentz-ext-btn agentz-ext-btn-secondary"
+              onClick={() => void startHostManual()}
+              disabled={hostBusy}
+              title={tr("extensions.hostStartHint")}
+            >
+              {hostBusy ? tr("extensions.hostStarting") : tr("extensions.hostStart")}
+            </button>
+          </div>
           <p className="agentz-ext-market-hint">{tr("extensions.marketHint")}</p>
         </div>
 

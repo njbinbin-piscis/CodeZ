@@ -84,6 +84,7 @@
 }
 
 .agentz-browser-view {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -107,9 +108,51 @@
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain;
+  object-fit: fill;
   object-position: top left;
   pointer-events: none;
+}
+
+/* Synthetic scrollbars — the screenshot view has no native one. */
+.agentz-browser-scrollbar {
+  position: absolute;
+  z-index: 6;
+  background: transparent;
+}
+.agentz-browser-scrollbar.vertical {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+}
+.agentz-browser-scrollbar.horizontal {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 12px;
+}
+.agentz-browser-scrollbar.vertical + .agentz-browser-scrollbar.horizontal,
+.agentz-browser-scrollbar.horizontal {
+  right: 12px;
+}
+
+.agentz-browser-scrollthumb {
+  position: absolute;
+  background: color-mix(in srgb, var(--text-muted, #888) 55%, transparent);
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.12s ease;
+}
+.agentz-browser-scrollbar.vertical .agentz-browser-scrollthumb {
+  right: 2px;
+  width: 8px;
+}
+.agentz-browser-scrollbar.horizontal .agentz-browser-scrollthumb {
+  bottom: 2px;
+  height: 8px;
+}
+.agentz-browser-scrollthumb:hover {
+  background: color-mix(in srgb, var(--text-muted, #888) 80%, transparent);
 }
 
 .agentz-browser-shot.pick {

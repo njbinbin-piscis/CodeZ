@@ -121,3 +121,18 @@ export function WikiIcon(props: IconProps) {
     </SvgIcon>
   );
 }
+
+/** IM assistant message panel (chat bubble with a presence dot). */
+export function AssistantBubbleIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path
+        d="M21 11.5a8 8 0 0 1-11.7 7.1L4 20l1.4-4.2A8 8 0 1 1 21 11.5z"
+        strokeLinejoin="round"
+      />
+      <circle cx="9" cy="11.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="11.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="11.5" r="1" fill="currentColor" stroke="none" />
+    </SvgIcon>
+  );
+}

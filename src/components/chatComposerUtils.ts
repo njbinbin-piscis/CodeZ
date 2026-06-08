@@ -60,8 +60,34 @@ export function modelDisplayLabel(p: LlmProviderConfig): string {
 
 /** Short label for the default-model menu entry (settings provider/model). */
 export function defaultModelDisplayLabel(provider: string, model: string): string {
-  if (model?.trim()) return model.trim();
-  return provider?.trim() || "default";
+  return globalDefaultModelLabel(provider, model).label;
+}
+
+/** Label + hint for the composer "use global default" menu row. */
+export function globalDefaultModelLabel(
+  provider: string,
+  model: string,
+  llmProviders: Array<{ id: string; label: string; provider: string; model: string }> = [],
+): { label: string; hint: string } {
+  const m = model?.trim();
+  const p = provider?.trim();
+  if (m) {
+    const hint = p ? `${p} · ${m}` : m;
+    return { label: m, hint };
+  }
+  const first = llmProviders.find((row) => row.model?.trim() || row.label?.trim() || row.id?.trim());
+  if (first) {
+    const name = first.label?.trim() || first.id;
+    const fm = first.model?.trim();
+    if (fm) {
+      return { label: fm, hint: `${name} · ${fm}` };
+    }
+    return { label: name, hint: name };
+  }
+  if (p) {
+    return { label: p, hint: p };
+  }
+  return { label: "", hint: "" };
 }
 
 export async function pickChatAttachment(): Promise<{

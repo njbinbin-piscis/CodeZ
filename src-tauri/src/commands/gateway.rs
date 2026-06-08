@@ -676,6 +676,11 @@ async fn handle_inbound(
         ..Default::default()
     };
 
+    {
+        let mut s = settings.lock().await;
+        crate::commands::chat_turn::materialize_headless_llm_settings(&mut s, &app, None);
+    }
+
     let deps = HeadlessDeps::new(db.clone(), settings, registry, sink);
     let reply_text = match run_piscis_turn(request, deps).await {
         Ok(resp) => {
@@ -773,4 +778,115 @@ pub fn spawn_inbound_consumer(app: AppHandle) {
         }
         info!("Gateway inbound consumer stopped");
     });
+}
+
+// ─── Assistant message panel (IM session history) ───────────────────────────
+
+/// One IM-backed conversation, surfaced in the assistant message panel.
+#[derive(Debug, Clone, Serialize)]
+pub struct ImSessionMeta {
+    pub id: String,
+    /// Channel slug parsed from the `im_<channel>` source tag (feishu, telegram…).
+    pub channel: String,
+    pub title: String,
+    pub status: String,
+    pub message_count: i64,
+    pub updated_at: String,
+}
+
+/// A single chat message inside an IM session.
+#[derive(Debug, Clone, Serialize)]
+pub struct ImMessageDto {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Open the global (headless) DB that the IM consumer writes to.
+fn open_global_db(app: &AppHandle) -> Result<Database, String> {
+    let dir = resolve_global_config_dir(app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Database::open(&dir.join("piscis.db")).map_err(|e| e.to_string())
+}
+
+fn channel_from_source(source: &str) -> Option<String> {
+    source
+        .strip_prefix("im_")
+        .filter(|c| !c.is_empty())
+        .map(|c| c.to_string())
+}
+
+/// List every IM-backed conversation (newest first), optionally for one channel.
+#[tauri::command]
+pub async fn list_im_sessions(
+    app: AppHandle,
+    channel: Option<String>,
+) -> Result<Vec<ImSessionMeta>, String> {
+    let want = channel.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+    let db = open_global_db(&app)?;
+    let sessions = db.list_sessions(500, 0).map_err(|e| e.to_string())?;
+    Ok(sessions
+        .into_iter()
+        .filter_map(|s| {
+            let ch = channel_from_source(&s.source)?;
+            if let Some(ref w) = want {
+                if &ch != w {
+                    return None;
+                }
+            }
+            Some(ImSessionMeta {
+                id: s.id,
+                channel: ch,
+                title: s.title.unwrap_or_default(),
+                status: s.status,
+                message_count: s.message_count,
+                updated_at: s.updated_at.to_rfc3339(),
+            })
+        })
+        .collect())
+}
+
+/// Load one IM session's messages in chronological order.
+#[tauri::command]
+pub async fn im_session_messages(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Vec<ImMessageDto>, String> {
+    let db = open_global_db(&app)?;
+    let msgs = db.get_messages(&session_id, 1000, 0).map_err(|e| e.to_string())?;
+    Ok(msgs
+        .into_iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .map(|m| ImMessageDto {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at.to_rfc3339(),
+        })
+        .collect())
+}
+
+/// Delete IM conversation history. With `channel`, clears only that channel;
+/// otherwise clears every IM session.
+#[tauri::command]
+pub async fn clear_im_sessions(app: AppHandle, channel: Option<String>) -> Result<usize, String> {
+    let want = channel.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+    let db = open_global_db(&app)?;
+    let sessions = db.list_sessions(1000, 0).map_err(|e| e.to_string())?;
+    let mut removed = 0usize;
+    for s in sessions {
+        let Some(ch) = channel_from_source(&s.source) else {
+            continue;
+        };
+        if let Some(ref w) = want {
+            if &ch != w {
+                continue;
+            }
+        }
+        if db.delete_session(&s.id).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }

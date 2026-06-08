@@ -14,6 +14,29 @@ export interface ToolStep {
   isError?: boolean;
 }
 
+/** Insert or refresh a tool step when `tool_start` arrives (events may repeat). */
+export function upsertToolStep(
+  prev: ToolStep[],
+  evt: Pick<ToolStep, "id" | "name" | "input">,
+): ToolStep[] {
+  const idx = prev.findIndex((s) => s.id === evt.id);
+  if (idx >= 0) {
+    const next = prev.slice();
+    next[idx] = { ...next[idx], name: evt.name, input: evt.input };
+    return next;
+  }
+  return [
+    ...prev,
+    {
+      id: evt.id,
+      name: evt.name,
+      input: evt.input,
+      completed: false,
+      expanded: false,
+    },
+  ];
+}
+
 export function mergePlanItems(existing: PlanTodoItem[], updates: PlanTodoItem[]): PlanTodoItem[] {
   const merged = existing.slice();
   for (const update of updates) {

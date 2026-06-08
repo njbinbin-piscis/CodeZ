@@ -1,6 +1,11 @@
 //! Small platform-integration commands shared across workspaces.
 
+use std::io::Write;
 use std::path::Path;
+
+use tauri::AppHandle;
+
+use super::data_scope::resolve_global_config_dir;
 
 /// Reveal a path in the OS file manager (or open it with the default handler).
 ///
@@ -26,4 +31,24 @@ pub async fn open_path(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("Failed to open '{path}': {e}"))?;
     Ok(())
+}
+
+/// Append a frontend composer-debug line to `{config_dir}/logs/composer.log`.
+/// Survives UI freezes — read the file after force-quitting the app.
+#[tauri::command]
+pub async fn composer_debug_log(app: AppHandle, line: String) -> Result<(), String> {
+    let log_dir = resolve_global_config_dir(&app)?.join("logs");
+    tokio::task::spawn_blocking(move || {
+        std::fs::create_dir_all(&log_dir).map_err(|e| format!("create log dir: {e}"))?;
+        let path = log_dir.join("composer.log");
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|e| format!("open composer.log: {e}"))?;
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+        writeln!(f, "{now} {line}").map_err(|e| format!("write composer.log: {e}"))
+    })
+    .await
+    .map_err(|e| format!("composer log task: {e}"))?
 }

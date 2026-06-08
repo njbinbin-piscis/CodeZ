@@ -1,0 +1,258 @@
+.agentz-project-edge-panel {
+  position: fixed;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.agentz-edge-zone {
+  position: absolute;
+  right: 0;
+  width: 280px;
+  height: 0;
+  pointer-events: none;
+}
+
+.agentz-edge-zone.open,
+.agentz-edge-zone.pinned {
+  pointer-events: auto;
+}
+
+.agentz-edge-tab {
+  position: absolute;
+  right: 0;
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--border, #2a2a38);
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim, #9a9ab0);
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.agentz-edge-zone.open .agentz-edge-tab,
+.agentz-edge-zone.pinned .agentz-edge-tab {
+  color: var(--accent, #7c6af7);
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-edge-tab-count {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border-radius: 8px;
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+.agentz-edge-drawer {
+  position: absolute;
+  top: 0;
+  right: 28px;
+  width: 260px;
+  max-height: min(420px, 70vh);
+  background: var(--bg-elev, #14141c);
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px 0 0 8px;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
+  transform: translateX(calc(100% + 28px));
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.agentz-edge-zone.open .agentz-edge-drawer,
+.agentz-edge-zone.pinned .agentz-edge-drawer {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.agentz-edge-drawer-head {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim, #9a9ab0);
+  border-bottom: 1px solid var(--border, #2a2a38);
+  flex-shrink: 0;
+}
+
+.agentz-edge-drawer-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.agentz-edge-review {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border, #2a2a38);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agentz-edge-review-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agentz-edge-review-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.agentz-edge-review-btn {
+  flex: 1;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.agentz-edge-review-btn.danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.agentz-edge-review-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.agentz-edge-changes-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px 0;
+}
+
+.agentz-edge-refresh {
+  background: transparent;
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 5px;
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  padding: 2px 8px;
+}
+
+.agentz-edge-empty {
+  padding: 8px 12px 12px;
+  font-size: 12px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-edge-changes-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px 8px;
+}
+
+.agentz-edge-changes-list.journal {
+  border-top: 1px dashed var(--border, #2a2a38);
+}
+
+.agentz-edge-change {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.agentz-edge-change:hover {
+  background: var(--bg-elev-2, #1b1b26);
+}
+
+.agentz-edge-change-badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(124, 106, 247, 0.25);
+}
+
+.agentz-edge-change-badge.new {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.agentz-edge-change-badge.edit,
+.agentz-edge-change-badge.modified {
+  background: rgba(250, 204, 21, 0.2);
+}
+
+.agentz-edge-change-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentz-edge-artifacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.agentz-edge-artifacts-item,
+.agentz-edge-artifacts-dir-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.agentz-edge-artifacts-item:hover,
+.agentz-edge-artifacts-dir-btn:hover,
+.agentz-edge-artifacts-item.active {
+  background: var(--bg-elev-2, #1b1b26);
+}
+
+.agentz-edge-artifacts-item.active {
+  color: var(--accent, #7c6af7);
+}
+
+.agentz-edge-artifacts-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agentz-edge-artifacts-chevron {
+  width: 10px;
+  flex-shrink: 0;
+  font-size: 10px;
+}

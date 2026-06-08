@@ -114,6 +114,7 @@ pub fn run() {
             commands::ide::ide_lsp_stop,
             // platform
             commands::platform::open_path,
+            commands::platform::composer_debug_log,
             // AI chat (agent turn on the piscis-engine kernel)
             commands::chat::chat_send,
             commands::chat::chat_cancel,
@@ -138,6 +139,9 @@ pub fn run() {
             commands::browser::browser_pick_at,
             commands::browser::browser_inspect_at,
             commands::browser::browser_set_viewport,
+            commands::browser::browser_scroll_by,
+            commands::browser::browser_scroll_to,
+            commands::browser::browser_scroll_info,
             commands::browser::browser_current_url,
             commands::browser::browser_is_open,
             commands::browser::browser_close,
@@ -188,6 +192,9 @@ pub fn run() {
             commands::gateway::disconnect_gateway_channels,
             commands::gateway::start_wechat_login,
             commands::gateway::poll_wechat_login,
+            commands::gateway::list_im_sessions,
+            commands::gateway::im_session_messages,
+            commands::gateway::clear_im_sessions,
             // Connectors (Phase 0B): authenticated external services exposed as MCP tools
             commands::connectors::connectors_list,
             commands::connectors::connectors_install,
@@ -253,6 +260,7 @@ pub fn run() {
             commands::interactive::respond_interactive_ui,
             // File journal — Review / Undo of a turn's edits
             commands::journal::journal_list_changes,
+            commands::journal::journal_get_turn_diffs,
             commands::journal::journal_undo_turn,
             // Workspace session restore (hot exit)
             commands::workspace::workspace_load,

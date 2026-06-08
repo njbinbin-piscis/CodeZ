@@ -90,6 +90,34 @@ export function disconnectGatewayChannels(): Promise<void> {
   return invoke<void>("disconnect_gateway_channels");
 }
 
+export interface ImSessionMeta {
+  id: string;
+  channel: string;
+  title: string;
+  status: string;
+  message_count: number;
+  updated_at: string;
+}
+
+export interface ImMessageDto {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export function listImSessions(channel?: string): Promise<ImSessionMeta[]> {
+  return invoke<ImSessionMeta[]>("list_im_sessions", { channel: channel ?? null });
+}
+
+export function imSessionMessages(sessionId: string): Promise<ImMessageDto[]> {
+  return invoke<ImMessageDto[]>("im_session_messages", { sessionId });
+}
+
+export function clearImSessions(channel?: string): Promise<number> {
+  return invoke<number>("clear_im_sessions", { channel: channel ?? null });
+}
+
 export function startWechatLogin(): Promise<WechatLoginStatus> {
   return invoke<WechatLoginStatus>("start_wechat_login");
 }

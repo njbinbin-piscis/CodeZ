@@ -11,7 +11,8 @@ use tauri::{AppHandle, Emitter, State};
 use piscis_core::host::{EventSink, HeadlessCliMode, HeadlessCliRequest};
 
 use crate::commands::chat_turn::run_agentz_turn;
-use crate::commands::data_scope::{open_project_kernel_state, require_project_dir, SESSION_SOURCE};
+use crate::commands::data_scope::{open_project_kernel_state, require_project_dir};
+use crate::commands::session_sources::{default_channel_for, SOURCE_CODEZ};
 use crate::state::AppState;
 
 /// Re-export for settings / inline edit (always global config dir).
@@ -78,6 +79,9 @@ pub async fn chat_send(
     task_key: Option<String>,
     enabled_skills: Option<Vec<String>>,
     agent_id: Option<String>,
+    session_source: Option<String>,
+    team_id: Option<String>,
+    pool_id: Option<String>,
 ) -> Result<ChatResult, String> {
     let project = require_project_dir(project_dir.as_deref().or(workspace.as_deref()))?;
     // When an isolated worktree is provided, the agent works inside it (and the
@@ -125,13 +129,27 @@ pub async fn chat_send(
         }
     }
 
+    let channel = session_source
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| default_channel_for(SOURCE_CODEZ).to_string());
+    // CodeZ sessions get a title from the first user message; WorkZ keeps a
+    // generic placeholder until maybe_autotitle_session_from_first_prompt runs.
+    let session_title = match channel.as_str() {
+        "workz-team" => Some("WorkZ team task".to_string()),
+        "workz" => Some("WorkZ task".to_string()),
+        _ => None,
+    };
+
     let request = HeadlessCliRequest {
         prompt,
         workspace: Some(agent_workspace.clone()),
         mode: HeadlessCliMode::Piscis,
         session_id,
-        session_title: Some("AgentZ chat".to_string()),
-        channel: Some(SESSION_SOURCE.to_string()),
+        session_title,
+        channel: Some(channel),
         ..Default::default()
     };
 
@@ -153,6 +171,8 @@ pub async fn chat_send(
         config_dir,
         enabled_skills.unwrap_or_default(),
         agent_id.filter(|a| !a.trim().is_empty()),
+        team_id.filter(|s| !s.trim().is_empty()),
+        pool_id.filter(|s| !s.trim().is_empty()),
     )
     .await;
 

@@ -32,7 +32,8 @@ export function parseUserMessageRefs(text: string): UserMessagePart[] {
   while ((match = re.exec(normalized)) !== null) {
     const before = normalized.slice(last, match.index + (match[1]?.length ?? 0));
     if (before) parts.push({ type: "text", value: before });
-    if (match[2]) {
+    // match[2] is the whole @-token for any alternative; use inner groups to branch.
+    if (match[3] !== undefined) {
       const selector = match[3];
       const tagMatch = selector.match(/^([a-z][a-z0-9-]*)/i);
       parts.push({
@@ -40,14 +41,14 @@ export function parseUserMessageRefs(text: string): UserMessagePart[] {
         selector,
         label: tagMatch ? `<${tagMatch[1]}>` : selector,
       });
-    } else if (match[4]) {
+    } else if (match[4] !== undefined) {
       const snippetId = match[4];
       parts.push({
         type: "terminal-snippet",
         snippetId,
         label: "Terminal",
       });
-    } else {
+    } else if (match[5] !== undefined) {
       const path = match[5];
       const isDir = /\/$/.test(path);
       parts.push({ type: "ref", path, isDir });

@@ -26,6 +26,7 @@ pub mod repo_wiki;
 pub mod seed;
 pub mod teams;
 pub mod session;
+pub mod session_sources;
 pub mod settings;
 pub mod user_tools;
 pub mod vsix;

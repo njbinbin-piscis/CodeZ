@@ -71,6 +71,15 @@ fn resolve_host_js(app: &AppHandle, explicit: Option<String>) -> Result<PathBuf,
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
+    // Dev: always prefer a freshly built extension-host/dist over the stale
+    // resource copy under target/debug (only refreshed on `cargo build`).
+    let dev_host =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../extension-host/dist/host.js");
+    candidates.push(dev_host.clone());
+    if dev_host.exists() {
+        return Ok(dev_host);
+    }
+
     // Production bundle: tauri.conf.json maps dist/host.js → extension-host/host.js
     if let Ok(p) = app
         .path()
@@ -80,14 +89,6 @@ fn resolve_host_js(app: &AppHandle, explicit: Option<String>) -> Result<PathBuf,
         if p.exists() {
             return Ok(p);
         }
-    }
-
-    // Dev build: extension-host/dist/host.js next to the crate.
-    let dev_host =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../extension-host/dist/host.js");
-    candidates.push(dev_host.clone());
-    if dev_host.exists() {
-        return Ok(dev_host);
     }
 
     if let Ok(exe) = std::env::current_exe() {

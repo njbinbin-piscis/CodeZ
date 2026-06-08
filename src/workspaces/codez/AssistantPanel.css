@@ -275,10 +275,26 @@
   font-size: 12px;
 }
 
+.agentz-turn-user {
+  margin-bottom: 10px;
+}
+
+.agentz-turn-user.queued {
+  opacity: 0.55;
+}
+
+.agentz-turn-diffs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .agentz-msg {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-bottom: 12px;
 }
 
 .agentz-msg-role {

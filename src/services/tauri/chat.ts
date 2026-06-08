@@ -71,7 +71,21 @@ export interface JournalChange {
   applied: boolean;
 }
 
+/** Before/after contents for inline diff cards. */
+export interface JournalFileDiff {
+  id: number;
+  rel_path: string;
+  existed: boolean;
+  before: string | null;
+  after: string;
+}
+
 export type ChatMode = "agent" | "plan";
+
+/** Session namespace — CodeZ and WorkZ histories are stored separately. */
+export const SESSION_SOURCE_CODEZ = "codez";
+export const SESSION_SOURCE_WORKZ = "workz";
+export const SESSION_SOURCE_WORKZ_TEAM = "workz-team";
 
 /** Start one agent turn. Resolves with the final assistant text. */
 export function chatSend(args: {
@@ -92,6 +106,12 @@ export function chatSend(args: {
   enabledSkills?: string[] | null;
   /** Agent persona id to run as (Phase 2). Null = default assistant. */
   agentId?: string | null;
+  /** DB `sessions.source` tag — defaults to CodeZ. */
+  sessionSource?: string | null;
+  /** WorkZ team mode: binds session to a team (stored in state_frame). */
+  teamId?: string | null;
+  /** WorkZ team mode: pool id for this coordinator run. */
+  poolId?: string | null;
 }): Promise<ChatResult> {
   return invoke<ChatResult>("chat_send", {
     prompt: args.prompt,
@@ -107,6 +127,9 @@ export function chatSend(args: {
     taskKey: args.taskKey ?? null,
     enabledSkills: args.enabledSkills ?? null,
     agentId: args.agentId ?? null,
+    sessionSource: args.sessionSource ?? SESSION_SOURCE_CODEZ,
+    teamId: args.teamId ?? null,
+    poolId: args.poolId ?? null,
   });
 }
 
@@ -123,6 +146,9 @@ export interface SessionMeta {
   status: string;
   message_count: number;
   updated_at: string;
+  source: string;
+  team_id?: string | null;
+  pool_id?: string | null;
 }
 
 export interface MessageDto {
@@ -131,8 +157,16 @@ export interface MessageDto {
   content: string;
 }
 
-export function listSessions(projectDir: string): Promise<SessionMeta[]> {
-  return invoke<SessionMeta[]>("chat_list_sessions", { projectDir });
+export function listSessions(
+  projectDir: string,
+  sources?: string[],
+  teamId?: string | null,
+): Promise<SessionMeta[]> {
+  return invoke<SessionMeta[]>("chat_list_sessions", {
+    projectDir,
+    sources: sources && sources.length > 0 ? sources : null,
+    teamId: teamId?.trim() ? teamId : null,
+  });
 }
 
 export function getMessages(sessionId: string, projectDir: string): Promise<MessageDto[]> {
@@ -185,6 +219,19 @@ export function journalListChanges(
   turnId: string,
 ): Promise<JournalChange[]> {
   return invoke<JournalChange[]>("journal_list_changes", {
+    projectDir,
+    sessionId,
+    turnId,
+  });
+}
+
+/** Before/after file contents for inline diff cards in the CodeZ stream. */
+export function journalGetTurnDiffs(
+  projectDir: string,
+  sessionId: string,
+  turnId: string,
+): Promise<JournalFileDiff[]> {
+  return invoke<JournalFileDiff[]>("journal_get_turn_diffs", {
     projectDir,
     sessionId,
     turnId,

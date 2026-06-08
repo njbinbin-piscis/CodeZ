@@ -9,7 +9,6 @@ import SearchPanel from "./SearchPanel";
 import ExtensionsManager from "./ExtensionsManager";
 import BottomPanel, { type BottomTab } from "./BottomPanel";
 import IdeStatusBar from "./IdeStatusBar";
-import ExtensionHostProvider from "../../extensions/ui/ExtensionHostProvider";
 import { ideApi, onFileChanged } from "../../services/tauri/ide";
 import { openPath } from "../../services/tauri";
 import BrowserPanel from "./BrowserPanel";
@@ -19,6 +18,7 @@ import type { PickedElement } from "../../services/tauri/browser";
 import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
 import type { EditorSnapshot, LayoutSnapshot } from "../../services/tauri/workspace";
 import { editorSnapshotFromTabs } from "../../services/tauri/workspace";
+import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
 import "./IDE.css";
 
 type SidebarTab = "explorer" | "search" | "git" | "extensions";
@@ -184,6 +184,11 @@ export default function CodeZWorkspace({
   projectDirRef.current = projectDir;
   const handledOpenPathNonce = useRef(0);
   const openFileRef = useRef<(path: string, readOnly?: boolean) => Promise<void>>(async () => {});
+  const { registerOnSelectPath } = useProjectEdge();
+
+  useEffect(() => {
+    return registerOnSelectPath((path) => void openFileRef.current(path));
+  }, [registerOnSelectPath]);
 
   const prevProjectDirRef = useRef<string | null>(null);
   const handledRestoreKeyRef = useRef(0);
@@ -892,7 +897,7 @@ export default function CodeZWorkspace({
           {sidebarTab === "extensions" ? (
             <div className="ide-sidebar-section ide-extensions-sidebar">
               <div className="ide-sidebar-title">{t("extensions.nav") || "Extensions"}</div>
-              <ExtensionsManager />
+              <ExtensionsManager projectDir={projectDir} />
             </div>
           ) : !projectDir ? (
             <div className="ide-sidebar-empty">
@@ -1013,7 +1018,7 @@ export default function CodeZWorkspace({
             />
           ) : (
             <div className="ide-editor-welcome">
-              <div className="welcome-logo welcome-logo-text">AgentZ</div>
+              <div className="welcome-logo welcome-logo-text">CodeZ</div>
               <div className="welcome-title">
                 {t("ide.welcome") || "Select a file to start editing"}
               </div>
@@ -1047,7 +1052,11 @@ export default function CodeZWorkspace({
       </div>
 
       {/* Full-width application status bar */}
-      <IdeStatusBar onOpenPanel={openBottomPanel} onOpenExtensions={openExtensionsSidebar} />
+      <IdeStatusBar
+        projectDir={projectDir}
+        onOpenPanel={openBottomPanel}
+        onOpenExtensions={openExtensionsSidebar}
+      />
 
       {/* File tree right-click context menu */}
       {fileTreeContextMenu && (
@@ -1115,8 +1124,6 @@ export default function CodeZWorkspace({
         </div>
       )}
 
-      {/* VS Code extension ecosystem: host sidecar + contributed UI surfaces */}
-      <ExtensionHostProvider projectDir={projectDir} />
     </div>
   );
 }

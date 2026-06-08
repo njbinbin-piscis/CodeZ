@@ -74,8 +74,11 @@ export default function CollabBoard({ projectDir, poolId, onClose }: CollabBoard
   }, [refresh]);
 
   const memberName = useCallback(
-    (koiId: string) => members.find((m) => m.koi_id === koiId)?.name ?? koiId,
-    [members],
+    (koiId: string) => {
+      if (koiId === "piscis") return t("agent.role");
+      return members.find((m) => m.koi_id === koiId)?.name ?? koiId;
+    },
+    [members, t],
   );
 
   const columns = useMemo(

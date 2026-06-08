@@ -5,8 +5,11 @@ import {
   chatCancel,
   onChatEvent,
   listSessions,
+  SESSION_SOURCE_WORKZ,
+  SESSION_SOURCE_WORKZ_TEAM,
   getMessages,
   deleteSession,
+  journalListChanges,
   type AgentEvent,
   type ChatAttachment,
   type ChatEventEnvelope,
@@ -14,8 +17,8 @@ import {
   type SessionMeta,
 } from "../../services/tauri/chat";
 import { useAppSettings, pruneModelId } from "../../hooks/useAppSettings";
+import { loadScopedModelId, saveScopedModelId } from "../../utils/modelPrefs";
 import { useInputHistory } from "../../components/useInputHistory";
-import { ideApi } from "../../services/tauri/ide";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask";
 import { generateRepoWiki } from "../../services/tauri/repoWiki";
@@ -34,15 +37,16 @@ import { visionCapable } from "../../components/visionUtils";
 import TaskPanel, {
   mergePlanItems,
   parsePlanFromToolInput,
+  upsertToolStep,
   type ToolStep,
 } from "../../components/TaskPanel";
-import type { GitFileStatus } from "../codez/types";
 import Markdown from "../codez/Markdown";
 import InteractiveCard from "../../components/chat/InteractiveCard";
 import { useInteractiveCards } from "../../hooks/useInteractiveCards";
-import ArtifactsDrawer from "./ArtifactsDrawer";
 import AgentFilePreview from "./AgentFilePreview";
+import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
 import CollabBoard from "./CollabBoard";
+import PoolActivityFeed from "./PoolActivityFeed";
 import WorkflowRunPanel from "./WorkflowRunPanel";
 import WorkflowRunsList from "./WorkflowRunsList";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
@@ -57,6 +61,7 @@ import {
   type AgentStep,
 } from "./agentArtifacts";
 import { applyToolEnd, applyToolStart, finalizeTools } from "./agentTools";
+import { taskDisplayTitle, workzGoalFromText } from "./taskTitle";
 import "./Agent.css";
 
 interface WorkZWorkspaceProps {
@@ -81,18 +86,23 @@ export default function WorkZWorkspace({
   onWikiBusyChange,
 }: WorkZWorkspaceProps) {
   const { t } = useTranslation();
+  const {
+    gitChanges,
+    setArtifacts,
+    setPreviewPath,
+    previewPath,
+    refreshGitChanges,
+    setPendingReview,
+  } = useProjectEdge();
   const [tasks, setTasks] = useState<SessionMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState("");
-  const [changes, setChanges] = useState<GitFileStatus[]>([]);
-  const [changesOpen, setChangesOpen] = useState(false);
-  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [wikiBusy, setWikiBusy] = useState(false);
-  const [modelId, setModelId] = useState(() => localStorage.getItem("agentz-model-id") ?? "");
-  const { appSettings, llmProviders, defaultModelLabel } = useAppSettings();
+  const [modelId, setModelId] = useState(() => loadScopedModelId("workz"));
+  const { appSettings, llmProviders, defaultModelLabel, defaultModelHint } = useAppSettings();
   const inputHistory = useInputHistory("agentz-input-history-workz");
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
@@ -119,7 +129,13 @@ export default function WorkZWorkspace({
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [runsOpen, setRunsOpen] = useState(false);
-  const hasWorkflowTeam = useMemo(() => teams.some((tm) => tm.mode === "workflow"), [teams]);
+  const [swarmMainTab, setSwarmMainTab] = useState<"main" | "chatroom" | "coordination">("main");
+
+  /** All WorkZ user tasks — sidebar lists single-agent and team sessions together. */
+  const workzTaskSources = useMemo(
+    () => [SESSION_SOURCE_WORKZ, SESSION_SOURCE_WORKZ_TEAM],
+    [],
+  );
   const activePoolRef = useRef<string | null>(null);
   activePoolRef.current = activePoolId;
 
@@ -168,7 +184,7 @@ export default function WorkZWorkspace({
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("agentz-model-id", modelId);
+    saveScopedModelId("workz", modelId);
   }, [modelId]);
 
   useEffect(() => {
@@ -194,10 +210,28 @@ export default function WorkZWorkspace({
     localStorage.setItem("agentz-workz-agent", activeAgentId);
   }, [activeAgentId]);
 
-  // Reset pool binding when the team selection changes.
+  // Swarm team selected → materialise/reuse the pool immediately so the
+  // collaboration board is available before the first coordinator turn
+  // (workflow「历史」is team-scoped the same way).
   useEffect(() => {
-    setActivePoolId(null);
-  }, [activeTeam, projectDir]);
+    if (!projectDir || !activeTeam) return;
+    const team = teams.find((tm) => tm.id === activeTeam);
+    if (team?.mode !== "swarm") return;
+
+    let cancelled = false;
+    createPoolFromTeam(projectDir, activeTeam)
+      .then((created) => {
+        if (!cancelled) {
+          setActivePoolId(created.pool_id);
+          activePoolRef.current = created.pool_id;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectDir, activeTeam, teams]);
 
   // Track the active workflow run's status so the reopen button reflects it.
   useEffect(() => {
@@ -248,24 +282,54 @@ export default function WorkZWorkspace({
       setTasks([]);
       return;
     }
-    listSessions(projectDir).then(setTasks).catch(() => setTasks([]));
-  }, [projectDir]);
+    listSessions(projectDir, workzTaskSources, null)
+      .then(setTasks)
+      .catch(() => setTasks([]));
+  }, [projectDir, workzTaskSources]);
 
-  const refreshChanges = useCallback(() => {
-    if (!projectDir) {
-      setChanges([]);
-      return;
+  /** True once a task session (or workflow run) is bound — mode pickers lock. */
+  const taskBound = selectedId !== null || workflowRunId !== null;
+
+  const applyTaskModeBinding = useCallback((meta: SessionMeta | undefined) => {
+    const boundTeam = meta?.team_id?.trim() ?? "";
+    setActiveTeam(boundTeam);
+    setSwarmMainTab("main");
+    if (meta?.pool_id) {
+      setActivePoolId(meta.pool_id);
+      activePoolRef.current = meta.pool_id;
+    } else {
+      setActivePoolId(null);
+      activePoolRef.current = null;
     }
-    ideApi
-      .gitStatus(projectDir)
-      .then(setChanges)
-      .catch(() => setChanges([]));
-  }, [projectDir]);
+  }, []);
+
+  const handleTeamChange = useCallback(
+    (teamId: string) => {
+      if (taskBound) return;
+      setSwarmMainTab("main");
+      setActivePoolId(null);
+      activePoolRef.current = null;
+      setActiveTeam(teamId);
+    },
+    [taskBound],
+  );
+
+  const handleAgentChange = useCallback(
+    (agentId: string) => {
+      if (taskBound) return;
+      setActiveAgentId(agentId);
+    },
+    [taskBound],
+  );
 
   useEffect(() => {
     refreshTasks();
-    refreshChanges();
-  }, [refreshTasks, refreshChanges]);
+    refreshGitChanges();
+  }, [refreshTasks, refreshGitChanges]);
+
+  useEffect(() => {
+    setArtifacts(collectArtifacts(steps, gitChanges));
+  }, [steps, gitChanges, setArtifacts]);
 
   // Stream kernel events into the in-flight step. The event channel is shared
   // with the IDE chat panel and with any background Agent tasks, so we only
@@ -273,18 +337,43 @@ export default function WorkZWorkspace({
   // known we match on it; while a brand-new task is still session-less we
   // accept events that aren't claimed by another running session.
   const applyEvent = useCallback((env: ChatEventEnvelope) => {
-    if (!liveRef.current) return;
-    const fg = foregroundSessionRef.current;
-    if (fg) {
-      if (env.sessionId !== fg) return;
-    } else if (env.sessionId && runningSessionsRef.current.has(env.sessionId)) {
+    if (env.channel === "session_title" && env.sessionId) {
+      const title = (env.payload as { title?: string }).title;
+      if (title) {
+        setTasks((prev) => {
+          const idx = prev.findIndex((task) => task.id === env.sessionId);
+          if (idx < 0) return prev;
+          const next = prev.slice();
+          next[idx] = { ...next[idx], title };
+          return next;
+        });
+      }
       return;
     }
+    // Turn completion must update every session — including background runs
+    // after the user clicks「新建」— or the sidebar dot stays yellow forever.
     if (env.channel === "agent_final") {
       const fin = env.payload as { ok: boolean; error?: string };
-      if (!fin.ok && fin.error) setError(fin.error);
+      const fg = foregroundSessionRef.current;
+      if (liveRef.current && fg && env.sessionId === fg && !fin.ok && fin.error) {
+        setError(fin.error);
+      }
+      markRunning(env.sessionId, false);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === env.sessionId ? { ...t, status: fin.ok ? "idle" : "error" } : t,
+        ),
+      );
       return;
     }
+
+    if (!liveRef.current) return;
+    // The kernel multiplexes every session (coordinator turn + each member
+    // Koi turn) onto one channel. Apply only events for the bound foreground
+    // session; the id is always known up front now (pre-generated for new
+    // tasks), so anything else — broadcasts included — is dropped.
+    const fg = foregroundSessionRef.current;
+    if (!fg || env.sessionId !== fg) return;
     if (env.channel !== "agent_event") return;
     const evt = env.payload as AgentEvent;
 
@@ -311,16 +400,7 @@ export default function WorkZWorkspace({
             setTaskPanelTab("todo");
           }
         }
-        setToolSteps((prev) => [
-          ...prev,
-          {
-            id: evt.id,
-            name: evt.name,
-            input: evt.input,
-            completed: false,
-            expanded: false,
-          },
-        ]);
+        setToolSteps((prev) => upsertToolStep(prev, evt));
         setSteps((prev) => {
           if (prev.length === 0) return prev;
           const copy = prev.slice();
@@ -375,7 +455,7 @@ export default function WorkZWorkspace({
         handleAgentEvent(evt);
         break;
     }
-  }, [handleAgentEvent]);
+  }, [handleAgentEvent, markRunning]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -409,13 +489,40 @@ export default function WorkZWorkspace({
     // Each turn gets a unique task key so Stop and the concurrency queue can
     // target it independently of any sibling task running in the background.
     const taskKey = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const startSession = sessionRef.current;
-    liveRef.current = true;
-    foregroundSessionRef.current = startSession;
-    foregroundTaskKeyRef.current = taskKey;
+    // Continue the open task's session — never spawn a sibling row on follow-up.
+    const startSession = sessionRef.current ?? selectedId;
     if (startSession) {
-      markRunning(startSession, true);
-      taskKeyBySessionRef.current.set(startSession, taskKey);
+      sessionRef.current = startSession;
+    }
+    // Pre-generate the session id for a brand-new task so the sidebar can
+    // select it, show the running indicator, and (critically) the event
+    // stream can be filtered to *this* session immediately — otherwise
+    // member-Koi turns sharing the event channel leak into the view while the
+    // turn is session-less. The backend honours a client-provided id.
+    const effectiveSessionId = startSession ?? crypto.randomUUID();
+    liveRef.current = true;
+    foregroundSessionRef.current = effectiveSessionId;
+    foregroundTaskKeyRef.current = taskKey;
+    sessionRef.current = effectiveSessionId;
+    taskKeyBySessionRef.current.set(effectiveSessionId, taskKey);
+    markRunning(effectiveSessionId, true);
+    setSelectedId(effectiveSessionId);
+    if (!startSession) {
+      // Optimistically surface the new task in the sidebar; refreshTasks()
+      // reconciles it (real title / status) once the turn finishes.
+      const optimistic: SessionMeta = {
+        id: effectiveSessionId,
+        title: workzGoalFromText(text) || text.trim().slice(0, 60) || t("agent.untitled"),
+        status: "running",
+        message_count: 1,
+        updated_at: new Date().toISOString(),
+        source: activeTeam ? SESSION_SOURCE_WORKZ_TEAM : SESSION_SOURCE_WORKZ,
+        team_id: activeTeam || null,
+        pool_id: activePoolRef.current,
+      };
+      setTasks((prev) =>
+        prev.some((p) => p.id === effectiveSessionId) ? prev : [optimistic, ...prev],
+      );
     }
 
     const isForeground = () => foregroundTaskKeyRef.current === taskKey;
@@ -441,13 +548,11 @@ export default function WorkZWorkspace({
       let effectivePrompt = text;
       if (activeTeam) {
         try {
-          let poolId = activePoolRef.current;
-          if (!poolId) {
-            const created = await createPoolFromTeam(projectDir!, activeTeam);
-            poolId = created.pool_id;
-            setActivePoolId(poolId);
-            activePoolRef.current = poolId;
-          }
+          // Re-sync member agent models into kois on every task start (idempotent pool).
+          const created = await createPoolFromTeam(projectDir!, activeTeam);
+          const poolId = created.pool_id;
+          setActivePoolId(poolId);
+          activePoolRef.current = poolId;
           // Only establish the coordinator role + org_spec on the first turn of a
           // session; follow-up messages stay raw so the contract isn't repeated
           // (the first-turn instruction persists in the session history).
@@ -468,20 +573,27 @@ export default function WorkZWorkspace({
       }
       const res = await chatSend({
         prompt: effectivePrompt,
-        sessionId: startSession,
+        displayPrompt: text,
+        sessionId: effectiveSessionId,
         projectDir: projectDir!,
         workspaceDir: wt?.worktree_path ?? null,
         attachment: att,
         chatMode: "agent",
-        modelId: modelId || null,
+        modelId: showModelSelector ? modelId || null : null,
         taskKey,
         // Single-agent mode: run as the chosen persona. Team mode uses the
         // coordinator path, so no per-agent persona is applied there.
         agentId: activeTeam ? null : activeAgentId || null,
+        sessionSource: activeTeam ? SESSION_SOURCE_WORKZ_TEAM : SESSION_SOURCE_WORKZ,
+        teamId: activeTeam || null,
+        poolId: activePoolRef.current,
       });
-      // Bind the (possibly newly created) session id to this run.
-      taskKeyBySessionRef.current.set(res.session_id, taskKey);
-      if (!startSession) markRunning(res.session_id, true);
+      // The backend echoes the (pre-generated) session id; keep the maps in
+      // sync in case it ever differs, then fold in the final assistant text.
+      if (res.session_id !== effectiveSessionId) {
+        taskKeyBySessionRef.current.set(res.session_id, taskKey);
+        markRunning(res.session_id, true);
+      }
       if (isForeground()) {
         sessionRef.current = res.session_id;
         foregroundSessionRef.current = res.session_id;
@@ -494,13 +606,36 @@ export default function WorkZWorkspace({
           }
           return copy;
         });
+        if (res.turn_id && projectDir) {
+          try {
+            const journalChanges = await journalListChanges(
+              projectDir,
+              res.session_id,
+              res.turn_id,
+            );
+            setPendingReview(
+              journalChanges.length > 0
+                ? {
+                    sessionId: res.session_id,
+                    turnId: res.turn_id,
+                    changes: journalChanges,
+                  }
+                : null,
+            );
+          } catch {
+            /* journal is best-effort */
+          }
+        }
       }
     } catch (e) {
       if (isForeground()) setError(String(e));
     } finally {
-      const sid = sessionRef.current ?? foregroundSessionRef.current;
-      markRunning(startSession, false);
-      if (sid) markRunning(sid, false);
+      // Clear the running flag for *this* run's own session — never the
+      // session the user may have navigated to in the meantime.
+      markRunning(effectiveSessionId, false);
+      if (startSession && startSession !== effectiveSessionId) {
+        markRunning(startSession, false);
+      }
       if (isForeground()) {
         setBusy(false);
         liveRef.current = false;
@@ -511,7 +646,7 @@ export default function WorkZWorkspace({
         );
       }
       refreshTasks();
-      refreshChanges();
+      refreshGitChanges();
     }
   };
 
@@ -546,13 +681,16 @@ export default function WorkZWorkspace({
   const newTask = useCallback(() => {
     if (!projectDir) return;
     // Detach the current view from any in-flight run — it keeps going in the
-    // background and resurfaces in the task list when it finishes.
+    // background and resurfaces in the task list when it finishes. Clearing
+    // the session binding unlocks team / agent mode pickers for the next task.
     liveRef.current = false;
     foregroundSessionRef.current = null;
     foregroundTaskKeyRef.current = null;
     setBusy(false);
     sessionRef.current = null;
     setSelectedId(null);
+    setWorkflowRunId(null);
+    setWorkflowStatus(null);
     setSteps([]);
     setPlanItems([]);
     setToolSteps([]);
@@ -560,17 +698,30 @@ export default function WorkZWorkspace({
     setGoal("");
     clearAttachment();
     setWorktree(null);
+    // Land on the main chat so a fresh task is visibly empty (instead of the
+    // previous run's Koi chatroom / coordination view lingering).
+    setSwarmMainTab("main");
     requestAnimationFrame(() => taRef.current?.focus());
   }, [projectDir, clearAttachment]);
 
   const openTask = useCallback(
     async (id: string) => {
       if (!projectDir) return;
+      // Clicking the session that is already the live foreground run must not
+      // wipe its streaming tool calls / detach the stream — that was the
+      // "in-progress tools vanish on click" bug. It's already on screen.
+      if (id === foregroundSessionRef.current && liveRef.current) {
+        setSelectedId(id);
+        return;
+      }
       try {
+        const meta = tasks.find((task) => task.id === id);
+        applyTaskModeBinding(meta);
         const history = await getMessages(id, projectDir);
-        // Switching away detaches live streaming from the previous foreground
-        // run (it continues in the background). We show this task's persisted
-        // history; if it is itself running, results refresh on completion.
+        // Switching to a different task detaches live streaming from the
+        // previous foreground run (it keeps going in the background). We show
+        // the opened task's persisted history; if it is itself running, its
+        // results refresh on completion.
         liveRef.current = false;
         foregroundTaskKeyRef.current = null;
         foregroundSessionRef.current = id;
@@ -582,12 +733,12 @@ export default function WorkZWorkspace({
         setToolSteps([]);
         setError(null);
         setPreviewPath(null);
-        refreshChanges();
+        refreshGitChanges();
       } catch (e) {
         setError(String(e));
       }
     },
-    [projectDir, refreshChanges],
+    [projectDir, refreshGitChanges, tasks, applyTaskModeBinding],
   );
 
   // Cancel the task bound to the active view (foreground run, or a reopened
@@ -777,7 +928,11 @@ export default function WorkZWorkspace({
 
   const modelOptions = useMemo((): ComposerMenuOption[] => {
     const opts: ComposerMenuOption[] = [
-      { id: "", label: defaultModelLabel || t("chat.modelDefault"), hint: t("chat.modelDefault") },
+      {
+        id: "",
+        label: defaultModelLabel || t("chat.modelDefault"),
+        hint: defaultModelHint || t("chat.modelDefault"),
+      },
     ];
     for (const p of llmProviders) {
       opts.push({
@@ -787,7 +942,7 @@ export default function WorkZWorkspace({
       });
     }
     return opts;
-  }, [llmProviders, defaultModelLabel, t]);
+  }, [llmProviders, defaultModelLabel, defaultModelHint, t]);
 
   const toggleToolStep = useCallback((id: string) => {
     setToolSteps((prev) =>
@@ -800,6 +955,18 @@ export default function WorkZWorkspace({
     () => teams.find((tm) => tm.id === activeTeam),
     [teams, activeTeam],
   );
+  const isSwarmTeam = selectedTeam?.mode === "swarm";
+  const isWorkflowTeam = selectedTeam?.mode === "workflow";
+  /** UI model picker only applies to single-agent + generic persona (no team, no named agent). */
+  const showModelSelector = !activeTeam && !activeAgentId;
+  const composerModeNotice = useMemo(() => {
+    if (taskBound) return t("agent.modeLocked");
+    if (activeTeam) {
+      return isWorkflowTeam ? t("agent.modelWorkflowTeam") : t("agent.modelSwarmTeam");
+    }
+    if (activeAgentId) return t("agent.modelBoundAgent");
+    return null;
+  }, [taskBound, activeTeam, activeAgentId, isWorkflowTeam, t]);
 
   const teamOptions = useMemo((): DropdownOption[] => {
     const opts: DropdownOption[] = [{ id: "", label: t("agent.teamNone") }];
@@ -819,7 +986,6 @@ export default function WorkZWorkspace({
     }
     return opts;
   }, [agents, t]);
-  const artifacts = useMemo(() => collectArtifacts(steps, changes), [steps, changes]);
 
   return (
     <div className="agentz-agent" ref={panelRef}>
@@ -851,7 +1017,9 @@ export default function WorkZWorkspace({
               <span
                 className={`agentz-workz-task-dot ${runningIds.includes(task.id) ? "running" : task.status}`}
               />
-              <span className="agentz-workz-task-title">{task.title || t("agent.untitled")}</span>
+              <span className="agentz-workz-task-title">
+                {taskDisplayTitle(task.title, t("agent.untitled"))}
+              </span>
               <span className="agentz-workz-task-count">{task.message_count}</span>
               <button
                 className="agentz-workz-task-del"
@@ -871,12 +1039,42 @@ export default function WorkZWorkspace({
       <section className="agentz-workz-main">
         <div className={`agentz-workz-content${previewPath ? " has-preview" : ""}`}>
           <div className="agentz-workz-steps-wrap">
-            <ArtifactsDrawer
-              artifacts={artifacts}
-              activePath={previewPath}
-              pinned={previewPath != null}
-              onSelect={(path) => setPreviewPath(path)}
-            />
+            {isSwarmTeam && projectDir && (
+              <div className="agentz-workz-swarm-tabs">
+                <button
+                  type="button"
+                  className={`agentz-workz-swarm-tab${swarmMainTab === "main" ? " active" : ""}`}
+                  onClick={() => setSwarmMainTab("main")}
+                >
+                  {t("agent.swarmTabMain")}
+                </button>
+                <button
+                  type="button"
+                  className={`agentz-workz-swarm-tab${swarmMainTab === "chatroom" ? " active" : ""}`}
+                  onClick={() => setSwarmMainTab("chatroom")}
+                >
+                  {t("agent.swarmTabChatroom")}
+                </button>
+                <button
+                  type="button"
+                  className={`agentz-workz-swarm-tab${swarmMainTab === "coordination" ? " active" : ""}`}
+                  onClick={() => setSwarmMainTab("coordination")}
+                >
+                  {t("agent.swarmTabCoordination")}
+                </button>
+              </div>
+            )}
+            {isSwarmTeam && projectDir && swarmMainTab !== "main" ? (
+              activePoolId ? (
+                <PoolActivityFeed
+                  projectDir={projectDir}
+                  poolId={activePoolId}
+                  filter={swarmMainTab === "chatroom" ? "chat" : "events"}
+                />
+              ) : (
+                <div className="agentz-workz-feed-loading">{t("common.loading")}</div>
+              )
+            ) : (
             <div className="agentz-workz-steps" ref={scrollRef}>
           {steps.length === 0 && (
             <div className="agentz-workz-empty">
@@ -937,11 +1135,13 @@ export default function WorkZWorkspace({
             </div>
           ))}
             </div>
+            )}
           </div>
           {previewPath && projectDir && (
             <AgentFilePreview
               projectDir={projectDir}
               path={previewPath}
+              workspaceDir={worktree?.worktree_path ?? null}
               onClose={() => setPreviewPath(null)}
             />
           )}
@@ -961,60 +1161,16 @@ export default function WorkZWorkspace({
           onToggleToolStep={toggleToolStep}
         />
 
-        <div className={`agentz-workz-changes${changesOpen ? " expanded" : ""}`}>
-          <div className="agentz-workz-changes-head">
-            <button
-              type="button"
-              className="agentz-workz-changes-toggle"
-              onClick={() => setChangesOpen((v) => !v)}
-              aria-expanded={changesOpen}
-            >
-              <span>
-                {t("agent.changes")}
-                {changes.length > 0 ? ` (${changes.length})` : ""}
-              </span>
-              <span className="agentz-workz-changes-chevron">{changesOpen ? "▾" : "▸"}</span>
-            </button>
-            <button
-              type="button"
-              className="agentz-workz-changes-refresh"
-              onClick={() => void refreshChanges()}
-              disabled={!projectDir}
-              title={t("agent.refreshGit")}
-            >
-              ⟳
-            </button>
-          </div>
-          {changesOpen && (
-            changes.length === 0 ? (
-              <div className="agentz-workz-changes-empty">{t("agent.noChanges")}</div>
-            ) : (
-              <div className="agentz-workz-changes-list">
-                {changes.map((c) => (
-                  <button
-                    key={c.path}
-                    type="button"
-                    className="agentz-workz-change"
-                    onClick={() => projectDir && setPreviewPath(c.path)}
-                  >
-                    <span className={`agentz-workz-change-badge ${c.status}`}>
-                      {c.status.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="agentz-workz-change-path">{c.path}</span>
-                  </button>
-                ))}
-              </div>
-            )
-          )}
-        </div>
-
         <div className="agentz-workz-isolate-bar">
           <div className="agentz-workz-bar-left">
-            <label className="agentz-workz-isolate-toggle" title={t("agent.isolateHint")}>
+            <label
+              className="agentz-workz-isolate-toggle"
+              title={taskBound ? t("agent.modeLocked") : t("agent.isolateHint")}
+            >
               <input
                 type="checkbox"
                 checked={isolate}
-                disabled={busy}
+                disabled={busy || taskBound}
                 onChange={(e) => setIsolate(e.target.checked)}
               />
               <span>{isolate ? t("agent.isolateOn") : t("agent.isolateOff")}</span>
@@ -1022,13 +1178,15 @@ export default function WorkZWorkspace({
 
             {teams.length > 0 && (
               <div
-                className="agentz-workz-pill-menu"
+                className={`agentz-workz-pill-menu${taskBound ? " is-locked" : ""}`}
                 title={
-                  activeTeam
-                    ? selectedTeam?.mode === "workflow"
-                      ? t("agent.teamHintWorkflow")
-                      : t("agent.teamHintSwarm")
-                    : t("agent.teamHint")
+                  taskBound
+                    ? t("agent.modeLocked")
+                    : activeTeam
+                      ? selectedTeam?.mode === "workflow"
+                        ? t("agent.teamHintWorkflow")
+                        : t("agent.teamHintSwarm")
+                      : t("agent.teamHint")
                 }
               >
                 <span className="agentz-workz-pill-label">{t("agent.team")}</span>
@@ -1037,29 +1195,32 @@ export default function WorkZWorkspace({
                   placement="up"
                   value={activeTeam}
                   options={teamOptions}
-                  disabled={busy}
-                  onChange={setActiveTeam}
+                  disabled={busy || taskBound}
+                  onChange={handleTeamChange}
                 />
               </div>
             )}
 
             {!activeTeam && agents.length > 0 && (
-              <div className="agentz-workz-pill-menu" title={t("agent.agentHint")}>
+              <div
+                className={`agentz-workz-pill-menu${taskBound ? " is-locked" : ""}`}
+                title={taskBound ? t("agent.modeLocked") : t("agent.agentHint")}
+              >
                 <span className="agentz-workz-pill-label">{t("agent.agentLabel")}</span>
                 <DropdownSelect
                   variant="pill"
                   placement="up"
                   value={activeAgentId}
                   options={agentOptions}
-                  disabled={busy}
-                  onChange={setActiveAgentId}
+                  disabled={busy || taskBound}
+                  onChange={handleAgentChange}
                 />
               </div>
             )}
           </div>
 
           <div className="agentz-workz-bar-right">
-            {activePoolId && (
+            {isSwarmTeam && activePoolId && (
               <button
                 type="button"
                 className="agentz-workz-review-btn"
@@ -1068,7 +1229,7 @@ export default function WorkZWorkspace({
                 {t("collab.openBoard")}
               </button>
             )}
-            {workflowRunId && (
+            {isWorkflowTeam && workflowRunId && (
               <button
                 type="button"
                 className="agentz-workz-review-btn"
@@ -1078,7 +1239,7 @@ export default function WorkZWorkspace({
                 {workflowStatus ? ` · ${t(`workflow.status.${workflowStatus}`)}` : ""}
               </button>
             )}
-            {hasWorkflowTeam && (
+            {isWorkflowTeam && (
               <button
                 type="button"
                 className="agentz-workz-review-btn"
@@ -1122,6 +1283,8 @@ export default function WorkZWorkspace({
           modelId={modelId}
           modelOptions={modelOptions}
           onModelChange={setModelId}
+          showModelSelector={showModelSelector}
+          modeNotice={composerModeNotice}
           attachment={attachment}
           attachmentPreview={attachmentPreview}
           onAttach={() => void handleAttach()}
@@ -1167,7 +1330,7 @@ export default function WorkZWorkspace({
           task={reviewTask}
           onClose={() => setReviewTask(null)}
           onResolved={() => {
-            refreshChanges();
+            refreshGitChanges();
             refreshTasks();
           }}
         />

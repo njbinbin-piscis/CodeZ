@@ -187,7 +187,9 @@
 }
 
 .agentz-composer-input::placeholder {
-  color: var(--text-dim, #6b6b80);
+  color: color-mix(in srgb, var(--text-dim, #6b6b80) 38%, var(--bg-elev, #14141c));
+  font-size: 12px;
+  opacity: 0.72;
 }
 
 .agentz-composer-input:disabled {

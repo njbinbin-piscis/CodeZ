@@ -126,6 +126,8 @@ export interface ChatComposerProps {
   modelId: string;
   modelOptions: ComposerMenuOption[];
   onModelChange: (id: string) => void;
+  /** When false, hide the model dropdown (team / bound-agent modes manage models elsewhere). */
+  showModelSelector?: boolean;
   attachment: ChatAttachment | null;
   attachmentPreview: string | null;
   onAttach: () => void;
@@ -171,6 +173,7 @@ export default function ChatComposer({
   modelId,
   modelOptions,
   onModelChange,
+  showModelSelector = true,
   attachment,
   attachmentPreview,
   onAttach,
@@ -293,14 +296,16 @@ export default function ChatComposer({
                 disabled={busy || locked}
               />
             )}
-            <DropdownSelect
-              value={modelId}
-              options={modelOptions}
-              onChange={onModelChange}
-              variant="text"
-              placement="up"
-              disabled={busy || locked}
-            />
+            {showModelSelector && (
+              <DropdownSelect
+                value={modelId}
+                options={modelOptions}
+                onChange={onModelChange}
+                variant="text"
+                placement="up"
+                disabled={busy || locked}
+              />
+            )}
             {agentSelector && agentSelector.options.length > 1 && (
               <DropdownSelect
                 value={agentSelector.value}

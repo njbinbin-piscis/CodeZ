@@ -14,7 +14,7 @@ import { generateRepoWiki } from "./services/tauri/repoWiki";
 import { confirmTerminalCloseOnProjectChange, destroyAllTerminals } from "./workspaces/codez/Terminal";
 import { getSettings } from "./services/tauri/settings";
 import { setLanguage } from "./i18n";
-import { onSettingsRefresh } from "./services/settingsRefresh";
+import { onSettingsRefresh, notifySettingsRefresh } from "./services/settingsRefresh";
 import {
   getAppearanceTheme,
   toggleAppearanceTheme,
@@ -29,6 +29,7 @@ import { browserClose, type PickedElement } from "./services/tauri/browser";
 import type { ChatAttachment } from "./services/tauri/chat";
 import { terminalSnippetPut } from "./services/tauri/terminal";
 import {
+  AssistantBubbleIcon,
   BrowserIcon,
   ChatIcon,
   CloseIcon,
@@ -40,6 +41,12 @@ import {
   WikiIcon,
 } from "./components/TitleBarIcons";
 import MarketplacePanel from "./workspaces/codez/MarketplacePanel";
+import AssistantMessagesPanel from "./workspaces/codez/AssistantMessagesPanel";
+import { getImSettings } from "./services/tauri/gateway";
+import ExtensionHostProvider from "./extensions/ui/ExtensionHostProvider";
+import { ProjectEdgeProvider } from "./contexts/ProjectEdgeContext";
+import ProjectEdgeShell from "./components/ProjectEdgeShell";
+import { composerDbg } from "./utils/composerDebug";
 import "./App.css";
 
 type Mode = "codez" | "workz";
@@ -51,7 +58,7 @@ function normProjectPath(p: string): string {
 
 export default function App() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<Mode>("codez");
+  const [mode, setMode] = useState<Mode>("workz");
   const [projectDir, setProjectDir] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState<number>(() => {
@@ -76,8 +83,11 @@ export default function App() {
   const [browserOpen, setBrowserOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
+  const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
+  const [hasImAssistant, setHasImAssistant] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
   const [wikiBusy, setWikiBusy] = useState(false);
+  const [settingsToast, setSettingsToast] = useState<string | null>(null);
   const [ideWikiOpenPath, setIdeWikiOpenPath] = useState<{ path: string; nonce: number } | null>(
     null,
   );
@@ -240,7 +250,52 @@ export default function App() {
         });
     };
     applyLanguage();
-    return onSettingsRefresh(applyLanguage);
+    const offLang = onSettingsRefresh(applyLanguage);
+    const offToast = onSettingsRefresh(() => {
+      setSettingsToast(t("settings.savedEffectHint"));
+      window.setTimeout(() => setSettingsToast((cur) => (cur === t("settings.savedEffectHint") ? null : cur)), 3200);
+    });
+    return () => {
+      offLang();
+      offToast();
+    };
+  }, [t]);
+
+  // Surface the assistant message panel button only once an IM channel is
+  // configured. Re-check whenever settings are saved.
+  useEffect(() => {
+    const detect = () => {
+      getImSettings()
+        .then((s) => {
+          setHasImAssistant(
+            Boolean(
+              s.feishu_enabled ||
+                s.wecom_enabled ||
+                s.dingtalk_enabled ||
+                s.telegram_enabled ||
+                s.slack_enabled ||
+                s.discord_enabled ||
+                s.teams_enabled ||
+                s.matrix_enabled ||
+                s.webhook_enabled ||
+                s.wechat_enabled,
+            ),
+          );
+        })
+        .catch(() => setHasImAssistant(false));
+    };
+    detect();
+    const off = onSettingsRefresh(detect);
+    // The agent's `app_control` tool mutates settings/assistants in the backend;
+    // bridge its event to the same in-app refresh open panels already listen to.
+    const un = listen("agentz:app-control-updated", () => {
+      notifySettingsRefresh();
+      detect();
+    });
+    return () => {
+      off();
+      void un.then((f) => f());
+    };
   }, []);
 
   const pickFolder = useCallback(async () => {
@@ -281,6 +336,10 @@ export default function App() {
 
   const handleSendToChat = useCallback((paths: string[]) => {
     if (paths.length === 0) return;
+    composerDbg("explorer → sendToChat", {
+      paths,
+      dirs: paths.map((p) => /[/\\]$/.test(p)),
+    });
     setChatOpen(true);
     setChatInsert({ paths, nonce: Date.now() });
   }, []);
@@ -376,11 +435,15 @@ export default function App() {
   }, [chatWidth]);
 
   return (
+    <ProjectEdgeProvider>
     <div className="agentz-app">
       <header className="agentz-titlebar">
-        <div className="agentz-brand" aria-label="AgentZ">
+        <div className="agentz-brand" aria-label={`AgentZ v${__APP_VERSION__}`}>
           <span className="agentz-brand-text">Agent</span>
           <ZLogo size={22} className="agentz-brand-z" />
+          <span className="agentz-brand-ver" title={`v${__APP_VERSION__}`}>
+            v{__APP_VERSION__}
+          </span>
         </div>
 
         <button
@@ -432,6 +495,17 @@ export default function App() {
               <ChatIcon />
             </button>
           )}
+          {hasImAssistant && (
+            <button
+              type="button"
+              className={`agentz-titlebar-icon ${assistantPanelOpen ? "active" : ""}`}
+              onClick={() => setAssistantPanelOpen((v) => !v)}
+              title={t("assistantPanel.title")}
+              aria-label={t("assistantPanel.title")}
+            >
+              <AssistantBubbleIcon />
+            </button>
+          )}
           <button
             type="button"
             className={`agentz-titlebar-icon${wikiBusy ? " loading" : ""}`}
@@ -477,18 +551,18 @@ export default function App() {
 
         <div className="agentz-mode-switch">
           <button
-            className={mode === "codez" ? "active" : ""}
-            onClick={() => setMode("codez")}
-            title={t("app.modeCodeZTitle")}
-          >
-            {t("app.modeCodeZ")}
-          </button>
-          <button
             className={mode === "workz" ? "active" : ""}
             onClick={() => setMode("workz")}
             title={t("app.modeWorkZTitle")}
           >
             {t("app.modeWorkZ")}
+          </button>
+          <button
+            className={mode === "codez" ? "active" : ""}
+            onClick={() => setMode("codez")}
+            title={t("app.modeCodeZTitle")}
+          >
+            {t("app.modeCodeZ")}
           </button>
         </div>
       </header>
@@ -528,6 +602,7 @@ export default function App() {
                 insertElementRequest={chatInsertElement}
                 insertTerminalRequest={chatInsertTerminal}
                 attachRequest={chatAttach}
+                onAttachRequestHandled={() => setChatAttach(null)}
               />
             </div>
           </div>
@@ -546,12 +621,23 @@ export default function App() {
         <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
       )}
       {marketOpen && <MarketplacePanel onClose={() => setMarketOpen(false)} />}
+      {assistantPanelOpen && (
+        <AssistantMessagesPanel onClose={() => setAssistantPanelOpen(false)} />
+      )}
 
-      {exitToast && (
+      {/* Project-scoped extension host — must live outside CodeZ/WorkZ panes so
+          workspace auto-restore always boots extensions (not only after manual
+          folder pick or switching back to CodeZ). */}
+      <ExtensionHostProvider projectDir={projectDir} ready={workspaceReady} />
+
+      {(exitToast || settingsToast) && (
         <div className="agentz-exit-toast" role="status" aria-live="polite">
-          {t("app.exiting")}
+          {exitToast ?? settingsToast}
         </div>
       )}
+
+      <ProjectEdgeShell projectDir={projectDir} />
     </div>
+    </ProjectEdgeProvider>
   );
 }

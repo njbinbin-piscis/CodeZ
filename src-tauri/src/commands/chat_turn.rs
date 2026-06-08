@@ -2,7 +2,7 @@
 //! runtime model override, vision attachment injection, and plan-mode tooling.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,13 +22,21 @@ use piscis_kernel::agent::tool::{
 use crate::browser::BrowserManager;
 use crate::lsp::manager::LspManager;
 use piscis_kernel::headless::KernelState;
-use piscis_kernel::llm::{self, ContentBlock, LlmMessage, MessageContent};
+use piscis_kernel::llm::{self, ContentBlock, LlmMessage, LlmRequest, MessageContent};
 use piscis_kernel::policy::gate::PolicyGate;
 use piscis_kernel::store::settings::{LlmProviderConfig, Settings};
 use piscis_kernel::tools::NeutralToolsConfig;
 
+use super::agents::{sync_agents_to_kois, AgentManifest, safe_id};
 use super::chat::FrontendAttachment;
+use super::data_scope::resolve_global_config_dir;
+use super::session::{
+    first_chat_round_for_title, maybe_autotitle_session_from_first_prompt, persist_workz_meta,
+    sanitize_llm_session_title, validate_session_continuation,
+};
+use super::session_sources::{default_channel_for, SOURCE_CODEZ};
 use super::system_prompt::{agent_system_prompt, plan_mode_context, subagent_system_prompt};
+use super::teams::TeamManifest;
 
 const PLAN_MODE_DISABLED: &[&str] = &[
     "file_write",
@@ -109,7 +117,7 @@ fn set_provider_api_key(settings: &mut Settings, provider: &str, key: &str) {
     }
 }
 
-fn apply_llm_provider(settings: &mut Settings, provider: &LlmProviderConfig) {
+pub(crate) fn apply_llm_provider(settings: &mut Settings, provider: &LlmProviderConfig) {
     settings.provider = provider.provider.clone();
     settings.model = provider.model.clone();
     settings.custom_base_url = provider.base_url.clone();
@@ -152,6 +160,95 @@ fn auto_route_model(settings: &Settings, chat_mode: &str) -> Option<String> {
         .map(|p| p.id.clone())
 }
 
+const SESSION_TITLE_SUMMARY_SYSTEM: &str = "You write very short chat session titles for a sidebar. \
+Rules: 4–12 words; same language as the user message; describe the topic; \
+no quotes; no trailing period; output ONLY the title on one line.";
+
+fn clip_title_source(text: &str, max_chars: usize) -> String {
+    let t = text.trim();
+    if t.chars().count() <= max_chars {
+        t.to_string()
+    } else {
+        format!("{}…", t.chars().take(max_chars).collect::<String>())
+    }
+}
+
+async fn maybe_llm_rename_session_title(
+    app: &tauri::AppHandle,
+    db: &Arc<Mutex<piscis_kernel::store::db::Database>>,
+    settings: &Arc<Mutex<Settings>>,
+    session_id: &str,
+    event_sink: &Arc<dyn EventSink>,
+) -> Result<()> {
+    let (user_text, assistant_text) = {
+        let guard = db.lock().await;
+        first_chat_round_for_title(&guard, session_id)
+    }
+    .ok_or_else(|| anyhow!("session '{session_id}' is not a first chat round"))?;
+
+    let (runtime, read_timeout) = {
+        let s = settings.lock().await;
+        let flash_id = resolve_global_config_dir(app)
+            .ok()
+            .and_then(|dir| crate::commands::flash::load_flash_provider_id(&dir));
+        let flash = flash_id.filter(|id| s.find_llm_provider(id).is_some());
+        let runtime = resolve_llm_runtime(&s, flash.as_deref())
+            .or_else(|_| resolve_llm_runtime(&s, None))?;
+        (runtime, s.llm_read_timeout_secs.max(30))
+    };
+
+    let client = llm::build_client_with_timeout(
+        &runtime.provider,
+        &runtime.api_key,
+        if runtime.base_url.is_empty() {
+            None
+        } else {
+            Some(&runtime.base_url)
+        },
+        read_timeout,
+    );
+
+    let user = format!(
+        "User message:\n{}\n\nAssistant reply:\n{}\n\nTitle:",
+        clip_title_source(&user_text, 600),
+        clip_title_source(&assistant_text, 800),
+    );
+    let req = LlmRequest {
+        messages: vec![LlmMessage {
+            role: "user".into(),
+            content: MessageContent::text(&user),
+        }],
+        system: Some(SESSION_TITLE_SUMMARY_SYSTEM.to_string()),
+        tools: Vec::new(),
+        model: runtime.model,
+        max_tokens: 64,
+        stream: false,
+        vision_override: Some(false),
+    };
+
+    let resp = client
+        .complete(req)
+        .await
+        .context("flash title summarize failed")?;
+    let title = sanitize_llm_session_title(&resp.content);
+    if title.is_empty() {
+        return Ok(());
+    }
+
+    {
+        let guard = db.lock().await;
+        guard
+            .rename_session(session_id, &title)
+            .context("rename_session after title summarize failed")?;
+    }
+    event_sink.emit_session(
+        session_id,
+        "session_title",
+        serde_json::json!({ "title": title }),
+    );
+    Ok(())
+}
+
 fn resolve_llm_runtime(settings: &Settings, model_id: Option<&str>) -> Result<LlmRuntime> {
     if let Some(id) = model_id.filter(|s| !s.trim().is_empty()) {
         let provider = settings
@@ -181,6 +278,38 @@ fn resolve_llm_runtime(settings: &Settings, model_id: Option<&str>) -> Result<Ll
         });
     }
 
+    // Legacy top-level provider/model — fall back to the first configured
+    // llm_providers entry when the user only uses the multi-provider list.
+    if settings.model.trim().is_empty() {
+        if let Some(first) = settings.llm_providers.first() {
+            let api_key = {
+                let key = first.effective_api_key();
+                if key.trim().is_empty() {
+                    settings.active_api_key().to_string()
+                } else {
+                    key.to_string()
+                }
+            };
+            if api_key.is_empty() {
+                return Err(anyhow!(
+                    "no API key configured for provider '{}'",
+                    first.provider
+                ));
+            }
+            return Ok(LlmRuntime {
+                provider: first.provider.clone(),
+                model: first.model.clone(),
+                api_key,
+                base_url: first.base_url.clone(),
+                max_tokens: if first.max_tokens > 0 {
+                    first.max_tokens
+                } else {
+                    settings.max_tokens.max(1024)
+                },
+            });
+        }
+    }
+
     let api_key = settings.active_api_key().to_string();
     if api_key.is_empty() {
         return Err(anyhow!(
@@ -195,6 +324,114 @@ fn resolve_llm_runtime(settings: &Settings, model_id: Option<&str>) -> Result<Ll
         base_url: settings.custom_base_url.clone(),
         max_tokens: settings.max_tokens.max(1024),
     })
+}
+
+/// Apply a provider id from `llm_providers` onto the mutable settings snapshot
+/// that headless / Koi turns read via `settings.provider` + `settings.model`.
+pub(crate) fn apply_model_id_to_settings(settings: &mut Settings, model_id: Option<&str>) {
+    if let Some(id) = model_id.filter(|s| !s.trim().is_empty()) {
+        if let Some(prov) = settings.find_llm_provider(id).cloned() {
+            apply_llm_provider(settings, &prov);
+        }
+    }
+}
+
+/// Resolve which `llm_providers` id a Koi turn should run on: per-Koi binding,
+/// else the global flash model, else the legacy default (caller may fall back
+/// to the first configured provider when model is still empty).
+pub(crate) fn resolve_koi_model_id(
+    settings: &Settings,
+    app: &tauri::AppHandle,
+    koi_llm_provider_id: Option<&str>,
+) -> Option<String> {
+    if let Some(id) = koi_llm_provider_id.filter(|s| !s.trim().is_empty()) {
+        if settings.find_llm_provider(id).is_some() {
+            return Some(id.to_string());
+        }
+    }
+    let flash_id = crate::commands::data_scope::resolve_global_config_dir(app)
+        .ok()
+        .and_then(|dir| crate::commands::flash::load_flash_provider_id(&dir));
+    flash_id.filter(|id| settings.find_llm_provider(id).is_some())
+}
+
+/// Ensure headless consumers see a concrete provider/model on the settings mutex.
+pub(crate) fn materialize_headless_llm_settings(settings: &mut Settings, app: &tauri::AppHandle, koi_llm_provider_id: Option<&str>) {
+    let model_id = resolve_koi_model_id(settings, app, koi_llm_provider_id);
+    apply_model_id_to_settings(settings, model_id.as_deref());
+    if settings.model.trim().is_empty() {
+        if let Some(first) = settings.llm_providers.first().cloned() {
+            apply_llm_provider(settings, &first);
+        }
+    }
+}
+
+/// Fresh agent manifest → koi row sync, then resolve the Koi's bound provider id.
+pub(crate) fn resolve_koi_llm_provider_for_turn(
+    db: &piscis_kernel::store::db::Database,
+    config_dir: &Path,
+    koi_id: &str,
+) -> Option<String> {
+    let _ = sync_agents_to_kois(db, config_dir);
+    let koi = db.get_koi(koi_id).ok().flatten()?;
+    if let Some(pid) = koi.llm_provider_id.filter(|s| !s.trim().is_empty()) {
+        return Some(pid);
+    }
+    let handle = safe_id(&koi.name);
+    if handle.is_empty() {
+        return None;
+    }
+    AgentManifest::load(&config_dir.join("agents").join(&handle).join("agent.json"))
+        .ok()
+        .and_then(|m| m.llm_provider_id)
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// Swarm coordinator must not silently fall back to the legacy global main model.
+fn resolve_team_coordinator_model_id(
+    app: &tauri::AppHandle,
+    db: &piscis_kernel::store::db::Database,
+    settings: &Settings,
+    team_id: &str,
+    config_dir: &Path,
+) -> Option<String> {
+    if let Some(flash) = resolve_global_config_dir(app)
+        .ok()
+        .and_then(|dir| crate::commands::flash::load_flash_provider_id(&dir))
+    {
+        if settings.find_llm_provider(&flash).is_some() {
+            return Some(flash);
+        }
+    }
+
+    let _ = sync_agents_to_kois(db, config_dir);
+
+    if let Ok(team) = TeamManifest::load_by_id(app, team_id) {
+        for member in &team.members {
+            let slug = safe_id(member);
+            if slug.is_empty() {
+                continue;
+            }
+            if let Ok(Some(koi)) = db.find_koi_by_name(&slug) {
+                if let Some(pid) = koi.llm_provider_id.filter(|s| !s.trim().is_empty()) {
+                    if settings.find_llm_provider(&pid).is_some() {
+                        return Some(pid);
+                    }
+                }
+            }
+            if let Ok(manifest) =
+                AgentManifest::load(&config_dir.join("agents").join(&slug).join("agent.json"))
+            {
+                if let Some(pid) = manifest.llm_provider_id.filter(|s| !s.trim().is_empty()) {
+                    if settings.find_llm_provider(&pid).is_some() {
+                        return Some(pid);
+                    }
+                }
+            }
+        }
+    }
+
+    settings.llm_providers.first().map(|p| p.id.clone())
 }
 
 pub fn model_supports_vision(provider: &str, model: &str) -> bool {
@@ -547,6 +784,12 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
     if refs.is_empty() {
         return raw.to_string();
     }
+    tracing::info!(
+        "expand_file_refs: {} @ref(s) in prompt (raw_len={}): {:?}",
+        refs.len(),
+        raw.len(),
+        refs
+    );
     let wants_codebase = refs.iter().any(|r| r == "codebase");
     let mut blocks = Vec::new();
     let mut total = 0usize;
@@ -561,23 +804,39 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
             break;
         }
         if let Some(block) = read_ref_block(workspace_root, ref_path) {
+            tracing::info!(
+                "expand_file_refs: inlined @{} → {} chars (total_so_far={})",
+                ref_path,
+                block.len(),
+                total + block.len()
+            );
             total += block.len();
             blocks.push(block);
+        } else {
+            tracing::info!("expand_file_refs: @{} → skipped (not found or unreadable)", ref_path);
         }
     }
     if wants_codebase {
         if let Some(block) = codebase_context_block(raw, workspace_root) {
+            tracing::info!("expand_file_refs: @codebase block → {} chars", block.len());
             blocks.push(block);
         }
     }
     if blocks.is_empty() {
+        tracing::info!("expand_file_refs: no blocks produced, passing prompt through");
         return raw.to_string();
     }
-    format!(
+    let out = format!(
         "Context from referenced files:\n\n{}\n\n---\n\n{}",
         blocks.join("\n\n"),
         raw
-    )
+    );
+    tracing::info!(
+        "expand_file_refs: wrapped prompt → {} chars (blocks={})",
+        out.len(),
+        blocks.len()
+    );
+    out
 }
 
 fn build_tool_registry(
@@ -701,6 +960,10 @@ fn build_tool_registry(
                 app: app.clone(),
             }));
             registry.register(Box::new(crate::tools::chat_ui_listen::ChatUiListenTool {
+                app: app.clone(),
+            }));
+            // App self-management: update settings, create assistants & teams.
+            registry.register(Box::new(crate::tools::app_control::AppControlTool {
                 app,
             }));
         }
@@ -1238,6 +1501,8 @@ pub async fn run_agentz_turn(
     config_dir: PathBuf,
     enabled_skills: Vec<String>,
     agent_id: Option<String>,
+    workz_team_id: Option<String>,
+    workz_pool_id: Option<String>,
 ) -> Result<HeadlessCliResponse> {
     if !matches!(request.mode, HeadlessCliMode::Piscis) {
         return Err(anyhow!("AgentZ chat only supports mode=piscis"));
@@ -1272,8 +1537,14 @@ pub async fn run_agentz_turn(
         {
             Some(id) => Some(id),
             None => {
-                let s = settings.lock().await;
-                auto_route_model(&s, chat_mode)
+                if let Some(team_id) = workz_team_id.as_deref().filter(|s| !s.is_empty()) {
+                    let guard = db.lock().await;
+                    let s = settings.lock().await;
+                    resolve_team_coordinator_model_id(&app, &guard, &s, team_id, &config_dir)
+                } else {
+                    let s = settings.lock().await;
+                    auto_route_model(&s, chat_mode)
+                }
             }
         },
     };
@@ -1429,23 +1700,66 @@ pub async fn run_agentz_turn(
     let with_terminal = expand_terminal_snippets(&with_browser, &snippets);
     let llm_user_content = expand_file_refs(&with_terminal, &workspace_root);
 
+    let expected_source = request
+        .channel
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| default_channel_for(SOURCE_CODEZ).to_string());
+
     let session_id = match request.session_id.clone().filter(|s| !s.is_empty()) {
         Some(id) => {
-            let title = request.session_title.as_deref().unwrap_or(&id);
-            let source = request.channel.as_deref().unwrap_or("agentz");
+            // A client may pre-generate the session id (so it can bind the
+            // sidebar selection + stream filter before the turn returns). Only
+            // validate cross-source continuation when the session already
+            // exists; a brand-new id is created fresh under `expected_source`.
+            let exists = {
+                let guard = db.lock().await;
+                guard
+                    .get_session(&id)
+                    .map_err(|e| anyhow!("get_session failed: {e}"))?
+                    .is_some()
+            };
+            if exists {
+                let guard = db.lock().await;
+                validate_session_continuation(
+                    &guard,
+                    &id,
+                    &expected_source,
+                    workz_team_id.as_deref(),
+                )
+                .map_err(|e| anyhow!(e))?;
+            }
+            let title = request
+                .session_title
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("");
             let db = db.lock().await;
-            db.ensure_fixed_session(&id, title, source)
+            db.ensure_fixed_session(&id, title, &expected_source)
                 .context("failed to ensure requested session")?
                 .id
         }
         None => {
             let title = request.session_title.as_deref();
             let db = db.lock().await;
-            db.create_session_with_source(title, "agentz")
+            db.create_session_with_source(title, &expected_source)
                 .context("failed to create session")?
                 .id
         }
     };
+
+    if workz_team_id.is_some() || workz_pool_id.is_some() {
+        let guard = db.lock().await;
+        persist_workz_meta(
+            &guard,
+            &session_id,
+            workz_team_id.as_deref(),
+            workz_pool_id.as_deref(),
+        )
+        .map_err(|e| anyhow!(e))?;
+    }
 
     if clear_plan {
         let mut plans = plan_store.lock().await;
@@ -1457,6 +1771,7 @@ pub async fn run_agentz_turn(
         db.append_message(&session_id, "user", &display_for_db)
             .context("failed to append user message")?;
         let _ = db.update_session_status(&session_id, "running");
+        let _ = maybe_autotitle_session_from_first_prompt(&db, &session_id, &display_for_db);
     }
 
     let (
@@ -1644,7 +1959,10 @@ pub async fn run_agentz_turn(
             }
             match event {
                 AgentEvent::TextDelta { delta } => text.push_str(&delta),
-                AgentEvent::Error { message } => errored = Some(message),
+                AgentEvent::Error { message } => {
+                    errored = Some(message);
+                    break;
+                }
                 AgentEvent::Done { .. } => break,
                 _ => {}
             }
@@ -1677,6 +1995,7 @@ pub async fn run_agentz_turn(
     // Agent loop already persists via harness persistence; do not append
     // `new_messages` again or every turn is duplicated in the DB.
 
+    let turn_failed = error_msg.is_some() || stream_error.is_some();
     if let Some(err) = error_msg.as_deref().or(stream_error.as_deref()) {
         event_sink.emit_session(
             &session_id,
@@ -1685,6 +2004,35 @@ pub async fn run_agentz_turn(
         );
     } else {
         event_sink.emit_session(&session_id, "agent_final", serde_json::json!({"ok": true}));
+    }
+
+    // Reset the session status set to `running` at turn start so the sidebar
+    // stops showing the live indicator once this turn ends. (Without this the
+    // dot blinks forever because `task.status` stays `running` in the DB.)
+    {
+        let db = db.lock().await;
+        let _ = db.update_session_status(&session_id, if turn_failed { "error" } else { "idle" });
+    }
+
+    if !turn_failed {
+        let db_bg = db.clone();
+        let settings_bg = settings.clone();
+        let app_bg = app.clone();
+        let session_bg = session_id.clone();
+        let sink_bg = event_sink.clone();
+        tokio::spawn(async move {
+            if let Err(e) = maybe_llm_rename_session_title(
+                &app_bg,
+                &db_bg,
+                &settings_bg,
+                &session_bg,
+                &sink_bg,
+            )
+            .await
+            {
+                tracing::debug!("session title summarize skipped: {e}");
+            }
+        });
     }
 
     if let Some(snap) = settings_snapshot {
