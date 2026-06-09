@@ -36,7 +36,10 @@ use super::session::{
     sanitize_llm_session_title, validate_session_continuation,
 };
 use super::session_sources::{default_channel_for, SOURCE_CODEZ};
-use super::system_prompt::{agent_system_prompt, plan_mode_context, subagent_system_prompt};
+use super::system_prompt::{
+    agent_active_plan_context, agent_system_prompt, plan_mode_context, session_plan_rel_path,
+    subagent_system_prompt,
+};
 use super::teams::TeamManifest;
 
 const PLAN_MODE_DISABLED: &[&str] = &[
@@ -50,6 +53,7 @@ const PLAN_MODE_DISABLED: &[&str] = &[
     "ssh",
     "web_search",
     "memory_store",
+    "plan_todo",
 ];
 
 #[derive(Debug, Clone)]
@@ -851,6 +855,7 @@ fn build_tool_registry(
     user_tools_dir: Option<PathBuf>,
     extra_enabled_tools: &[String],
     enable_pool: bool,
+    loop_halt: Arc<std::sync::atomic::AtomicBool>,
 ) -> ToolRegistry {
     let mut builtin_tool_enabled = None;
     if chat_mode == "plan" {
@@ -862,10 +867,26 @@ fn build_tool_registry(
     }
     // User-selected skills can re-enable tools they need (e.g. a tool that plan
     // mode disabled). The map is an override (missing = enabled), so this only
-    // ever expands the surface, never restricts it.
+    // ever expands the surface, never restricts it — except in Plan mode where
+    // only `plan_write` may mutate files.
     if !extra_enabled_tools.is_empty() {
         let map = builtin_tool_enabled.get_or_insert_with(HashMap::new);
+        const PLAN_MODE_WRITE_TOOLS: &[&str] = &[
+            "file_write",
+            "file_edit",
+            "shell",
+            "code_run",
+            "process_control",
+            "elevate",
+            "email",
+            "ssh",
+            "memory_store",
+            "plan_todo",
+        ];
         for name in extra_enabled_tools {
+            if chat_mode == "plan" && PLAN_MODE_WRITE_TOOLS.contains(&name.as_str()) {
+                continue;
+            }
             map.insert(name.clone(), true);
         }
     }
@@ -915,6 +936,33 @@ fn build_tool_registry(
         }
         // SubAgent delegation (M7): only the main agent gets `delegate`; the
         // sub-agent's own (plan-mode) registry omits it to prevent recursion.
+        // chat_ui + plan_mode_ui are available in Plan mode (brainstorm / build).
+        registry.register(Box::new(crate::tools::chat_ui::ChatUiTool {
+            app: app.clone(),
+        }));
+        registry.register(Box::new(crate::tools::chat_ui_patch::ChatUiPatchTool {
+            app: app.clone(),
+        }));
+        registry.register(Box::new(crate::tools::chat_ui_listen::ChatUiListenTool {
+            app: app.clone(),
+        }));
+        registry.register(Box::new(crate::tools::plan_mode_ui::PlanModeUiTool {
+            app: app.clone(),
+            loop_halt,
+        }));
+        if chat_mode == "plan" {
+            if let (Some(db), Some(settings), Some(plan)) =
+                (db_for_delegate.clone(), settings_for_delegate.clone(), plan_for_delegate.clone())
+            {
+                registry.register(Box::new(crate::tools::delegate::DelegateTool {
+                    db,
+                    settings,
+                    plan_store: plan,
+                    lsp_manager: lsp_manager.clone(),
+                    app: app.clone(),
+                }));
+            }
+        }
         if chat_mode != "plan" {
             if let (Some(db), Some(settings), Some(plan)) =
                 (db_for_delegate, settings_for_delegate, plan_for_delegate)
@@ -954,15 +1002,6 @@ fn build_tool_registry(
                     terminals: app.state::<crate::state::AppState>().terminals.clone(),
                 }));
             }
-            registry.register(Box::new(crate::tools::chat_ui::ChatUiTool {
-                app: app.clone(),
-            }));
-            registry.register(Box::new(crate::tools::chat_ui_patch::ChatUiPatchTool {
-                app: app.clone(),
-            }));
-            registry.register(Box::new(crate::tools::chat_ui_listen::ChatUiListenTool {
-                app: app.clone(),
-            }));
             // App self-management: update settings, create assistants & teams.
             registry.register(Box::new(crate::tools::app_control::AppControlTool {
                 app,
@@ -1001,6 +1040,7 @@ fn build_subagent_registry(
         None,
         &[],
         false,
+        Arc::new(std::sync::atomic::AtomicBool::new(false)),
     )
 }
 
@@ -1142,6 +1182,7 @@ pub(crate) async fn run_subagent_with_prompt(
         pool_session_id: None,
         tool_use_id: None,
         cancel: cancel.clone(),
+        loop_halt: None,
     };
 
     let messages = vec![LlmMessage {
@@ -1484,6 +1525,23 @@ fn repo_wiki_context(workspace_root: &str) -> Option<String> {
     )
 }
 
+/// Load a short excerpt from the session plan file for Agent-mode context.
+fn active_plan_excerpt(workspace_root: &str, session_id: &str) -> Option<(String, String)> {
+    let rel = session_plan_rel_path(session_id);
+    let abs = Path::new(workspace_root).join(&rel);
+    let content = std::fs::read_to_string(&abs).ok()?;
+    if content.trim().is_empty() {
+        return None;
+    }
+    let excerpt: String = content.chars().take(2400).collect();
+    let excerpt = if content.chars().count() > 2400 {
+        format!("{excerpt}\n…")
+    } else {
+        excerpt
+    };
+    Some((rel, excerpt))
+}
+
 pub async fn run_agentz_turn(
     app: tauri::AppHandle,
     mut request: HeadlessCliRequest,
@@ -1577,16 +1635,6 @@ pub async fn run_agentz_turn(
         resolve_attachment(&request.prompt, attachment, vision_capable)?;
     request.prompt = effective_prompt.clone();
 
-    if chat_mode == "plan" {
-        let extra = match request.extra_system_context.as_deref() {
-            Some(existing) if !existing.trim().is_empty() => {
-                format!("{existing}\n\n{}", plan_mode_context())
-            }
-            _ => plan_mode_context().to_string(),
-        };
-        request.extra_system_context = Some(extra);
-    }
-
     // Phase 1: skills the user selected for this conversation bind their
     // `tools` (re-enabled) and `mcp_servers` (registered even if globally off),
     // and have their full instructions injected below.
@@ -1611,6 +1659,7 @@ pub async fn run_agentz_turn(
         skill_mcp_names.extend(agent.mcp_servers.iter().cloned());
     }
 
+    let loop_halt = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let mut registry = build_tool_registry(
         app.clone(),
         db.clone(),
@@ -1622,6 +1671,7 @@ pub async fn run_agentz_turn(
         Some(config_dir.join("user-tools")),
         &skill_enabled_tools,
         chat_mode != "plan",
+        loop_halt.clone(),
     );
     // Register MCP server tools (M6) from settings.mcp_servers — async because
     // it connects to stdio/SSE servers. Plan mode keeps them (read-context).
@@ -1889,6 +1939,14 @@ pub async fn run_agentz_turn(
     if let Some(wiki) = repo_wiki_context(&workspace_root) {
         extra_sections.push(wiki);
     }
+    if chat_mode == "plan" {
+        let plan_path = session_plan_rel_path(&session_id);
+        extra_sections.push(plan_mode_context(&plan_path));
+    } else if let Some((plan_path, excerpt)) =
+        active_plan_excerpt(&workspace_root, &session_id)
+    {
+        extra_sections.push(agent_active_plan_context(&plan_path, Some(&excerpt)));
+    }
     // Run user-defined `beforeAgentTurn` hooks and inject their output as
     // additional system context (project hooks.json, M6+).
     if let Some(hook_ctx) =
@@ -1946,6 +2004,7 @@ pub async fn run_agentz_turn(
         pool_session_id: None,
         tool_use_id: None,
         cancel: cancel.clone(),
+        loop_halt: Some(loop_halt),
     };
 
     let (tx, mut rx) = mpsc::channel::<AgentEvent>(1024);
@@ -1956,23 +2015,41 @@ pub async fn run_agentz_turn(
     let collector = tokio::spawn(async move {
         let mut text = String::new();
         let mut errored: Option<String> = None;
+        let mut tool_inputs: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
         while let Some(event) = rx.recv().await {
-            // Bridge file-modifying tools → ide-file-changed so the frontend
-            // file watcher / git status refresh picks them up even when the
-            // inotify event is delayed or missed.
-            if let AgentEvent::ToolEnd { ref name, .. } = event {
-                if matches!(
-                    name.as_str(),
-                    "file_write" | "file_edit" | "shell" | "code_run"
-                ) {
-                    let _ = collector_app.emit(
-                        "ide-file-changed",
-                        serde_json::json!({
-                            "project_dir": collector_workspace,
-                            "path": ".",
-                            "kind": "modified",
-                        }),
-                    );
+            if let AgentEvent::ToolStart {
+                ref id,
+                ref input,
+                ..
+            } = event
+            {
+                tool_inputs.insert(id.clone(), input.clone());
+            }
+            // Bridge file-modifying tools → ide-file-changed with the real path
+            // so the frontend reloads only affected tabs (watcher may lag).
+            if let AgentEvent::ToolEnd { ref id, ref name, .. } = event {
+                if matches!(name.as_str(), "file_write" | "file_edit") {
+                    if let Some(input) = tool_inputs.remove(id) {
+                        if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+                            let path_norm = path.replace('\\', "/");
+                            if !path_norm.is_empty()
+                                && path_norm != "."
+                                && crate::path_filter::should_watch_path(&path_norm)
+                            {
+                                let _ = collector_app.emit(
+                                    "ide-file-changed",
+                                    serde_json::json!({
+                                        "project_dir": collector_workspace,
+                                        "path": path_norm,
+                                        "kind": "modified",
+                                    }),
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    tool_inputs.remove(id);
                 }
             }
             if let Ok(payload) = serde_json::to_value(&event) {

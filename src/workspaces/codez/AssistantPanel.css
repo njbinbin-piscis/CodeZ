@@ -520,3 +520,20 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
+
+/* Off-screen messages skip layout/paint until scrolled near (virtualization-lite). */
+.agentz-msg-virtual {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+.agentz-streaming {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  background: transparent;
+  border: none;
+}

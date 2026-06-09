@@ -112,6 +112,8 @@ export type UiMode = "form" | "display" | "wizard";
 
 export interface UiDefinition {
   protocol_version?: string;
+  /** AgentZ plan workflow card kind (plan_mode_ui tool). */
+  kind?: "plan_mode_suggest" | "plan_mode_build" | "plan_mode_brainstorm" | string;
   mode?: UiMode;
   title?: string;
   description?: string;

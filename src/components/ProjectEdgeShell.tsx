@@ -10,8 +10,13 @@ interface ProjectEdgeShellProps {
 
 /** Global git changes + journal review drawer; shared by CodeZ and WorkZ. */
 export default function ProjectEdgeShell({ projectDir }: ProjectEdgeShellProps) {
-  const { setGitChanges, registerRefreshGitChanges, pendingReview, setPendingReview } =
-    useProjectEdge();
+  const {
+    setGitChanges,
+    registerWorkspaceRefresh,
+    scheduleWorkspaceRefresh,
+    pendingReview,
+    setPendingReview,
+  } = useProjectEdge();
   const [undoing, setUndoing] = useState(false);
 
   const refreshGit = useCallback(() => {
@@ -26,10 +31,12 @@ export default function ProjectEdgeShell({ projectDir }: ProjectEdgeShellProps) 
   }, [projectDir, setGitChanges]);
 
   useEffect(() => {
-    refreshGit();
-  }, [refreshGit]);
+    registerWorkspaceRefresh("git", refreshGit);
+  }, [registerWorkspaceRefresh, refreshGit]);
 
-  useEffect(() => registerRefreshGitChanges(refreshGit), [registerRefreshGitChanges, refreshGit]);
+  useEffect(() => {
+    scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 });
+  }, [projectDir, scheduleWorkspaceRefresh]);
 
   const undoReview = useCallback(async () => {
     if (!projectDir || !pendingReview) return;
@@ -37,16 +44,16 @@ export default function ProjectEdgeShell({ projectDir }: ProjectEdgeShellProps) 
     try {
       await journalUndoTurn(projectDir, pendingReview.sessionId, pendingReview.turnId);
       setPendingReview(null);
-      refreshGit();
+      scheduleWorkspaceRefresh({ git: true, fileTree: true, force: true, delayMs: 0 });
     } finally {
       setUndoing(false);
     }
-  }, [projectDir, pendingReview, setPendingReview, refreshGit]);
+  }, [projectDir, pendingReview, setPendingReview, scheduleWorkspaceRefresh]);
 
   return (
     <ProjectEdgePanel
       projectDir={projectDir}
-      onRefreshGit={refreshGit}
+      onRefreshGit={() => scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 })}
       onUndoReview={undoReview}
       undoing={undoing}
     />

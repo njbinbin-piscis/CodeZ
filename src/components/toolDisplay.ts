@@ -12,6 +12,8 @@ const TOOL_ICONS: Record<string, string> = {
   web_search: "🌐",
   browser: "🌍",
   plan_todo: "📋",
+  plan_write: "📝",
+  plan_mode_ui: "🧭",
   skill_list: "⚡",
 };
 
@@ -29,6 +31,8 @@ export function toolSummary(name: string, input: unknown): string {
   if (name === "file_list") return String(i.path ?? i.directory ?? ".").slice(0, 80);
   if (name === "web_search") return String(i.query ?? "").slice(0, 80);
   if (name === "plan_todo") return `${Array.isArray(i.todos) ? i.todos.length : 0} items`;
+  if (name === "plan_write") return String(i.path ?? ".agentz/plans/…").slice(0, 80);
+  if (name === "plan_mode_ui") return String(i.action ?? "").slice(0, 80);
   return Object.entries(i)
     .filter(([k]) => !k.startsWith("_"))
     .slice(0, 2)

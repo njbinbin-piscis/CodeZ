@@ -47,6 +47,10 @@ interface InteractiveCardProps {
   wizardStepHint?: number;
   onSubmitted?: () => void;
   onActionSent?: () => void;
+  /** User accepted Plan mode from suggest_enter card */
+  onPlanModeEnter?: () => void;
+  /** User clicked Build on plan_ready card */
+  onPlanBuild?: (planPath: string) => void;
 }
 
 function buildPayload(
@@ -82,8 +86,16 @@ export default function InteractiveCard({
   wizardStepHint,
   onSubmitted,
   onActionSent,
+  onPlanModeEnter,
+  onPlanBuild,
 }: InteractiveCardProps) {
   const { t } = useTranslation();
+  const cardKind = uiDefinition.kind;
+  const planPath =
+    typeof uiDefinition.data?.plan_path === "string" ? uiDefinition.data.plan_path : "";
+  const [suggestCountdown, setSuggestCountdown] = useState<number | null>(
+    cardKind === "plan_mode_suggest" && !submittedValues ? 30 : null,
+  );
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitted, setSubmitted] = useState(!!submittedValues);
@@ -110,6 +122,49 @@ export default function InteractiveCard({
     setErrors({});
   }, [uiDefinition, submittedValues, wizardStep]);
 
+  // Plan suggest: auto-decline after 30s if user does not respond.
+  useEffect(() => {
+    if (cardKind !== "plan_mode_suggest" || submitted || submittedValues) return;
+    if (suggestCountdown == null) return;
+    if (suggestCountdown <= 0) {
+      void (async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+          const payload = {
+            decision: "continue_agent",
+            __action__: "timeout",
+            __action_type__: "submit",
+            __meta__: {
+              protocol_version: protocolVersion(uiDefinition),
+              request_id: requestId,
+              submitted_at: new Date().toISOString(),
+            },
+          };
+          await respondInteractiveUi(requestId, payload);
+          setSubmitted(true);
+          onSubmitted?.();
+        } catch {
+          /* channel may already be gone */
+        } finally {
+          setSubmitting(false);
+        }
+      })();
+      return;
+    }
+    const timer = window.setTimeout(() => setSuggestCountdown((c) => (c != null ? c - 1 : c)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [
+    cardKind,
+    suggestCountdown,
+    submitted,
+    submittedValues,
+    submitting,
+    requestId,
+    uiDefinition,
+    onSubmitted,
+  ]);
+
   const activeBlocks = useMemo(() => {
     if (isWizard && uiDefinition.steps?.length) {
       const step = uiDefinition.steps[wizardStep];
@@ -135,6 +190,20 @@ export default function InteractiveCard({
 
   const handleAction = async (block: UiBlock, button: UiButton) => {
     if (submitted || submitting) return;
+
+    // Plan ready: Build does not block on tool channel (turn already ended).
+    if (cardKind === "plan_mode_build") {
+      setSubmitting(true);
+      try {
+        onPlanBuild?.(planPath);
+        setSubmitted(true);
+        onSubmitted?.();
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     const emit = button.emit ?? "submit";
     const nextErrors = validateInteractiveForm(valueBlocks, values, t);
     setErrors(nextErrors);
@@ -147,6 +216,9 @@ export default function InteractiveCard({
     try {
       const actionType = emit === "action" ? "action" : "submit";
       const payload = buildPayload(requestId, uiDefinition, values, block, button, actionType);
+      if (cardKind === "plan_mode_suggest" && values.decision === "enter_plan") {
+        onPlanModeEnter?.();
+      }
       await respondInteractiveUi(requestId, payload);
       if (actionType === "action") {
         setActionSent(true);
@@ -408,6 +480,14 @@ export default function InteractiveCard({
     <div className={`interactive-card${submitted ? " ic-submitted" : ""}`}>
       {uiDefinition.title && <div className="ic-title">{uiDefinition.title}</div>}
       {uiDefinition.description && <p className="ic-description">{uiDefinition.description}</p>}
+      {cardKind === "plan_mode_suggest" && suggestCountdown != null && !submitted && (
+        <p className="ic-plan-countdown">
+          {t("chat.planSuggestCountdown", {
+            defaultValue: "{{seconds}}s 后自动按 Agent 模式继续",
+            seconds: suggestCountdown,
+          })}
+        </p>
+      )}
 
       {isWizard && uiDefinition.steps && (
         <div className="ic-wizard-header">

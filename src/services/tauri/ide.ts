@@ -12,6 +12,7 @@ import type {
   FileContent,
   SearchResult,
   GitFileStatus,
+  GitRepoSnapshot,
   DiffResult,
   BranchInfo,
 } from "../../workspaces/codez/types";
@@ -56,38 +57,51 @@ export const ideApi = {
   gitStatus: (projectDir: string) =>
     invoke<GitFileStatus[]>("ide_git_status", { projectDir }),
 
-  gitDiff: (projectDir: string, path: string, base?: string) =>
-    invoke<DiffResult>("ide_git_diff", { projectDir, path, base }),
+  gitWorkspaceStatus: (projectDir: string) =>
+    invoke<GitRepoSnapshot[]>("ide_git_workspace_status", { projectDir }),
 
-  gitBranches: (projectDir: string) =>
-    invoke<BranchInfo[]>("ide_git_branches", { projectDir }),
+  gitDiff: (projectDir: string, path: string, base?: string, gitRoot?: string | null) =>
+    invoke<DiffResult>("ide_git_diff", {
+      projectDir,
+      path,
+      base,
+      gitRoot: gitRoot ?? null,
+    }),
 
-  gitFileAtRef: (projectDir: string, path: string, gitRef: string) =>
-    invoke<FileContent>("ide_git_file_at_ref", { projectDir, path, gitRef }),
+  gitBranches: (projectDir: string, gitRoot?: string | null) =>
+    invoke<BranchInfo[]>("ide_git_branches", { projectDir, gitRoot: gitRoot ?? null }),
 
-  gitAdd: (projectDir: string, path: string) =>
-    invoke<void>("ide_git_add", { projectDir, path }),
+  gitFileAtRef: (projectDir: string, path: string, gitRef: string, gitRoot?: string | null) =>
+    invoke<FileContent>("ide_git_file_at_ref", {
+      projectDir,
+      path,
+      gitRef,
+      gitRoot: gitRoot ?? null,
+    }),
 
-  gitReset: (projectDir: string, path: string) =>
-    invoke<void>("ide_git_reset", { projectDir, path }),
+  gitAdd: (projectDir: string, path: string, gitRoot?: string | null) =>
+    invoke<void>("ide_git_add", { projectDir, path, gitRoot: gitRoot ?? null }),
 
-  gitDiscard: (projectDir: string, path: string) =>
-    invoke<void>("ide_git_discard", { projectDir, path }),
+  gitReset: (projectDir: string, path: string, gitRoot?: string | null) =>
+    invoke<void>("ide_git_reset", { projectDir, path, gitRoot: gitRoot ?? null }),
 
-  gitAddAll: (projectDir: string) =>
-    invoke<void>("ide_git_add_all", { projectDir }),
+  gitDiscard: (projectDir: string, path: string, gitRoot?: string | null) =>
+    invoke<void>("ide_git_discard", { projectDir, path, gitRoot: gitRoot ?? null }),
 
-  gitResetAll: (projectDir: string) =>
-    invoke<void>("ide_git_reset_all", { projectDir }),
+  gitAddAll: (projectDir: string, gitRoot?: string | null) =>
+    invoke<void>("ide_git_add_all", { projectDir, gitRoot: gitRoot ?? null }),
 
-  gitCommit: (projectDir: string, message: string) =>
-    invoke<string>("ide_git_commit", { projectDir, message }),
+  gitResetAll: (projectDir: string, gitRoot?: string | null) =>
+    invoke<void>("ide_git_reset_all", { projectDir, gitRoot: gitRoot ?? null }),
 
-  gitCheckout: (projectDir: string, branch: string) =>
-    invoke<string>("ide_git_checkout", { projectDir, branch }),
+  gitCommit: (projectDir: string, message: string, gitRoot?: string | null) =>
+    invoke<string>("ide_git_commit", { projectDir, message, gitRoot: gitRoot ?? null }),
 
-  gitCreateBranch: (projectDir: string, branch: string) =>
-    invoke<string>("ide_git_create_branch", { projectDir, branch }),
+  gitCheckout: (projectDir: string, branch: string, gitRoot?: string | null) =>
+    invoke<string>("ide_git_checkout", { projectDir, branch, gitRoot: gitRoot ?? null }),
+
+  gitCreateBranch: (projectDir: string, branch: string, gitRoot?: string | null) =>
+    invoke<string>("ide_git_create_branch", { projectDir, branch, gitRoot: gitRoot ?? null }),
 
   // ─── Terminal ────────────────────────────────────────────────────────
 

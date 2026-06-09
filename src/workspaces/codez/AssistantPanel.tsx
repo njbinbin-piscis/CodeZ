@@ -50,8 +50,7 @@ import {
 import { visionCapable } from "../../components/visionUtils";
 import ContextUsageRing, { type ContextUsageSnapshot } from "../../components/ContextUsageRing";
 import { formatUserMessageDisplay } from "../../components/chatFileRefs";
-import TaskCard from "../../components/TaskCard";
-import FileDiffCard from "../../components/FileDiffCard";
+import AssistantMessageList from "./AssistantMessageList";
 import TaskPanel, {
   mergePlanItems,
   parsePlanFromToolInput,
@@ -59,8 +58,6 @@ import TaskPanel, {
   type ToolStep,
 } from "../../components/TaskPanel";
 import type { FileNode } from "./types";
-import Markdown from "./Markdown";
-import InteractiveCard from "../../components/chat/InteractiveCard";
 import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import { chipsSnapshot, composerDbg, composerDbgMark, promptPreview } from "../../utils/composerDebug";
 import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
@@ -147,8 +144,14 @@ export default function AssistantPanel({
   onAttachRequestHandled,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
-  const { setPendingReview, setArtifacts, gitChanges, refreshGitChanges, onSelectPath } =
-    useProjectEdge();
+  const {
+    setPendingReview,
+    setArtifacts,
+    gitChanges,
+    onSelectPath,
+    setAgentTurnBusy,
+    scheduleWorkspaceRefresh,
+  } = useProjectEdge();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [turnDiffsByTurnId, setTurnDiffsByTurnId] = useState<Record<string, JournalFileDiff[]>>({});
   const [input, setInput] = useState("");
@@ -211,6 +214,35 @@ export default function AssistantPanel({
   const sessionRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   busyRef.current = busy;
+  const streamPendingRef = useRef("");
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushStreamDelta = useCallback(() => {
+    const chunk = streamPendingRef.current;
+    streamPendingRef.current = "";
+    streamTimerRef.current = null;
+    if (!chunk) return;
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const copy = prev.slice();
+      const last = copy[copy.length - 1];
+      if (last.role !== "assistant") return prev;
+      copy[copy.length - 1] = { ...last, text: last.text + chunk };
+      return copy;
+    });
+  }, []);
+
+  useEffect(() => {
+    setAgentTurnBusy(busy);
+    if (!busy) flushStreamDelta();
+  }, [busy, setAgentTurnBusy, flushStreamDelta]);
+
+  useEffect(
+    () => () => {
+      if (streamTimerRef.current) clearTimeout(streamTimerRef.current);
+    },
+    [],
+  );
   const queueRef = useRef<QueuedTurn[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -416,14 +448,10 @@ export default function AssistantPanel({
 
     switch (evt.type) {
       case "text_delta":
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const copy = prev.slice();
-          const last = copy[copy.length - 1];
-          if (last.role !== "assistant") return prev;
-          copy[copy.length - 1] = { ...last, text: last.text + evt.delta };
-          return copy;
-        });
+        streamPendingRef.current += evt.delta;
+        if (!streamTimerRef.current) {
+          streamTimerRef.current = setTimeout(flushStreamDelta, 80);
+        }
         break;
       case "tool_start":
         setTaskPanelOpen(true);
@@ -636,7 +664,7 @@ export default function AssistantPanel({
           listSessions(projectDir, [SESSION_SOURCE_CODEZ])
             .then(setSessions)
             .catch(() => setSessions([]));
-          refreshGitChanges();
+          scheduleWorkspaceRefresh({ git: true, fileTree: true, force: true, delayMs: 0 });
         }
       }
       const next = queueRef.current.shift();
@@ -707,6 +735,27 @@ export default function AssistantPanel({
     setModeNotice(mode === "plan" ? t("chat.modePlanHint") : t("chat.modeAgentHint"));
     window.setTimeout(() => setModeNotice(null), 4000);
   };
+
+  const onPlanModeEnter = useCallback(() => {
+    onModeChange("plan");
+  }, [t]);
+
+  const onPlanBuild = useCallback(
+    (planPath: string) => {
+      onModeChange("agent");
+      const prompt = t("chat.planBuildPrompt", {
+        defaultValue: "请按照计划文件 {{path}} 逐步执行，更新计划进度并产出验收证据。",
+        path: planPath,
+      });
+      if (!busy) {
+        void runTurnRef.current({ text: prompt, attachment: null, clearPlan: false });
+      } else {
+        queueRef.current.push({ text: prompt, attachment: null, clearPlan: false });
+        setQueuedView(queueRef.current.map((q) => q.text));
+      }
+    },
+    [busy, t],
+  );
 
   const refreshSessions = useCallback(() => {
     if (!projectDir) {
@@ -928,14 +977,14 @@ export default function AssistantPanel({
 
   const unfinishedCount = planItems.filter((i) => i.status === "pending" || i.status === "in_progress").length;
 
-  const onInputChange = (value: string, caret?: number) => {
+  const onInputChange = useCallback((value: string, caret?: number) => {
     setInput(value);
     const pos = caret ?? value.length;
     const before = value.slice(0, pos);
     const m = before.match(/(?:^|\s)@([^\s]*)$/);
     if (m) setMention({ query: m[1], start: pos - m[1].length - 1, caret: pos, active: 0 });
     else setMention(null);
-  };
+  }, []);
 
   const matches = useMemo(() => {
     if (!mention) return [];
@@ -1027,13 +1076,6 @@ export default function AssistantPanel({
           ? t("chat.placeholder")
           : t("chat.placeholderFollowUp");
 
-  const lastUserMessageIndex = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user" && messages[i].text.trim()) return i;
-    }
-    return -1;
-  }, [messages]);
-
   return (
     <div className="agentz-assistant" ref={panelRef}>
       <div className="agentz-assistant-header">
@@ -1093,77 +1135,21 @@ export default function AssistantPanel({
         onToggleToolStep={toggleToolStep}
       />
 
-      <div className="agentz-assistant-messages" ref={scrollRef}>
-        {messages.length === 0 && <div className="agentz-assistant-empty">{t("chat.empty")}</div>}
-        {messages.map((m, i) => {
-          if (m.role === "user") {
-            return (
-              <div key={m.id ?? `msg-${i}`} className="agentz-turn-user">
-                <TaskCard text={m.text} sticky={i === lastUserMessageIndex} />
-              </div>
-            );
-          }
-
-          const isStreamingLast = busy && i === messages.length - 1;
-          const showCheckpoint = m.id && m.text.trim() && !isStreamingLast;
-          const diffs = m.turnId ? turnDiffsByTurnId[m.turnId] : undefined;
-
-          return (
-            <div key={m.id ?? `msg-${i}`} className="agentz-msg assistant">
-              {m.text ? (
-                <Markdown content={m.text} />
-              ) : isStreamingLast ? (
-                <div className="agentz-msg-text agentz-thinking">{t("chat.thinking")}</div>
-              ) : null}
-              {diffs && diffs.length > 0 && (
-                <div className="agentz-turn-diffs">
-                  {diffs.map((d) => (
-                    <FileDiffCard key={d.id} diff={d} onOpen={onSelectPath} />
-                  ))}
-                </div>
-              )}
-              {showCheckpoint && (
-                <div className="agentz-checkpoint">
-                  <span className="agentz-checkpoint-label">{t("chat.checkpoint")}</span>
-                  <button
-                    type="button"
-                    className="agentz-checkpoint-btn"
-                    onClick={() => void forkFromCheckpoint(m.id!)}
-                    title={t("chat.checkpointFork")}
-                  >
-                    {t("chat.checkpointFork")}
-                  </button>
-                  <button
-                    type="button"
-                    className="agentz-checkpoint-btn muted"
-                    onClick={() => void restoreToCheckpoint(m.id!)}
-                    title={t("chat.checkpointRestore")}
-                  >
-                    {t("chat.checkpointRestore")}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {queuedView.map((q, i) => (
-          <div key={`q-${i}`} className="agentz-turn-user queued">
-            <TaskCard text={q} />
-          </div>
-        ))}
-        {pendingCards.map((card) => (
-          <div key={card.requestId} className="agentz-msg assistant">
-            <InteractiveCard
-              requestId={card.requestId}
-              uiDefinition={card.uiDefinition}
-              listenOpen={card.listenOpen}
-              wizardStepHint={card.wizardStepHint}
-              onSubmitted={() => markSubmitted(card.requestId)}
-              onActionSent={() => markActionSent(card.requestId)}
-            />
-          </div>
-        ))}
-      </div>
+      <AssistantMessageList
+        messages={messages}
+        turnDiffsByTurnId={turnDiffsByTurnId}
+        busy={busy}
+        queuedView={queuedView}
+        pendingCards={pendingCards}
+        scrollRef={scrollRef}
+        onSelectPath={onSelectPath}
+        onForkCheckpoint={forkFromCheckpoint}
+        onRestoreCheckpoint={restoreToCheckpoint}
+        onCardSubmitted={markSubmitted}
+        onCardActionSent={markActionSent}
+        onPlanModeEnter={onPlanModeEnter}
+        onPlanBuild={onPlanBuild}
+      />
 
       {error && <div className="agentz-assistant-error">{error}</div>}
 

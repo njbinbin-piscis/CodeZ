@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PlanTodoItem } from "../services/tauri/chat";
 import { toolIcon, toolSummary } from "./toolDisplay";
@@ -181,7 +181,7 @@ export interface TaskPanelProps {
   className?: string;
 }
 
-export default function TaskPanel({
+function TaskPanel({
   planItems,
   toolSteps,
   busy,
@@ -258,3 +258,5 @@ export default function TaskPanel({
     </div>
   );
 }
+
+export default memo(TaskPanel);

@@ -29,23 +29,6 @@ pub struct CodeSearchHit {
 const CHUNK_LINES: usize = 50;
 const MAX_FILE_BYTES: u64 = 1_000_000;
 
-const ALWAYS_IGNORE: &[&str] = &[
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".koi-worktrees",
-    ".agentz-worktrees",
-    "target",
-    ".next",
-    ".nuxt",
-    "dist",
-    "build",
-    ".venv",
-    "venv",
-    ".DS_Store",
-    ".agentz",
-];
-
 const CODE_EXTS: &[&str] = &[
     "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "java", "c", "h", "cpp", "cc", "cxx",
     "hpp", "cs", "rb", "php", "swift", "kt", "scala", "lua", "sh", "bash", "json", "toml", "yaml",
@@ -76,7 +59,7 @@ fn open_index(root: &Path) -> Result<Connection, String> {
 }
 
 fn is_ignored_dir(name: &str) -> bool {
-    ALWAYS_IGNORE.contains(&name) || name.starts_with('.')
+    crate::path_filter::is_ignored_dir_name(name)
 }
 
 fn is_code_file(path: &Path) -> bool {
@@ -158,6 +141,9 @@ pub fn build_index(root: &Path) -> Result<usize, String> {
 
 /// Re-index a single file (incremental update from the watcher).
 pub fn index_file(root: &Path, rel: &str) -> Result<(), String> {
+    if !crate::path_filter::should_index_path(rel) {
+        return Ok(());
+    }
     let conn = open_index(root)?;
     conn.execute("DELETE FROM chunks WHERE path = ?1", params![rel])
         .map_err(|e| format!("delete old chunks: {e}"))?;

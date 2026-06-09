@@ -55,7 +55,16 @@ export function useInteractiveCards() {
         break;
       case "done":
       case "cancelled":
-        setCards({});
+        setCards((prev) => {
+          const kept: Record<string, InteractiveCardState> = {};
+          for (const [id, card] of Object.entries(prev)) {
+            const kind = (card.uiDefinition as UiDefinition).kind;
+            if (kind === "plan_mode_build" && !card.submitted) {
+              kept[id] = card;
+            }
+          }
+          return kept;
+        });
         break;
       default:
         break;

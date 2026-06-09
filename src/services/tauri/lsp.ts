@@ -595,6 +595,9 @@ export function registerLspProviders(
 ): LspProvidersRegistration {
   const disposables: Monaco.IDisposable[] = [];
   const modelUri = monaco.Uri.parse(`file://${filePath}`);
+  const langId = languageForFile(filePath) ?? "plaintext";
+  const matchesFile = (model: Monaco.editor.ITextModel) =>
+    model.uri.toString() === modelUri.toString();
 
   // ── Diagnostics via markers ──────────────────────────────────────────
   client.setDiagnosticsCallback((diags) => {
@@ -622,8 +625,9 @@ export function registerLspProviders(
   });
 
   // ── Hover provider ───────────────────────────────────────────────────
-  const hoverDisposable = monaco.languages.registerHoverProvider("*", {
-    provideHover: async (_model, position) => {
+  const hoverDisposable = monaco.languages.registerHoverProvider(langId, {
+    provideHover: async (model, position) => {
+      if (!matchesFile(model)) return null;
       const result = await client.requestHover(
         filePath,
         position.lineNumber - 1,
@@ -645,9 +649,10 @@ export function registerLspProviders(
 
   // ── Completion provider ──────────────────────────────────────────────
   const completionDisposable = monaco.languages.registerCompletionItemProvider(
-    "*",
+    langId,
     {
-      provideCompletionItems: async (_model, position) => {
+      provideCompletionItems: async (model, position) => {
+        if (!matchesFile(model)) return null;
         const items = await client.requestCompletions(
           filePath,
           position.lineNumber - 1,
@@ -662,8 +667,9 @@ export function registerLspProviders(
   disposables.push(completionDisposable);
 
   // ── Definition provider ──────────────────────────────────────────────
-  const defDisposable = monaco.languages.registerDefinitionProvider("*", {
-    provideDefinition: async (_model, position) => {
+  const defDisposable = monaco.languages.registerDefinitionProvider(langId, {
+    provideDefinition: async (model, position) => {
+      if (!matchesFile(model)) return null;
       return await client.requestDefinition(
         filePath,
         position.lineNumber - 1,
@@ -674,8 +680,9 @@ export function registerLspProviders(
   disposables.push(defDisposable);
 
   // ── Reference provider ───────────────────────────────────────────────
-  const refDisposable = monaco.languages.registerReferenceProvider("*", {
-    provideReferences: async (_model, position) => {
+  const refDisposable = monaco.languages.registerReferenceProvider(langId, {
+    provideReferences: async (model, position) => {
+      if (!matchesFile(model)) return null;
       return await client.requestReferences(
         filePath,
         position.lineNumber - 1,

@@ -56,7 +56,22 @@ export class ExtensionService {
   private started = false;
   /** Serializes start/stop so React effect cleanups cannot race startup. */
   private opChain: Promise<void> = Promise.resolve();
+  /** Only the focused editor model is synced to the extension host (RPC reduction). */
+  private activeModelKey: string | null = null;
   projectDir = "";
+
+  setActiveEditorModel(model: monaco.editor.ITextModel | null): void {
+    this.activeModelKey = model?.uri.toString() ?? null;
+    if (model && this.rpc) {
+      this.ensureModelSynced(model);
+    }
+  }
+
+  private shouldSyncModel(model: monaco.editor.ITextModel): boolean {
+    if (model.uri.scheme === "inmemory") return false;
+    if (!this.activeModelKey) return true;
+    return model.uri.toString() === this.activeModelKey;
+  }
 
   get isRunning(): boolean {
     return this.started;
@@ -170,52 +185,119 @@ export class ExtensionService {
     });
   }
 
+  private modelSyncs = new Map<
+    string,
+    {
+      changeSub: monaco.IDisposable;
+      flushTimer: ReturnType<typeof setTimeout> | undefined;
+      pendingChanges: ModelChangedEventDto["changes"];
+    }
+  >();
+
+  private ensureModelSynced(model: monaco.editor.ITextModel): void {
+    if (!this.rpc || !this.shouldSyncModel(model)) return;
+    const key = model.uri.toString();
+    if (this.modelSyncs.has(key)) return;
+
+    const extHostDocs = this.rpc.getProxy(ExtHostContext.ExtHostDocuments);
+    const MAX_SYNC_LINES = 2000;
+    const MAX_SYNC_CHARS = 512_000;
+    const rpc = this.rpc;
+    window.setTimeout(() => {
+      if (this.rpc !== rpc) return;
+      const lines = model.getLinesContent();
+      let syncLines = lines;
+      const totalChars = lines.reduce((n, l) => n + l.length, 0);
+      if (lines.length > MAX_SYNC_LINES || totalChars > MAX_SYNC_CHARS) {
+        syncLines = lines.slice(0, MAX_SYNC_LINES);
+      }
+      void extHostDocs.$acceptModelOpened({
+        uri: conv.uriToDto(model.uri),
+        languageId: model.getLanguageId(),
+        versionId: model.getVersionId(),
+        lines: syncLines,
+        eol: model.getEOL(),
+      });
+    }, 0);
+
+    const changeSub = model.onDidChangeContent((e) => {
+      if (!this.shouldSyncModel(model)) return;
+      const state = this.modelSyncs.get(key);
+      if (!state) return;
+      for (const c of e.changes) {
+        state.pendingChanges.push({
+          range: conv.fromMonacoRange(c.range),
+          text: c.text,
+        });
+      }
+      this.scheduleModelFlush(model);
+    });
+    this.modelSyncs.set(key, { changeSub, flushTimer: undefined, pendingChanges: [] });
+  }
+
+  private scheduleModelFlush(model: monaco.editor.ITextModel): void {
+    const key = model.uri.toString();
+    const state = this.modelSyncs.get(key);
+    if (!state || !this.rpc) return;
+    if (state.flushTimer) return;
+    const CHANGE_DEBOUNCE_MS = 50;
+    state.flushTimer = setTimeout(() => this.flushModelChanges(model), CHANGE_DEBOUNCE_MS);
+  }
+
+  private flushModelChanges(model: monaco.editor.ITextModel): void {
+    if (!this.rpc) return;
+    const extHostDocs = this.rpc.getProxy(ExtHostContext.ExtHostDocuments);
+    const key = model.uri.toString();
+    const state = this.modelSyncs.get(key);
+    if (!state || state.pendingChanges.length === 0) return;
+    const changes = state.pendingChanges;
+    state.pendingChanges = [];
+    state.flushTimer = undefined;
+    const event: ModelChangedEventDto = {
+      uri: conv.uriToDto(model.uri),
+      versionId: model.getVersionId(),
+      eol: model.getEOL(),
+      changes,
+    };
+    void extHostDocs.$acceptModelChanged(event);
+  }
+
+  private closeModelSync(model: monaco.editor.ITextModel): void {
+    const key = model.uri.toString();
+    const state = this.modelSyncs.get(key);
+    if (!state) return;
+    if (state.flushTimer) clearTimeout(state.flushTimer);
+    state.changeSub.dispose();
+    this.modelSyncs.delete(key);
+  }
+
   /** Push currently-open Monaco models to the host and keep them in sync. */
   private wireDocumentSync(): void {
     const extHostDocs = this.rpc!.getProxy(ExtHostContext.ExtHostDocuments);
-    const MAX_SYNC_LINES = 2000;
-    const MAX_SYNC_CHARS = 512_000;
 
     const openModel = (model: monaco.editor.ITextModel) => {
-      if (model.uri.scheme === "inmemory") return;
-      // Defer heavy getLinesContent() so extension-host restarts during an
-      // agent turn don't synchronously block the renderer (black-screen freeze).
-      const rpc = this.rpc!;
-      window.setTimeout(() => {
-        if (this.rpc !== rpc) return;
-        const lines = model.getLinesContent();
-        let syncLines = lines;
-        const totalChars = lines.reduce((n, l) => n + l.length, 0);
-        if (lines.length > MAX_SYNC_LINES || totalChars > MAX_SYNC_CHARS) {
-          syncLines = lines.slice(0, MAX_SYNC_LINES);
-        }
-        void extHostDocs.$acceptModelOpened({
-          uri: conv.uriToDto(model.uri),
-          languageId: model.getLanguageId(),
-          versionId: model.getVersionId(),
-          lines: syncLines,
-          eol: model.getEOL(),
-        });
-      }, 0);
-      const changeSub = model.onDidChangeContent((e) => {
-        const event: ModelChangedEventDto = {
-          uri: conv.uriToDto(model.uri),
-          versionId: model.getVersionId(),
-          eol: model.getEOL(),
-          changes: e.changes.map((c) => ({ range: conv.fromMonacoRange(c.range), text: c.text })),
-        };
-        void extHostDocs.$acceptModelChanged(event);
-      });
-      this.disposables.push(changeSub);
+      this.ensureModelSynced(model);
     };
 
     for (const model of monaco.editor.getModels()) openModel(model);
     this.disposables.push(monaco.editor.onDidCreateModel(openModel));
     this.disposables.push(
       monaco.editor.onWillDisposeModel((model) => {
-        extHostDocs.$acceptModelClosed(conv.uriToDto(model.uri));
+        this.flushModelChanges(model);
+        this.closeModelSync(model);
+        void extHostDocs.$acceptModelClosed(conv.uriToDto(model.uri));
       }),
     );
+    this.disposables.push({
+      dispose: () => {
+        for (const state of this.modelSyncs.values()) {
+          if (state.flushTimer) clearTimeout(state.flushTimer);
+          state.changeSub.dispose();
+        }
+        this.modelSyncs.clear();
+        this.activeModelKey = null;
+      },
+    });
   }
 
   /** Execute a command id (UI: tree items, status bar, menus, palette). */

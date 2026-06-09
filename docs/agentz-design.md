@@ -117,11 +117,28 @@ LSP ↔ WebSocket 桥（`ide_lsp_*`）。打开任意本地文件夹即进入 ID
   - `@path/to/file` → 行内注入文件内容（单文件上限 12K 字符，总上限 48K）；
   - `@codebase` → 跑代码库索引取 top 命中，行内注入（见 §7）。
 
-### 4.3 计划模式（Plan mode）
-`chat_mode = "plan"` 时禁用全部写/执行类工具
-（`file_write` / `file_edit` / `shell` / `code_run` / `process_control` / `elevate` /
-`email` / `ssh` / `web_search` / `memory_store`），用于"只读探索 / 出方案"。
-`agent` 模式则放开全量工具。
+### 4.3 计划模式（两级 Plan mode）
+
+CodeZ 的 Plan 流程分为两级，计划文件统一保存在 `{project}/.agentz/plans/*.md`。
+
+**一级 — Plan 模式（`chat_mode = "plan"`）**
+
+- 禁用写/执行类工具及 `plan_todo`；**唯一可写**：`plan_write` → `.agentz/plans/*.md`。
+- **头脑风暴优先**：`plan_mode_ui` action=`brainstorm` 以调查问卷形式（多选题 + 自定义输入）多轮澄清需求，问清后再 `plan_write`。
+- 计划完成后调用 `plan_mode_ui` action=`plan_ready`：展示 **Build** 按钮并 **暂停 agent 循环**；用户点击 Build → 切 Agent 模式并自动发起执行。
+
+**二级 — Agent 模式（`chat_mode = "agent"`）**
+
+- 复杂任务开始时 Agent 可调用 `plan_mode_ui` action=`suggest_enter` 建议进入 Plan（**30s** 超时则继续 Agent）。
+- 若已有计划文件，注入计划摘要；执行时同步 `plan_todo`、回写计划与验收证据。
+
+**Plan 模式 UI（`plan_mode_ui` / `chat_ui`）**
+
+| action | 模式 | 行为 |
+|--------|------|------|
+| `suggest_enter` | Agent | 30s 确认是否进入 Plan；超时 = 继续 Agent |
+| `brainstorm` | Plan | 多题问卷，阻塞至用户提交 |
+| `plan_ready` | Plan | Build 按钮 + 停止迭代 |
 
 ### 4.4 Review / Undo
 每个 turn 通过 `FileJournal::begin_turn` + before/after-tool 钩子把这一轮的文件快照

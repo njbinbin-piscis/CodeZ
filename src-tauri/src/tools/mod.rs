@@ -11,6 +11,7 @@ pub mod chat_ui_schema;
 pub mod codebase_search;
 pub mod delegate;
 pub mod lsp;
+pub mod plan_mode_ui;
 pub mod read_lints;
 pub mod terminal_read;
 pub mod web_fetch;

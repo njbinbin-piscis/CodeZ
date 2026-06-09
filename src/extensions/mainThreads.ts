@@ -118,14 +118,45 @@ export class MainThreadLanguageFeatures implements MainThreadLanguageFeaturesSha
   }
 
   $registerCompletionSupport(handle: number, selector: string[], triggerCharacters: string[]): void {
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let requestGen = 0;
     const d = monaco.languages.registerCompletionItemProvider(selector, {
       triggerCharacters,
-      provideCompletionItems: async (model, position) => {
-        const list = await this.extHost.$provideCompletionItems(handle, conv.uriToDto(model.uri), conv.toDtoPosition(position), undefined);
-        if (!list) return { suggestions: [] };
-        const range = this.defaultRange(model, position);
-        return { suggestions: list.items.map((i) => conv.toMonacoCompletion(i, range)), incomplete: list.isIncomplete };
-      },
+      provideCompletionItems: (model, position, _ctx, token) =>
+        new Promise((resolve) => {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(async () => {
+            debounceTimer = undefined;
+            if (token.isCancellationRequested) {
+              resolve({ suggestions: [] });
+              return;
+            }
+            const gen = ++requestGen;
+            try {
+              const list = await this.extHost.$provideCompletionItems(
+                handle,
+                conv.uriToDto(model.uri),
+                conv.toDtoPosition(position),
+                undefined,
+              );
+              if (token.isCancellationRequested || gen !== requestGen) {
+                resolve({ suggestions: [] });
+                return;
+              }
+              if (!list) {
+                resolve({ suggestions: [] });
+                return;
+              }
+              const range = this.defaultRange(model, position);
+              resolve({
+                suggestions: list.items.map((i) => conv.toMonacoCompletion(i, range)),
+                incomplete: list.isIncomplete,
+              });
+            } catch {
+              resolve({ suggestions: [] });
+            }
+          }, 150);
+        }),
     });
     this.store(handle, d);
   }

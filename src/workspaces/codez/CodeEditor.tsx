@@ -12,6 +12,7 @@ import {
 import { inlineEdit, aiInlineCompletion } from "../../services/tauri/edit";
 import { diffLines } from "./lineDiff";
 import { registerPersistedSnippets } from "./extensionStore";
+import { extensionService } from "../../extensions/extensionService";
 import { attachBreakpointGutter } from "../../extensions/debug/breakpoints";
 import "./InlineEdit.css";
 
@@ -60,6 +61,8 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
   const lspRef = useRef<LspProvidersRegistration | null>(null);
+  const lspClientRef = useRef<import("../../services/tauri/lsp").LspClient | null>(null);
+  const didChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bpDisposeRef = useRef<any>(null);
   const [inline, setInline] = useState<InlineEditState | null>(null);
@@ -363,6 +366,12 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+      const model = editor.getModel?.();
+      if (model) extensionService.setActiveEditorModel(model);
+      editor.onDidFocusEditorWidget?.(() => {
+        const m = editor.getModel?.();
+        if (m) extensionService.setActiveEditorModel(m);
+      });
       // Add Ctrl+S / Cmd+S save shortcut — delegates to the parent's onSave
       // so the actual disk write (ideApi.writeFile) runs from the IDE layer
       // where tab state + project dir live.
@@ -496,10 +505,10 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
                 fullPath,
                 tab.content,
               );
+              lspClientRef.current = client;
               const reg = registerLspProviders(monaco, client, fullPath);
               lspRef.current = reg;
 
-              // Trigger initial diagnostics
               client.requestDiagnostics(fullPath);
             } catch (e) {
               console.warn("[LSP] Failed to connect:", e);
@@ -511,29 +520,32 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
           });
       }
     },
-    [tab.path, tab.language, tab.content, projectDir, applyReveal],
+    [tab.path, tab.language, projectDir, applyReveal],
   );
 
   useEffect(() => {
-    // Update editor content when tab changes.
-    // Monaco's `value` prop handles the initial set; calling setValue here
-    // keeps the editor in sync when the user switches tabs (same editor
-    // instance, different content). Track the content so the next onChange
-    // can distinguish user edits from Monaco re-echoing the value.
     const editor = editorRef.current as { setValue?: (v: string) => void } | null;
-    if (editor && typeof editor.setValue === "function") {
+    if (!editor?.setValue) return;
+    if (tab.path !== lastPathRef.current) {
       editor.setValue(tab.content);
+      lastContentRef.current = tab.content;
+      lastPathRef.current = tab.path;
+    } else if (!tab.isDirty && tab.content !== lastContentRef.current) {
+      editor.setValue(tab.content);
+      lastContentRef.current = tab.content;
     }
-    lastContentRef.current = tab.content;
+  }, [tab.path, tab.content, tab.isDirty]);
 
-    // Cleanup LSP + breakpoint gutter on unmount
+  useEffect(() => {
     return () => {
+      if (didChangeTimerRef.current) clearTimeout(didChangeTimerRef.current);
       lspRef.current?.dispose();
       lspRef.current = null;
+      lspClientRef.current = null;
       bpDisposeRef.current?.dispose?.();
       bpDisposeRef.current = null;
     };
-  }, [tab.path, tab.content]);
+  }, [tab.path]);
 
   if (tab.isDiff && tab.originalContent !== undefined) {
     return (
@@ -573,6 +585,16 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
           if (next !== lastContentRef.current) {
             lastContentRef.current = next;
             onChangeRef.current(next);
+            const client = lspClientRef.current;
+            const dir = projectDir;
+            if (client && dir) {
+              const fullPath = `${dir}/${tab.path}`;
+              if (didChangeTimerRef.current) clearTimeout(didChangeTimerRef.current);
+              didChangeTimerRef.current = setTimeout(() => {
+                didChangeTimerRef.current = null;
+                client.sendDidChange(fullPath, next);
+              }, 300);
+            }
           }
         }}
         onMount={handleMount}

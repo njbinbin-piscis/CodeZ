@@ -34,6 +34,14 @@ export interface GitFileStatus {
   staged: boolean;
 }
 
+/** One git repository discovered under the workspace root (VS Code-style). */
+export interface GitRepoSnapshot {
+  repo_root: string;
+  name: string;
+  files: GitFileStatus[];
+  branches: BranchInfo[];
+}
+
 export interface DiffResult {
   path: string;
   original: string;

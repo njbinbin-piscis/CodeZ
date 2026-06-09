@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "agentz-desktop"
-version = "0.4.5"
+version = "0.4.6"
 dependencies = [
  "aes",
  "anyhow",
@@ -3832,7 +3832,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "piscis-core"
 version = "0.8.47"
-source = "git+https://github.com/njbinbin-piscis/piscis-engine.git?rev=v0.8.54#953f7a4632d5a13c9b5f6ec7f2d9a6522a6f5584"
+source = "git+https://github.com/njbinbin-piscis/piscis-engine.git?rev=v0.8.56#0941b8ba4c9d6b725b4e3bb5cf51522667c333c4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3844,7 +3844,7 @@ dependencies = [
 [[package]]
 name = "piscis-kernel"
 version = "0.8.47"
-source = "git+https://github.com/njbinbin-piscis/piscis-engine.git?rev=v0.8.54#953f7a4632d5a13c9b5f6ec7f2d9a6522a6f5584"
+source = "git+https://github.com/njbinbin-piscis/piscis-engine.git?rev=v0.8.56#0941b8ba4c9d6b725b4e3bb5cf51522667c333c4"
 dependencies = [
  "anyhow",
  "async-trait",

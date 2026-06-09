@@ -8,6 +8,7 @@
 
 pub mod browser;
 pub mod commands;
+pub mod path_filter;
 pub mod context_assembly;
 pub mod gateway;
 pub mod journal;
@@ -84,6 +85,7 @@ pub fn run() {
             commands::ide::ide_search_files,
             // git
             commands::ide::ide_git_status,
+            commands::ide::ide_git_workspace_status,
             commands::ide::ide_git_diff,
             commands::ide::ide_git_branches,
             commands::ide::ide_git_file_at_ref,

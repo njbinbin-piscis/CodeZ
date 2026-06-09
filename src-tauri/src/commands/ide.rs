@@ -123,38 +123,10 @@ fn load_gitignore_patterns(root: &Path) -> Vec<String> {
 }
 
 fn is_ignored(name: &str, path: &Path, patterns: &[String]) -> bool {
-    // Always ignore these
-    let always_ignore = [
-        ".git",
-        "node_modules",
-        "__pycache__",
-        ".koi-worktrees",
-        "target",
-        ".next",
-        ".nuxt",
-        "dist",
-        ".DS_Store",
-    ];
-    if always_ignore.contains(&name) {
-        return true;
-    }
-    // Check gitignore patterns (simple glob matching)
-    for pattern in patterns {
-        let p = pattern.trim_start_matches('/');
-        if name == p || path.to_string_lossy().contains(p) {
-            return true;
-        }
-        if p.ends_with('/') && name == p.trim_end_matches('/') {
-            return true;
-        }
-        if p.starts_with('*') {
-            let ext = p.trim_start_matches('*');
-            if name.ends_with(ext) {
-                return true;
-            }
-        }
-    }
-    false
+    let rel = path
+        .to_string_lossy()
+        .replace('\\', "/");
+    crate::path_filter::is_ignored_tree_entry(name, &rel, patterns)
 }
 
 fn build_file_tree(
@@ -757,72 +729,67 @@ fn search_dir_recursive(
     Ok(())
 }
 
+#[path = "git_workspace.rs"]
+mod git_workspace;
+pub use git_workspace::GitRepoSnapshot;
+
 // ─── Git Operations ────────────────────────────────────────────────────────
 
-/// Get git status for all files in the project directory.
-#[tauri::command]
-pub async fn ide_git_status(project_dir: String) -> Result<Vec<GitFileStatus>, String> {
-    let root = PathBuf::from(&project_dir);
-    if !root.join(".git").exists() {
-        return Ok(vec![]);
-    }
-
-    let output = run_git_cmd(&root, &["status", "--porcelain=v1", "-uall"])
+async fn git_status_at(repo: &Path, workspace: &Path) -> Result<Vec<GitFileStatus>, String> {
+    let output = run_git_cmd(repo, &["status", "--porcelain=v1", "-uall"])
         .await
         .map_err(|e| format!("git status failed: {}", e))?;
-
-    let mut statuses = Vec::new();
-    for line in output.lines() {
-        if line.len() < 4 {
-            continue;
-        }
-        let chars: Vec<char> = line.chars().collect();
-        let index_status = chars[0];
-        let worktree_status = chars[1];
-        let path = line[3..].to_string();
-
-        // Staged changes (index)
-        if index_status != ' ' && index_status != '?' {
-            statuses.push(GitFileStatus {
-                path: path.clone(),
-                status: status_char_to_string(index_status),
-                staged: true,
-            });
-        }
-
-        // Unstaged changes (worktree)
-        if worktree_status != ' ' && worktree_status != '?' {
-            statuses.push(GitFileStatus {
-                path: path.clone(),
-                status: status_char_to_string(worktree_status),
-                staged: false,
-            });
-        }
-
-        // Untracked
-        if index_status == '?' && worktree_status == '?' {
-            statuses.push(GitFileStatus {
-                path,
-                status: "untracked".to_string(),
-                staged: false,
-            });
-        }
-    }
-
-    Ok(statuses)
+    let rel = git_workspace::repo_root_rel(workspace, repo);
+    Ok(git_workspace::parse_git_status_output(&output, &rel))
 }
 
-fn status_char_to_string(c: char) -> String {
-    match c {
-        'M' => "modified",
-        'A' => "added",
-        'D' => "deleted",
-        'R' => "renamed",
-        'C' => "copied",
-        'T' => "type_changed",
-        _ => "unknown",
+async fn git_branches_at(repo: &Path) -> Result<Vec<BranchInfo>, String> {
+    let output = run_git_cmd(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)|%(HEAD)|%(subject)|%(creatordate:iso)",
+            "refs/heads/",
+        ],
+    )
+    .await
+    .map_err(|e| format!("git branch list failed: {}", e))?;
+    Ok(git_workspace::parse_git_branches_output(&output))
+}
+
+/// Discover all git repositories under a workspace (nested repos when root has no `.git`).
+#[tauri::command]
+pub async fn ide_git_workspace_status(
+    project_dir: String,
+) -> Result<Vec<GitRepoSnapshot>, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let repos = git_workspace::discover_git_repos(&workspace);
+    let mut snapshots = Vec::new();
+    for repo in repos {
+        let rel = git_workspace::repo_root_rel(&workspace, &repo);
+        let name = git_workspace::repo_display_name(&workspace, &repo, &rel);
+        let files = git_status_at(&repo, &workspace).await?;
+        let branches = git_branches_at(&repo).await?;
+        snapshots.push(GitRepoSnapshot {
+            repo_root: rel,
+            name,
+            files,
+            branches,
+        });
     }
-    .to_string()
+    Ok(snapshots)
+}
+
+/// Get git status for all files in the project directory (flattened across repos).
+#[tauri::command]
+pub async fn ide_git_status(project_dir: String) -> Result<Vec<GitFileStatus>, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let repos = git_workspace::discover_git_repos(&workspace);
+    let mut all = Vec::new();
+    for repo in repos {
+        all.extend(git_status_at(&repo, &workspace).await?);
+    }
+    Ok(all)
 }
 
 /// Get diff for a specific file (working tree vs HEAD or vs a specific ref).
@@ -831,17 +798,23 @@ pub async fn ide_git_diff(
     project_dir: String,
     path: String,
     base: Option<String>,
+    _git_root: Option<String>,
 ) -> Result<DiffResult, String> {
-    let root = PathBuf::from(&project_dir);
+    let workspace = PathBuf::from(&project_dir);
+    let (root, path_in_repo) =
+        git_workspace::resolve_git_context(&workspace, &path).map_err(|e| e.to_string())?;
 
     // Get original content (from HEAD or specified base)
     let base_ref = base.as_deref().unwrap_or("HEAD");
-    let original = run_git_cmd(&root, &["show", &format!("{}:{}", base_ref, path)])
-        .await
-        .unwrap_or_default();
+    let original = run_git_cmd(
+        &root,
+        &["show", &format!("{}:{}", base_ref, path_in_repo)],
+    )
+    .await
+    .unwrap_or_default();
 
     // Get current content
-    let full_path = root.join(&path);
+    let full_path = workspace.join(&path);
     let modified = if full_path.exists() {
         std::fs::read_to_string(&full_path).unwrap_or_default()
     } else {
@@ -921,57 +894,15 @@ fn parse_range(s: &str) -> (usize, usize) {
     (start, lines)
 }
 
-/// List all branches, highlighting koi/* branches.
+/// List all branches for the workspace git root (or empty when none / ambiguous).
 #[tauri::command]
-pub async fn ide_git_branches(project_dir: String) -> Result<Vec<BranchInfo>, String> {
-    let root = PathBuf::from(&project_dir);
-    if !root.join(".git").exists() {
-        return Ok(vec![]);
-    }
-
-    let output = run_git_cmd(
-        &root,
-        &[
-            "for-each-ref",
-            "--format=%(refname:short)|%(HEAD)|%(subject)|%(creatordate:iso)",
-            "refs/heads/",
-        ],
-    )
-    .await
-    .map_err(|e| format!("git branch list failed: {}", e))?;
-
-    let mut branches = Vec::new();
-    for line in output.lines() {
-        let parts: Vec<&str> = line.splitn(4, '|').collect();
-        if parts.len() >= 2 {
-            let name = parts[0].to_string();
-            let is_current = parts[1] == "*";
-            let last_commit = parts.get(2).map(|s| s.to_string());
-            let last_commit_time = parts.get(3).map(|s| s.to_string());
-
-            branches.push(BranchInfo {
-                is_koi: name.starts_with("koi/"),
-                name,
-                is_current,
-                last_commit,
-                last_commit_time,
-            });
-        }
-    }
-
-    // Sort: current first, then koi branches, then alphabetically
-    branches.sort_by(|a, b| {
-        if a.is_current != b.is_current {
-            return if a.is_current {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            };
-        }
-        a.name.cmp(&b.name)
-    });
-
-    Ok(branches)
+pub async fn ide_git_branches(
+    project_dir: String,
+    git_root: Option<String>,
+) -> Result<Vec<BranchInfo>, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
+    git_branches_at(&root).await
 }
 
 /// Get file content at a specific git ref (for diff comparison).
@@ -980,9 +911,15 @@ pub async fn ide_git_file_at_ref(
     project_dir: String,
     path: String,
     git_ref: String,
+    git_root: Option<String>,
 ) -> Result<FileContent, String> {
-    let root = PathBuf::from(&project_dir);
-    let content = run_git_cmd(&root, &["show", &format!("{}:{}", git_ref, path)])
+    let workspace = PathBuf::from(&project_dir);
+    let (root, path_in_repo) = git_workspace::resolve_git_context(&workspace, &path)?;
+    let _ = git_root; // reserved for explicit override in future
+    let content = run_git_cmd(
+        &root,
+        &["show", &format!("{}:{}", git_ref, path_in_repo)],
+    )
         .await
         .map_err(|e| format!("git show failed: {}", e))?;
 
@@ -1002,9 +939,15 @@ pub async fn ide_git_file_at_ref(
 /// Stage files for commit (`git add`).
 /// Pass `"."` as path to stage all changes.
 #[tauri::command]
-pub async fn ide_git_add(project_dir: String, path: String) -> Result<(), String> {
-    let root = PathBuf::from(&project_dir);
-    run_git_cmd(&root, &["add", &path])
+pub async fn ide_git_add(
+    project_dir: String,
+    path: String,
+    git_root: Option<String>,
+) -> Result<(), String> {
+    let workspace = PathBuf::from(&project_dir);
+    let (root, path_in_repo) = git_workspace::resolve_git_context(&workspace, &path)?;
+    let _ = git_root;
+    run_git_cmd(&root, &["add", &path_in_repo])
         .await
         .map_err(|e| format!("git add failed: {}", e))?;
     Ok(())
@@ -1014,22 +957,31 @@ pub async fn ide_git_add(project_dir: String, path: String) -> Result<(), String
 /// to HEAD (dropping both staged and worktree changes); untracked files are
 /// removed from disk. Mirrors VS Code's "Discard Changes".
 #[tauri::command]
-pub async fn ide_git_discard(project_dir: String, path: String) -> Result<(), String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_discard(
+    project_dir: String,
+    path: String,
+    git_root: Option<String>,
+) -> Result<(), String> {
+    let workspace = PathBuf::from(&project_dir);
+    let (root, path_in_repo) = git_workspace::resolve_git_context(&workspace, &path)?;
+    let _ = git_root;
 
     // Is the path tracked? `git ls-files --error-unmatch` exits non-zero for
     // untracked paths (run_git_cmd returns Err in that case).
-    let tracked = run_git_cmd(&root, &["ls-files", "--error-unmatch", "--", &path])
-        .await
-        .is_ok();
+    let tracked = run_git_cmd(
+        &root,
+        &["ls-files", "--error-unmatch", "--", &path_in_repo],
+    )
+    .await
+    .is_ok();
 
     if tracked {
-        run_git_cmd(&root, &["checkout", "HEAD", "--", &path])
+        run_git_cmd(&root, &["checkout", "HEAD", "--", &path_in_repo])
             .await
             .map_err(|e| format!("git discard failed: {}", e))?;
     } else {
         // Untracked — delete the file (or directory) from the working tree.
-        let abs = root.join(&path);
+        let abs = workspace.join(&path);
         if abs.is_dir() {
             std::fs::remove_dir_all(&abs).map_err(|e| format!("remove dir failed: {}", e))?;
         } else if abs.exists() {
@@ -1041,9 +993,15 @@ pub async fn ide_git_discard(project_dir: String, path: String) -> Result<(), St
 
 /// Unstage files (`git reset HEAD -- <path>`).
 #[tauri::command]
-pub async fn ide_git_reset(project_dir: String, path: String) -> Result<(), String> {
-    let root = PathBuf::from(&project_dir);
-    run_git_cmd(&root, &["reset", "HEAD", "--", &path])
+pub async fn ide_git_reset(
+    project_dir: String,
+    path: String,
+    git_root: Option<String>,
+) -> Result<(), String> {
+    let workspace = PathBuf::from(&project_dir);
+    let (root, path_in_repo) = git_workspace::resolve_git_context(&workspace, &path)?;
+    let _ = git_root;
+    run_git_cmd(&root, &["reset", "HEAD", "--", &path_in_repo])
         .await
         .map_err(|e| format!("git reset failed: {}", e))?;
     Ok(())
@@ -1052,8 +1010,9 @@ pub async fn ide_git_reset(project_dir: String, path: String) -> Result<(), Stri
 /// Stage all changes in the working tree (`git add -A`).
 /// Unlike `git add .`, `-A` also picks up deletions and changes outside the cwd.
 #[tauri::command]
-pub async fn ide_git_add_all(project_dir: String) -> Result<(), String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_add_all(project_dir: String, git_root: Option<String>) -> Result<(), String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     run_git_cmd(&root, &["add", "-A"])
         .await
         .map_err(|e| format!("git add -A failed: {}", e))?;
@@ -1062,8 +1021,9 @@ pub async fn ide_git_add_all(project_dir: String) -> Result<(), String> {
 
 /// Unstage everything in the index (`git reset HEAD --`).
 #[tauri::command]
-pub async fn ide_git_reset_all(project_dir: String) -> Result<(), String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_reset_all(project_dir: String, git_root: Option<String>) -> Result<(), String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     run_git_cmd(&root, &["reset", "HEAD", "--"])
         .await
         .map_err(|e| format!("git reset all failed: {}", e))?;
@@ -1072,8 +1032,13 @@ pub async fn ide_git_reset_all(project_dir: String) -> Result<(), String> {
 
 /// Commit staged changes with a message.
 #[tauri::command]
-pub async fn ide_git_commit(project_dir: String, message: String) -> Result<String, String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_commit(
+    project_dir: String,
+    message: String,
+    git_root: Option<String>,
+) -> Result<String, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     let output = run_git_cmd(&root, &["commit", "-m", &message])
         .await
         .map_err(|e| format!("git commit failed: {}", e))?;
@@ -1083,8 +1048,13 @@ pub async fn ide_git_commit(project_dir: String, message: String) -> Result<Stri
 /// Checkout (switch to) a branch. Refuses if there are uncommitted changes
 /// that would be overwritten (git handles that itself — the error is surfaced).
 #[tauri::command]
-pub async fn ide_git_checkout(project_dir: String, branch: String) -> Result<String, String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_checkout(
+    project_dir: String,
+    branch: String,
+    git_root: Option<String>,
+) -> Result<String, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     let output = run_git_cmd(&root, &["checkout", &branch])
         .await
         .map_err(|e| format!("git checkout failed: {}", e))?;
@@ -1093,8 +1063,13 @@ pub async fn ide_git_checkout(project_dir: String, branch: String) -> Result<Str
 
 /// Create a new branch from the current HEAD and switch to it.
 #[tauri::command]
-pub async fn ide_git_create_branch(project_dir: String, branch: String) -> Result<String, String> {
-    let root = PathBuf::from(&project_dir);
+pub async fn ide_git_create_branch(
+    project_dir: String,
+    branch: String,
+    git_root: Option<String>,
+) -> Result<String, String> {
+    let workspace = PathBuf::from(&project_dir);
+    let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     let output = run_git_cmd(&root, &["checkout", "-b", &branch])
         .await
         .map_err(|e| format!("git create branch failed: {}", e))?;
@@ -1476,11 +1451,7 @@ pub async fn ide_start_watcher(
                             // Windows and the editor never reloaded files that
                             // agents / external tools changed.
                             let rel_norm = rel.replace('\\', "/");
-                            if rel_norm == ".git"
-                                || rel_norm.starts_with(".git/")
-                                || rel_norm.contains("/node_modules/")
-                                || rel_norm.contains("/.koi-worktrees/")
-                            {
+                            if !crate::path_filter::should_watch_path(&rel_norm) {
                                 continue;
                             }
 
@@ -1502,14 +1473,16 @@ pub async fn ide_start_watcher(
 
                             // Incrementally update the codebase index so
                             // @codebase / codebase_search stay fresh (best-effort).
-                            let root_clone = PathBuf::from(&dir);
-                            let rel_for_index = rel_norm.clone();
-                            std::thread::spawn(move || {
-                                let _ = crate::commands::codebase::index_file(
-                                    &root_clone,
-                                    &rel_for_index,
-                                );
-                            });
+                            if crate::path_filter::should_index_path(&rel_norm) {
+                                let root_clone = PathBuf::from(&dir);
+                                let rel_for_index = rel_norm.clone();
+                                std::thread::spawn(move || {
+                                    let _ = crate::commands::codebase::index_file(
+                                        &root_clone,
+                                        &rel_for_index,
+                                    );
+                                });
+                            }
                         }
                     }
                     _ => {}

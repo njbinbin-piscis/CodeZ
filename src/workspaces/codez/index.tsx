@@ -15,10 +15,12 @@ import BrowserPanel from "./BrowserPanel";
 import { BROWSER_TAB_PATH, isBrowserTab } from "./browserTab";
 import { browserClose } from "../../services/tauri/browser";
 import type { PickedElement } from "../../services/tauri/browser";
-import type { FileNode, OpenTab, GitFileStatus, TabViewMode } from "./types";
+import type { FileNode, OpenTab, TabViewMode } from "./types";
 import type { EditorSnapshot, LayoutSnapshot } from "../../services/tauri/workspace";
 import { editorSnapshotFromTabs } from "../../services/tauri/workspace";
 import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
+import { normalizeRelPath, shouldWatchPath } from "../../utils/pathFilter";
+import { perfCounters } from "../../utils/perfCounters";
 import "./IDE.css";
 
 type SidebarTab = "explorer" | "search" | "git" | "extensions";
@@ -114,9 +116,23 @@ export default function CodeZWorkspace({
   const [fileLoading, setFileLoading] = useState<string | null>(null);
   const [fileLoadError, setFileLoadError] = useState<string | null>(null);
 
-  // Git status
-  const [gitModified, setGitModified] = useState<Set<string>>(new Set());
-  const [gitAdded, setGitAdded] = useState<Set<string>>(new Set());
+  const {
+    registerOnSelectPath,
+    gitChanges,
+    scheduleWorkspaceRefresh,
+    registerWorkspaceRefresh,
+    agentTurnBusy,
+  } = useProjectEdge();
+
+  const { gitModified, gitAdded } = useMemo(() => {
+    const modified = new Set<string>();
+    const added = new Set<string>();
+    for (const s of gitChanges) {
+      if (s.status === "modified") modified.add(s.path);
+      else if (s.status === "added" || s.status === "untracked") added.add(s.path);
+    }
+    return { gitModified: modified, gitAdded: added };
+  }, [gitChanges]);
 
   // UI state — unified bottom panel (terminal + extension consoles)
   const [bottomOpen, setBottomOpen] = useState(false);
@@ -184,7 +200,6 @@ export default function CodeZWorkspace({
   projectDirRef.current = projectDir;
   const handledOpenPathNonce = useRef(0);
   const openFileRef = useRef<(path: string, readOnly?: boolean) => Promise<void>>(async () => {});
-  const { registerOnSelectPath } = useProjectEdge();
 
   useEffect(() => {
     return registerOnSelectPath((path) => void openFileRef.current(path));
@@ -203,8 +218,6 @@ export default function CodeZWorkspace({
       setFileLoadError(null);
       setReveal(null);
       setFileTree([]);
-      setGitModified(new Set());
-      setGitAdded(new Set());
       setFileTreeSelection(new Set());
       setBottomOpen(false);
       setBottomTab("terminal");
@@ -306,23 +319,8 @@ export default function CodeZWorkspace({
     }
   }, [projectDir]);
 
-  // ─── Load git status ─────────────────────────────────────────────
-  const loadGitStatus = useCallback(async () => {
-    if (!projectDir) return;
-    try {
-      const statuses = await ideApi.gitStatus(projectDir);
-      const modified = new Set<string>();
-      const added = new Set<string>();
-      statuses.forEach((s: GitFileStatus) => {
-        if (s.status === "modified") modified.add(s.path);
-        else if (s.status === "added" || s.status === "untracked") added.add(s.path);
-      });
-      setGitModified(modified);
-      setGitAdded(added);
-    } catch {
-      // No git repo or error — ignore
-    }
-  }, [projectDir]);
+  const agentTurnBusyRef = useRef(agentTurnBusy);
+  agentTurnBusyRef.current = agentTurnBusy;
 
   // ─── Panel resize drag handlers ──────────────────────────────────
   const startSidebarResize = useCallback(
@@ -371,71 +369,78 @@ export default function CodeZWorkspace({
     [bottomHeight],
   );
 
-  // ─── Initialize ──────────────────────────────────────────────────
-  // Debounce file-change refreshes: bursty external edits (Koi agents,
-  // formatters, watch-mode builds) used to fire `loadFileTree`+`loadGitStatus`
-  // dozens of times per second, which on Windows compounded the popup-loop
-  // bug that v0.8.0 fixed at the watcher level. 250 ms trailing-edge is
-  // slow enough to coalesce a save-burst yet fast enough to feel live.
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleRefresh = useCallback(() => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => {
-      refreshTimer.current = null;
-      loadFileTree();
-      loadGitStatus();
+  // Debounced reload for open tabs whose backing files changed externally.
+  const tabReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTabPaths = useRef<Set<string>>(new Set());
+
+  const scheduleTabReload = useCallback((evtPath: string) => {
+    const hasOpenTab = tabsRef.current.some((t) => t.path === evtPath && !t.isDirty);
+    if (!hasOpenTab || !projectDirRef.current) return;
+
+    pendingTabPaths.current.add(evtPath);
+    perfCounters.recordTabReloadScheduled();
+    if (tabReloadTimer.current) clearTimeout(tabReloadTimer.current);
+    tabReloadTimer.current = setTimeout(() => {
+      tabReloadTimer.current = null;
+      const dir = projectDirRef.current;
+      if (!dir) return;
+      const paths = [...pendingTabPaths.current];
+      pendingTabPaths.current.clear();
+      for (const path of paths) {
+        if (!tabsRef.current.some((t) => t.path === path && !t.isDirty)) continue;
+        const fullPath = `${dir}/${path}`;
+        void ideApi.readFile(fullPath).then((fc) => {
+          setTabs((p) =>
+            p.map((t) =>
+              t.path === path && !t.isDirty ? { ...t, content: fc.content } : t,
+            ),
+          );
+        }).catch(() => {});
+      }
     }, 250);
-  }, [loadFileTree, loadGitStatus]);
+  }, []);
+
+  useEffect(() => registerWorkspaceRefresh("fileTree", loadFileTree), [registerWorkspaceRefresh, loadFileTree]);
 
   useEffect(() => {
     if (!projectDir) return;
-    loadFileTree();
-    loadGitStatus();
 
-    // Start file watcher
+    scheduleWorkspaceRefresh({ git: true, fileTree: true, force: true, delayMs: 0 });
+
     ideApi.startWatcher(projectDir).catch(() => {});
 
-    // Listen for file changes (from Koi agents or external edits)
     const unlistenPromise = onFileChanged((evt) => {
-      // Guard: `project_dir` is whatever the caller passed to startWatcher —
-      // compare raw. But normalize the path to `/` before comparing with
-      // `tab.path`, because `tab.path` is always stored with `/` (that's
-      // how `FileTree` node paths come from the backend, and how
-      // `openFile` stores them). On Windows, older backend versions emit
-      // backslash paths, which silently failed the `===` check and made
-      // externally-modified files never reload in the IDE.
       if (evt.project_dir !== projectDir) return;
-      const evtPath = evt.path.replace(/\\/g, "/");
-      scheduleRefresh();
+      perfCounters.recordWatcherReceived();
+      const evtPath = normalizeRelPath(evt.path);
+      if (!shouldWatchPath(evtPath)) {
+        perfCounters.recordWatcherIgnored();
+        return;
+      }
 
-      setTabs((prev) =>
-        prev.map((tab) => {
-          if (tab.path === evtPath && !tab.isDirty) {
-            const fullPath = `${projectDir}/${evtPath}`;
-            ideApi.readFile(fullPath).then((fc) => {
-              setTabs((p) =>
-                p.map((t) =>
-                  t.path === evtPath && !t.isDirty
-                    ? { ...t, content: fc.content }
-                    : t,
-                ),
-              );
-            }).catch(() => {});
-          }
-          return tab;
-        }),
-      );
+      if (!agentTurnBusyRef.current) {
+        if (evt.kind === "created") {
+          scheduleWorkspaceRefresh({ fileTree: true });
+        } else {
+          scheduleWorkspaceRefresh({ git: true, fileTree: true });
+        }
+      }
+
+      if (evt.kind === "modified" || evt.kind === "deleted") {
+        scheduleTabReload(evtPath);
+      }
     });
 
     return () => {
-      if (refreshTimer.current) {
-        clearTimeout(refreshTimer.current);
-        refreshTimer.current = null;
+      if (tabReloadTimer.current) {
+        clearTimeout(tabReloadTimer.current);
+        tabReloadTimer.current = null;
       }
+      pendingTabPaths.current.clear();
       unlistenPromise.then((fn) => fn());
       ideApi.stopWatcher(projectDir).catch(() => {});
     };
-  }, [projectDir, loadFileTree, loadGitStatus, scheduleRefresh]);
+  }, [projectDir, loadFileTree, scheduleWorkspaceRefresh, scheduleTabReload]);
 
   const openFile = useCallback(
     async (path: string, readOnly = false) => {
@@ -581,12 +586,12 @@ export default function CodeZWorkspace({
         setTabs((prev) =>
           prev.map((t) => (t.path === path ? { ...t, isDirty: false } : t)),
         );
-        loadGitStatus();
+        scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 });
       } catch (e) {
         console.error("Failed to save:", e);
       }
     },
-    [loadGitStatus],
+    [scheduleWorkspaceRefresh],
   );
 
   // ─── Close tab (no dirty prompt — used internally) ─────────────────
@@ -669,8 +674,8 @@ export default function CodeZWorkspace({
     }
     setTabs([]);
     setActiveTabPath(null);
-    loadGitStatus();
-  }, [loadGitStatus, t]);
+    scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 });
+  }, [scheduleWorkspaceRefresh, t]);
 
   const closeSavedTabs = useCallback(() => {
     setTabs((prev) => prev.filter((t) => t.isDirty));
@@ -701,8 +706,8 @@ export default function CodeZWorkspace({
     }
     setTabs((prev) => prev.filter((t) => t.path === keepPath));
     setActiveTabPath(keepPath);
-    loadGitStatus();
-  }, [loadGitStatus, t]);
+    scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 });
+  }, [scheduleWorkspaceRefresh, t]);
 
   const handleTabContextMenu = useCallback(
     (e: React.MouseEvent, path: string) => {
@@ -923,10 +928,9 @@ export default function CodeZWorkspace({
                   gitAdded={gitAdded}
                   projectDir={projectDir}
                   onFileClick={(node) => openFile(node.path)}
-                  onRefresh={() => {
-                    loadFileTree();
-                    loadGitStatus();
-                  }}
+                  onRefresh={() =>
+                    scheduleWorkspaceRefresh({ git: true, fileTree: true, force: true, delayMs: 0 })
+                  }
                   onSelect={handleFileTreeSelect}
                   onContextMenu={handleFileTreeContextMenu}
                   containerRef={fileTreeRef}
@@ -943,7 +947,9 @@ export default function CodeZWorkspace({
                   projectDir={projectDir}
                   onDiffClick={(path) => openDiff(path)}
                   onOpenFile={(path) => openFile(path)}
-                  onRefresh={loadGitStatus}
+                  onRefresh={async () => {
+                    scheduleWorkspaceRefresh({ git: true, force: true, delayMs: 0 });
+                  }}
                 />
               )}
             </>
