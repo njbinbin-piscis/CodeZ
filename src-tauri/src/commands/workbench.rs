@@ -22,41 +22,14 @@ pub struct InstalledSkill {
     pub name: String,
     pub description: String,
     pub path: String,
-}
-
-/// Parse `name` + `description` from a SKILL.md YAML frontmatter, falling back
-/// to the first `# heading` / first non-empty line.
-fn parse_skill_meta(content: &str, fallback: &str) -> (String, String) {
-    let mut name = fallback.to_string();
-    let mut desc = String::new();
-    if let Some(rest) = content.strip_prefix("---") {
-        if let Some(end) = rest.find("\n---") {
-            for line in rest[..end].lines() {
-                if let Some(v) = line.strip_prefix("name:") {
-                    let n = v.trim().trim_matches('"').trim_matches('\'');
-                    if !n.is_empty() {
-                        name = n.to_string();
-                    }
-                } else if let Some(v) = line.strip_prefix("description:") {
-                    let d = v.trim().trim_matches('"').trim_matches('\'');
-                    if !d.is_empty() {
-                        desc = d.to_string();
-                    }
-                }
-            }
-        }
-    }
-    if desc.is_empty() {
-        desc = content
-            .lines()
-            .find(|l| !l.trim().is_empty() && !l.starts_with("---") && !l.starts_with('#'))
-            .unwrap_or("")
-            .trim()
-            .chars()
-            .take(160)
-            .collect();
-    }
-    (name, desc)
+    #[serde(default)]
+    pub lifecycle: String,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub quadrant: String,
 }
 
 fn sanitize_slug(slug: &str) -> Result<String, String> {
@@ -72,48 +45,63 @@ fn sanitize_slug(slug: &str) -> Result<String, String> {
     Ok(slug.to_string())
 }
 
-/// List skills installed under `{config}/skills/*/SKILL.md`.
+/// List skills from quadrant storage (installed, draft, learned).
 #[tauri::command]
-pub fn skills_list_installed(app: AppHandle) -> Result<Vec<InstalledSkill>, String> {
+pub async fn skills_list_installed(app: AppHandle) -> Result<Vec<InstalledSkill>, String> {
     let config_dir = resolve_global_config_dir(&app)?;
-    let skills_root = config_dir.join("skills");
+    let root = crate::skills::service::skills_root_from_config_dir(&config_dir);
+    let mut loader = crate::skills::loader::SkillLoader::new(&root);
+    let _ = loader.load_all();
+    let ctx = crate::commands::skill_evolution_ctx::SkillEvolutionCtx::open(&app)?;
+    let db = ctx.db.lock().await;
     let mut out = Vec::new();
-    let entries = match std::fs::read_dir(&skills_root) {
-        Ok(e) => e,
-        Err(_) => return Ok(out), // no skills installed yet
-    };
-    for entry in entries.flatten() {
-        let dir = entry.path();
-        if !dir.is_dir() {
-            continue;
-        }
-        let skill_md = dir.join("SKILL.md");
-        let Ok(content) = std::fs::read_to_string(&skill_md) else {
-            continue;
+    for skill in loader.list_skills() {
+        let meta = db
+            .get_skill(&skill.skill_id)
+            .ok()
+            .flatten()
+            .map(|s| crate::skills::provenance::SkillConfigMeta::from_json(&s.config))
+            .unwrap_or_else(|| crate::skills::provenance::SkillConfigMeta {
+                lifecycle: skill.lifecycle.clone(),
+                locked: skill.locked,
+                ..Default::default()
+            });
+        let quadrant = match skill.lifecycle.as_str() {
+            crate::skills::provenance::LIFECYCLE_DRAFT => "draft",
+            crate::skills::provenance::LIFECYCLE_LEARNED => "learned",
+            crate::skills::provenance::LIFECYCLE_ARCHIVED => "archived",
+            _ => "installed",
         };
-        let slug = entry.file_name().to_string_lossy().to_string();
-        let (name, description) = parse_skill_meta(&content, &slug);
         out.push(InstalledSkill {
-            slug,
-            name,
-            description,
-            path: skill_md.display().to_string(),
+            slug: skill.skill_id.clone(),
+            name: skill.name.clone(),
+            description: skill.description.clone(),
+            path: skill.source_path.join("SKILL.md").display().to_string(),
+            lifecycle: meta.lifecycle,
+            locked: meta.locked,
+            pinned: meta.pinned,
+            quadrant: quadrant.to_string(),
         });
     }
     out.sort_by_key(|a| a.name.to_lowercase());
     Ok(out)
 }
 
-/// Remove an installed skill directory under `{config}/skills/{slug}/`.
+/// Remove a skill directory (any quadrant) and DB record.
 #[tauri::command]
-pub fn skills_uninstall(app: AppHandle, slug: String) -> Result<(), String> {
+pub async fn skills_uninstall(app: AppHandle, slug: String) -> Result<(), String> {
     let slug = sanitize_slug(&slug)?;
-    let config_dir = resolve_global_config_dir(&app)?;
-    let skill_dir = config_dir.join("skills").join(&slug);
-    if !skill_dir.is_dir() {
+    let ctx = crate::commands::skill_evolution_ctx::SkillEvolutionCtx::open(&app)?;
+    let root = ctx.skills_root();
+    if let Some(path) = crate::skills::provenance::find_skill_md(&root, &slug) {
+        if let Some(dir) = path.parent() {
+            std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+    } else {
         return Err(format!("skill not found: {slug}"));
     }
-    std::fs::remove_dir_all(&skill_dir).map_err(|e| e.to_string())?;
+    let db = ctx.db.lock().await;
+    let _ = db.delete_skill(&slug);
     Ok(())
 }
 

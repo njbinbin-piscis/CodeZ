@@ -53,7 +53,9 @@ impl AppControlTool {
 
     async fn update_settings(&self, patch: &Value) -> anyhow::Result<ToolResult> {
         if !patch.is_object() {
-            return Ok(ToolResult::err("`settings` must be a JSON object of fields to change."));
+            return Ok(ToolResult::err(
+                "`settings` must be a JSON object of fields to change.",
+            ));
         }
         let path = self.config_path().map_err(|e| anyhow::anyhow!(e))?;
         let settings = Settings::load(&path).map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -63,7 +65,9 @@ impl AppControlTool {
             .map_err(|e| anyhow::anyhow!("invalid settings after merge: {e}"))?;
         merged.config_path = path;
         merged.save().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-        let _ = self.app.emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "settings" }));
+        let _ = self
+            .app
+            .emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "settings" }));
         let changed: Vec<String> = patch
             .as_object()
             .map(|o| o.keys().cloned().collect())
@@ -79,12 +83,16 @@ impl AppControlTool {
         let manifest: AgentManifest = serde_json::from_value(spec.clone())
             .map_err(|e| anyhow::anyhow!("invalid assistant spec: {e}"))?;
         if manifest.id.trim().is_empty() || manifest.name.trim().is_empty() {
-            return Ok(ToolResult::err("assistant requires non-empty `id` and `name`."));
+            return Ok(ToolResult::err(
+                "assistant requires non-empty `id` and `name`.",
+            ));
         }
         let info = agents_save(self.app.clone(), manifest)
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
-        let _ = self.app.emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "assistant" }));
+        let _ = self
+            .app
+            .emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "assistant" }));
         Ok(ToolResult::ok(format!(
             "Assistant '{}' ({}) saved.",
             info.name, info.id
@@ -100,7 +108,9 @@ impl AppControlTool {
         let info = teams_save(self.app.clone(), manifest)
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
-        let _ = self.app.emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "team" }));
+        let _ = self
+            .app
+            .emit(APP_CONTROL_UPDATED_EVENT, json!({ "kind": "team" }));
         Ok(ToolResult::ok(format!(
             "Team '{}' ({}) saved with {} member(s).",
             info.name,
@@ -126,9 +136,7 @@ impl AppControlTool {
 
 /// Blank out obvious secret fields before returning settings to the model.
 fn redact_secrets(value: &mut Value) {
-    const SECRET_HINTS: &[&str] = &[
-        "api_key", "secret", "token", "password", "private_key",
-    ];
+    const SECRET_HINTS: &[&str] = &["api_key", "secret", "token", "password", "private_key"];
     if let Value::Object(map) = value {
         for (k, v) in map.iter_mut() {
             let lk = k.to_lowercase();

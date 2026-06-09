@@ -121,10 +121,11 @@ pub async fn user_tools_install(app: AppHandle, source: String) -> Result<UserTo
                 .map_err(|e| format!("Read error: {}", e))?;
 
             let tools_dir_cloned = tools_dir.clone();
-            let result = tokio::task::spawn_blocking(move || extract_zip(&bytes, &tools_dir_cloned))
-                .await
-                .map_err(|e| format!("Spawn error: {}", e))?
-                .map_err(|e| format!("Zip extraction failed: {}", e))?;
+            let result =
+                tokio::task::spawn_blocking(move || extract_zip(&bytes, &tools_dir_cloned))
+                    .await
+                    .map_err(|e| format!("Spawn error: {}", e))?
+                    .map_err(|e| format!("Zip extraction failed: {}", e))?;
 
             return Ok(result);
         } else {
@@ -233,7 +234,8 @@ pub async fn user_tools_save_config(
 
     // Validate the tool exists (config keys are accepted as-is; the Settings
     // encryption layer handles secret fields on save).
-    UserToolManifest::load(&tool_dir).map_err(|e| format!("Tool '{}' not found: {}", tool_name, e))?;
+    UserToolManifest::load(&tool_dir)
+        .map_err(|e| format!("Tool '{}' not found: {}", tool_name, e))?;
 
     let mut config_value = serde_json::Map::new();
     for (key, value) in config {

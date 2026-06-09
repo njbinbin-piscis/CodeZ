@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listInstalledSkills,
@@ -6,8 +6,13 @@ import {
   type InstalledSkill,
 } from "../../../services/tauri/workbench";
 import { clawHubApi, type ClawHubSkill } from "../../../services/tauri/clawhub";
+import {
+  skillEvolutionApi,
+  type CuratorStatus,
+  type SkillEvolutionSettings,
+} from "../../../services/tauri/skillEvolution";
 
-/** Settings tab: manage installed skills + search/install from ClawHub. */
+/** Settings tab: installed skills, evolution drafts, ClawHub, and Curator. */
 export default function SkillsTab() {
   const { t } = useTranslation();
   const [installed, setInstalled] = useState<InstalledSkill[]>([]);
@@ -20,11 +25,22 @@ export default function SkillsTab() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  const [curatorStatus, setCuratorStatus] = useState<CuratorStatus | null>(null);
+  const [evoSettings, setEvoSettings] = useState<SkillEvolutionSettings | null>(null);
+  const [curatorMsg, setCuratorMsg] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setInstalled(await listInstalledSkills());
+      const [skills, status, settings] = await Promise.all([
+        listInstalledSkills(),
+        skillEvolutionApi.curatorStatus().catch(() => null),
+        skillEvolutionApi.getSettings().catch(() => null),
+      ]);
+      setInstalled(skills);
+      setCuratorStatus(status);
+      setEvoSettings(settings);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -37,6 +53,14 @@ export default function SkillsTab() {
   }, [refresh]);
 
   const installedSlugs = new Set(installed.map((s) => s.slug));
+  const stableSkills = useMemo(
+    () => installed.filter((s) => (s.quadrant ?? "installed") === "installed"),
+    [installed],
+  );
+  const evolvingSkills = useMemo(
+    () => installed.filter((s) => s.quadrant === "draft" || s.quadrant === "learned"),
+    [installed],
+  );
 
   const doUninstall = useCallback(
     async (slug: string) => {
@@ -44,6 +68,25 @@ export default function SkillsTab() {
       setError(null);
       try {
         await uninstallSkill(slug);
+        await refresh();
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setBusySlug(null);
+      }
+    },
+    [refresh],
+  );
+
+  const doEvolution = useCallback(
+    async (slug: string, action: "promote" | "discard" | "lock" | "unlock") => {
+      setBusySlug(slug);
+      setError(null);
+      try {
+        if (action === "promote") await skillEvolutionApi.promote(slug);
+        if (action === "discard") await skillEvolutionApi.discard(slug);
+        if (action === "lock") await skillEvolutionApi.lock(slug);
+        if (action === "unlock") await skillEvolutionApi.unlock(slug);
         await refresh();
       } catch (e) {
         setError(String(e));
@@ -83,6 +126,31 @@ export default function SkillsTab() {
     [refresh],
   );
 
+  const runCurator = useCallback(async (dryRun: boolean) => {
+    setCuratorMsg(null);
+    try {
+      const msg = await skillEvolutionApi.curatorRun(dryRun);
+      setCuratorMsg(msg);
+      await refresh();
+    } catch (e) {
+      setCuratorMsg(String(e));
+    }
+  }, [refresh]);
+
+  const saveEvoToggle = useCallback(
+    async (patch: Partial<SkillEvolutionSettings>) => {
+      if (!evoSettings) return;
+      const next = { ...evoSettings, ...patch };
+      setEvoSettings(next);
+      try {
+        await skillEvolutionApi.saveSettings(next);
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [evoSettings],
+  );
+
   return (
     <div className="agentz-settings-tabpanel">
       <section className="agentz-settings-section">
@@ -91,11 +159,11 @@ export default function SkillsTab() {
         {error && <div className="agentz-settings-error">{error}</div>}
         {loading ? (
           <div className="agentz-settings-loading">{t("settings.loading")}</div>
-        ) : installed.length === 0 ? (
+        ) : stableSkills.length === 0 ? (
           <div className="agentz-wb-empty">{t("skills.empty")}</div>
         ) : (
           <div className="agentz-wb-list">
-            {installed.map((s) => (
+            {stableSkills.map((s) => (
               <div key={s.slug} className="agentz-wb-row">
                 <div className="agentz-wb-info">
                   <strong>{s.name}</strong>
@@ -116,6 +184,92 @@ export default function SkillsTab() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="agentz-settings-section">
+        <h3>{t("skills.evolutionTitle")}</h3>
+        <p className="agentz-settings-hint">{t("skills.evolutionHint")}</p>
+        {evoSettings && (
+          <label className="agentz-settings-row">
+            <input
+              type="checkbox"
+              checked={evoSettings.review_enabled}
+              onChange={(e) => void saveEvoToggle({ review_enabled: e.target.checked })}
+            />
+            {t("skills.reviewEnabled")}
+          </label>
+        )}
+        {evolvingSkills.length === 0 ? (
+          <div className="agentz-wb-empty">{t("skills.evolutionEmpty")}</div>
+        ) : (
+          <div className="agentz-wb-list">
+            {evolvingSkills.map((s) => (
+              <div key={s.slug} className="agentz-wb-row">
+                <div className="agentz-wb-info">
+                  <strong>{s.name}</strong>
+                  <span className="agentz-wb-meta">
+                    {s.slug} · {s.quadrant ?? s.lifecycle}
+                    {s.locked ? " · locked" : ""}
+                  </span>
+                  {s.description && <span className="agentz-wb-desc">{s.description}</span>}
+                </div>
+                <div className="agentz-wb-actions">
+                  {s.quadrant === "draft" && (
+                    <button
+                      type="button"
+                      disabled={busySlug === s.slug}
+                      onClick={() => void doEvolution(s.slug, "promote")}
+                    >
+                      {t("skills.promote")}
+                    </button>
+                  )}
+                  {s.quadrant === "draft" && (
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={busySlug === s.slug}
+                      onClick={() => void doEvolution(s.slug, "discard")}
+                    >
+                      {t("skills.discard")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busySlug === s.slug}
+                    onClick={() =>
+                      void doEvolution(s.slug, s.locked ? "unlock" : "lock")
+                    }
+                  >
+                    {s.locked ? t("skills.unlock") : t("skills.lock")}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="agentz-settings-section">
+        <h3>{t("skills.curatorTitle")}</h3>
+        <p className="agentz-settings-hint">{t("skills.curatorHint")}</p>
+        {curatorStatus && (
+          <p className="agentz-wb-meta">
+            {t("skills.curatorStats", {
+              draft: curatorStatus.draft_count,
+              learned: curatorStatus.learned_count,
+              archived: curatorStatus.archived_count,
+            })}
+          </p>
+        )}
+        <div className="agentz-wb-actions">
+          <button type="button" onClick={() => void runCurator(true)}>
+            {t("skills.curatorDryRun")}
+          </button>
+          <button type="button" onClick={() => void runCurator(false)}>
+            {t("skills.curatorRun")}
+          </button>
+        </div>
+        {curatorMsg && <p className="agentz-wb-desc">{curatorMsg}</p>}
       </section>
 
       <section className="agentz-settings-section">

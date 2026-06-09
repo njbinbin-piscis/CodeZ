@@ -271,14 +271,11 @@ pub async fn teams_create_pool(
     }
 
     // Reuse an existing active pool with the same name, else create one.
-    let existing = db
-        .list_pool_sessions()
-        .ok()
-        .and_then(|pools| {
-            pools
-                .into_iter()
-                .find(|p| p.name == team.name && p.status != "archived")
-        });
+    let existing = db.list_pool_sessions().ok().and_then(|pools| {
+        pools
+            .into_iter()
+            .find(|p| p.name == team.name && p.status != "archived")
+    });
     let pool = match existing {
         Some(p) => p,
         None => db

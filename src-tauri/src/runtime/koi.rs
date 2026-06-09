@@ -160,12 +160,10 @@ impl SubagentRuntime for DesktopInProcessSubagentRuntime {
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("unknown Koi turn: {}", handle.turn_id))?
         };
-        let rx = turn
-            .outcome_rx
-            .lock()
-            .await
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("wait_koi_turn called twice for {}", handle.turn_id))?;
+        let rx =
+            turn.outcome_rx.lock().await.take().ok_or_else(|| {
+                anyhow::anyhow!("wait_koi_turn called twice for {}", handle.turn_id)
+            })?;
         let outcome = rx.await.unwrap_or_else(|_| {
             Ok(KoiTurnOutcome {
                 handle: handle.clone(),

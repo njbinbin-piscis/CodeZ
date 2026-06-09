@@ -9,6 +9,10 @@ export interface InstalledSkill {
   name: string;
   description: string;
   path: string;
+  lifecycle?: string;
+  locked?: boolean;
+  pinned?: boolean;
+  quadrant?: string;
 }
 
 export interface RuleFile {

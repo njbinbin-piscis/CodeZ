@@ -63,18 +63,28 @@ fn entry_for(path: &str) -> String {
 #[tauri::command]
 pub fn import_vsix(path: String) -> Result<VsixManifest, String> {
     let file = std::fs::File::open(&path).map_err(|e| format!("open {path}: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
 
     let pkg_raw = read_entry(&mut archive, "extension/package.json")
         .ok_or_else(|| "extension/package.json not found in .vsix".to_string())?;
-    let pkg: Value = serde_json::from_str(&pkg_raw)
-        .map_err(|e| format!("invalid package.json: {e}"))?;
+    let pkg: Value =
+        serde_json::from_str(&pkg_raw).map_err(|e| format!("invalid package.json: {e}"))?;
 
-    let str_field = |k: &str| pkg.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let str_field = |k: &str| {
+        pkg.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
     let name = str_field("name");
     let display_name = {
         let d = str_field("displayName");
-        if d.is_empty() { name.clone() } else { d }
+        if d.is_empty() {
+            name.clone()
+        } else {
+            d
+        }
     };
     let publisher = str_field("publisher");
     let version = str_field("version");
@@ -88,7 +98,11 @@ pub fn import_vsix(path: String) -> Result<VsixManifest, String> {
     if let Some(c) = contributes {
         if let Some(arr) = c.get("themes").and_then(|v| v.as_array()) {
             for t in arr {
-                let label = t.get("label").and_then(|v| v.as_str()).unwrap_or("Theme").to_string();
+                let label = t
+                    .get("label")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Theme")
+                    .to_string();
                 let ui_theme = t
                     .get("uiTheme")
                     .and_then(|v| v.as_str())
@@ -96,14 +110,22 @@ pub fn import_vsix(path: String) -> Result<VsixManifest, String> {
                     .to_string();
                 if let Some(p) = t.get("path").and_then(|v| v.as_str()) {
                     if let Some(content) = read_entry(&mut archive, &entry_for(p)) {
-                        themes.push(VsixTheme { label, ui_theme, content });
+                        themes.push(VsixTheme {
+                            label,
+                            ui_theme,
+                            content,
+                        });
                     }
                 }
             }
         }
         if let Some(arr) = c.get("snippets").and_then(|v| v.as_array()) {
             for s in arr {
-                let language = s.get("language").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let language = s
+                    .get("language")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
                 if let Some(p) = s.get("path").and_then(|v| v.as_str()) {
                     if let Some(content) = read_entry(&mut archive, &entry_for(p)) {
                         snippets.push(VsixSnippetSet { language, content });
@@ -176,26 +198,53 @@ fn read_package_json(dir: &Path) -> Option<Value> {
 fn parse_installed(folder: &Path) -> Option<InstalledExtension> {
     // `.vsix` unpacks with an `extension/` subdir; support flat layout too.
     let inner = folder.join("extension");
-    let ext_dir = if inner.join("package.json").exists() { inner } else { folder.to_path_buf() };
+    let ext_dir = if inner.join("package.json").exists() {
+        inner
+    } else {
+        folder.to_path_buf()
+    };
     let pkg = read_package_json(&ext_dir)?;
-    let s = |k: &str| pkg.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let s = |k: &str| {
+        pkg.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
     let name = s("name");
     if name.is_empty() {
         return None;
     }
     let publisher = {
         let p = s("publisher");
-        if p.is_empty() { "unknown".to_string() } else { p }
+        if p.is_empty() {
+            "unknown".to_string()
+        } else {
+            p
+        }
     };
     let display = {
         let d = s("displayName");
-        if d.is_empty() { name.clone() } else { d }
+        if d.is_empty() {
+            name.clone()
+        } else {
+            d
+        }
     };
     let activation_events = pkg
         .get("activationEvents")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-        .unwrap_or_else(|| if pkg.get("main").is_some() { vec!["*".into()] } else { vec![] });
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            if pkg.get("main").is_some() {
+                vec!["*".into()]
+            } else {
+                vec![]
+            }
+        });
     let enabled = !folder.join(".disabled").exists();
     Some(InstalledExtension {
         id: format!("{publisher}.{name}"),
@@ -216,13 +265,17 @@ fn parse_installed(folder: &Path) -> Option<InstalledExtension> {
 #[tauri::command]
 pub fn vsix_install(app: AppHandle, path: String) -> Result<InstalledExtension, String> {
     let file = std::fs::File::open(&path).map_err(|e| format!("open {path}: {e}"))?;
-    let archive = zip::ZipArchive::new(file).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
+    let archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
     install_from_archive(&app, archive)
 }
 
 /// Download a `.vsix` from a URL (e.g. Open VSX) and install it.
 #[tauri::command]
-pub async fn vsix_install_from_url(app: AppHandle, url: String) -> Result<InstalledExtension, String> {
+pub async fn vsix_install_from_url(
+    app: AppHandle,
+    url: String,
+) -> Result<InstalledExtension, String> {
     let bytes = reqwest::Client::new()
         .get(&url)
         .header("User-Agent", "AgentZ")
@@ -235,7 +288,8 @@ pub async fn vsix_install_from_url(app: AppHandle, url: String) -> Result<Instal
         .await
         .map_err(|e| format!("read body failed: {e}"))?;
     let cursor = std::io::Cursor::new(bytes.to_vec());
-    let archive = zip::ZipArchive::new(cursor).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
+    let archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("not a valid .vsix (zip): {e}"))?;
     install_from_archive(&app, archive)
 }
 
@@ -251,13 +305,24 @@ fn install_from_archive<R: Read + std::io::Seek>(
             .by_name("extension/package.json")
             .map_err(|_| "extension/package.json not found in .vsix".to_string())?;
         let mut s = String::new();
-        f.read_to_string(&mut s).map_err(|e| format!("read package.json: {e}"))?;
+        f.read_to_string(&mut s)
+            .map_err(|e| format!("read package.json: {e}"))?;
         s
     };
-    let pkg: Value = serde_json::from_str(&pkg_raw).map_err(|e| format!("invalid package.json: {e}"))?;
-    let name = pkg.get("name").and_then(|v| v.as_str()).unwrap_or("extension");
-    let publisher = pkg.get("publisher").and_then(|v| v.as_str()).unwrap_or("unknown");
-    let version = pkg.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+    let pkg: Value =
+        serde_json::from_str(&pkg_raw).map_err(|e| format!("invalid package.json: {e}"))?;
+    let name = pkg
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("extension");
+    let publisher = pkg
+        .get("publisher")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let version = pkg
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.0.0");
 
     let root = extensions_root(app)?;
     let folder = root.join(format!("{publisher}.{name}-{version}"));
@@ -268,7 +333,9 @@ fn install_from_archive<R: Read + std::io::Seek>(
 
     // Extract every entry, preserving the archive's directory layout.
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| format!("zip entry {i}: {e}"))?;
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("zip entry {i}: {e}"))?;
         let entry_name = entry.name().to_string();
         // Guard against zip-slip.
         if entry_name.contains("..") {
@@ -280,10 +347,13 @@ fn install_from_archive<R: Read + std::io::Seek>(
             continue;
         }
         if let Some(parent) = out_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
         }
         let mut buf = Vec::new();
-        entry.read_to_end(&mut buf).map_err(|e| format!("read {entry_name}: {e}"))?;
+        entry
+            .read_to_end(&mut buf)
+            .map_err(|e| format!("read {entry_name}: {e}"))?;
         std::fs::write(&out_path, buf).map_err(|e| format!("write {}: {e}", out_path.display()))?;
     }
 
@@ -310,7 +380,10 @@ pub fn vsix_list(app: AppHandle) -> Result<Vec<InstalledExtension>, String> {
 
 fn find_install_folder(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     let root = extensions_root(app)?;
-    for entry in std::fs::read_dir(&root).map_err(|e| format!("read extensions dir: {e}"))?.flatten() {
+    for entry in std::fs::read_dir(&root)
+        .map_err(|e| format!("read extensions dir: {e}"))?
+        .flatten()
+    {
         let p = entry.path();
         if p.is_dir() {
             if let Some(ext) = parse_installed(&p) {

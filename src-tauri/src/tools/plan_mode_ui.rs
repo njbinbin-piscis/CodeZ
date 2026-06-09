@@ -116,11 +116,7 @@ fn brainstorm_ui(title: &str, intro: &str, questions: &[Value]) -> Value {
 }
 
 /// Build a radio + optional custom text block for one brainstorm question.
-pub fn brainstorm_question_block(
-    id: &str,
-    prompt: &str,
-    options: &[(&str, &str)],
-) -> Value {
+pub fn brainstorm_question_block(id: &str, prompt: &str, options: &[(&str, &str)]) -> Value {
     let mut opts: Vec<Value> = options
         .iter()
         .map(|(v, l)| json!({ "value": v, "label": l }))
@@ -254,9 +250,9 @@ impl Tool for PlanModeUiTool {
 
         match action {
             "suggest_enter" => {
-                let message = input["message"].as_str().unwrap_or(
-                    "该任务涉及多步改动或存在多种实现方案，建议先规划再执行。",
-                );
+                let message = input["message"]
+                    .as_str()
+                    .unwrap_or("该任务涉及多步改动或存在多种实现方案，建议先规划再执行。");
                 let ui = suggest_enter_ui(message);
                 match wait_interactive(
                     &self.app,
@@ -313,10 +309,7 @@ impl Tool for PlanModeUiTool {
                         .map(|arr| {
                             arr.iter()
                                 .filter_map(|o| {
-                                    Some((
-                                        o["value"].as_str()?,
-                                        o["label"].as_str().unwrap_or(""),
-                                    ))
+                                    Some((o["value"].as_str()?, o["label"].as_str().unwrap_or("")))
                                 })
                                 .collect()
                         })
@@ -365,7 +358,9 @@ impl Tool for PlanModeUiTool {
                     .filter(|s| !s.is_empty())
                     .map(str::to_string)
                     .unwrap_or_else(|| default_plan_rel_path(&ctx.session_id));
-                let summary = input["message"].as_str().unwrap_or("计划文件已写入，请确认后开始执行。");
+                let summary = input["message"]
+                    .as_str()
+                    .unwrap_or("计划文件已写入，请确认后开始执行。");
                 let ui = plan_ready_ui(&plan_path, summary);
                 emit_event(
                     &self.app,

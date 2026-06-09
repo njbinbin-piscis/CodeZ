@@ -80,10 +80,7 @@ fn branch_for(task_id: &str) -> String {
 async fn run_git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let output = timeout(
         Duration::from_secs(60),
-        Command::new("git")
-            .args(args)
-            .current_dir(dir)
-            .output(),
+        Command::new("git").args(args).current_dir(dir).output(),
     )
     .await
     .map_err(|_| "git command timed out".to_string())?
@@ -167,7 +164,9 @@ pub async fn agent_task_create(
     let branch = branch_for(&id_safe);
     let base = match base.map(|b| b.trim().to_string()).filter(|b| !b.is_empty()) {
         Some(b) => b,
-        None => current_branch(&project).await.unwrap_or_else(|_| "HEAD".into()),
+        None => current_branch(&project)
+            .await
+            .unwrap_or_else(|_| "HEAD".into()),
     };
 
     let wt_dir = worktrees_root(&project).join(format!("task-{id_safe}"));
@@ -256,7 +255,9 @@ pub async fn agent_task_changed_files(
     for line in out.lines() {
         let mut parts = line.split('\t');
         let Some(status) = parts.next() else { continue };
-        let Some(path) = parts.next_back() else { continue };
+        let Some(path) = parts.next_back() else {
+            continue;
+        };
         let c = status.chars().next().unwrap_or('?');
         changes.push(AgentTaskChange {
             path: path.to_string(),
@@ -330,11 +331,7 @@ pub async fn agent_task_discard(
     let project = require_project_dir(project_dir.as_deref())?;
     let project = PathBuf::from(project);
 
-    let _ = run_git(
-        &project,
-        &["worktree", "remove", &worktree_path, "--force"],
-    )
-    .await;
+    let _ = run_git(&project, &["worktree", "remove", &worktree_path, "--force"]).await;
     // Delete the branch (force — it may be unmerged on a discard).
     let _ = run_git(&project, &["branch", "-D", &branch]).await;
     Ok(())
@@ -378,8 +375,7 @@ pub async fn agent_task_open_pr(
     let body = body.unwrap_or_default();
     let output = Command::new("gh")
         .args([
-            "pr", "create", "--base", &base, "--head", &branch, "--title", &title, "--body",
-            &body,
+            "pr", "create", "--base", &base, "--head", &branch, "--title", &title, "--body", &body,
         ])
         .current_dir(&project)
         .output()

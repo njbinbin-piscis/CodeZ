@@ -168,9 +168,8 @@ impl BrowserManager {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| {
-            anyhow!("failed to launch Chromium at {}", chrome.display())
-        }))
+        Err(last_err
+            .unwrap_or_else(|| anyhow!("failed to launch Chromium at {}", chrome.display())))
     }
 
     /// Run a closure with the live page, launching first if needed.
@@ -248,18 +247,14 @@ impl BrowserManager {
 
     /// Scroll the page by a wheel delta (CSS pixels) and report new geometry.
     pub async fn scroll_by(&self, dx: f64, dy: f64) -> Result<ScrollInfo> {
-        let js = format!(
-            "(() => {{ window.scrollBy({dx}, {dy}); {SCROLL_INFO_JS_BODY} }})()"
-        );
+        let js = format!("(() => {{ window.scrollBy({dx}, {dy}); {SCROLL_INFO_JS_BODY} }})()");
         let val = self.eval(&js).await?;
         Ok(serde_json::from_value(val).unwrap_or_default())
     }
 
     /// Scroll the page to an absolute offset (CSS pixels) and report geometry.
     pub async fn scroll_to(&self, x: f64, y: f64) -> Result<ScrollInfo> {
-        let js = format!(
-            "(() => {{ window.scrollTo({x}, {y}); {SCROLL_INFO_JS_BODY} }})()"
-        );
+        let js = format!("(() => {{ window.scrollTo({x}, {y}); {SCROLL_INFO_JS_BODY} }})()");
         let val = self.eval(&js).await?;
         Ok(serde_json::from_value(val).unwrap_or_default())
     }
@@ -268,7 +263,9 @@ impl BrowserManager {
     pub async fn navigate(&self, url: &str) -> Result<String> {
         let target = normalise_url(url);
         self.with_page(|page| async move {
-            page.goto(target.as_str()).await.context("navigation failed")?;
+            page.goto(target.as_str())
+                .await
+                .context("navigation failed")?;
             let _ = page.wait_for_navigation().await;
             current_url(&page).await
         })
@@ -401,7 +398,8 @@ impl BrowserManager {
 
     /// The page's current URL.
     pub async fn current_url(&self) -> Result<String> {
-        self.with_page(|page| async move { current_url(&page).await }).await
+        self.with_page(|page| async move { current_url(&page).await })
+            .await
     }
 
     /// Whether a Chromium session is currently live.
@@ -666,7 +664,9 @@ mod tests {
     async fn launch_with_unique_profile() {
         let mgr = BrowserManager::new();
         mgr.set_viewport(800, 600).await.unwrap();
-        mgr.ensure_launch_for_test().await.expect("browser should launch");
+        mgr.ensure_launch_for_test()
+            .await
+            .expect("browser should launch");
         assert!(mgr.is_open().await);
         mgr.close().await.unwrap();
         assert!(!mgr.is_open().await);

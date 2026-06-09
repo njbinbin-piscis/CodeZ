@@ -267,7 +267,10 @@ fn list_manifest_dirs(dir: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-fn connector_info_from(manifest: &ConnectorManifest, creds: &HashMap<String, String>) -> ConnectorInfo {
+fn connector_info_from(
+    manifest: &ConnectorManifest,
+    creds: &HashMap<String, String>,
+) -> ConnectorInfo {
     let api_extra = manifest.kind == "api";
     ConnectorInfo {
         authorized: is_authorized(manifest, creds),
@@ -282,7 +285,9 @@ fn connector_info_from(manifest: &ConnectorManifest, creds: &HashMap<String, Str
         auth_method: manifest.auth.method.clone(),
         fields: manifest.auth.fields.clone(),
         enabled: manifest.enabled,
-        url: api_extra.then(|| manifest.url.clone()).filter(|u| !u.is_empty()),
+        url: api_extra
+            .then(|| manifest.url.clone())
+            .filter(|u| !u.is_empty()),
         use_case: api_extra
             .then(|| manifest.use_case.clone())
             .filter(|u| !u.is_empty()),
@@ -364,7 +369,10 @@ pub async fn call_api_connector(
         req = req.json(&body.unwrap_or(serde_json::json!({})));
     }
 
-    let resp = req.send().await.map_err(|e| format!("request failed: {e}"))?;
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("request failed: {e}"))?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| format!("read body: {e}"))?;
     if !status.is_success() {
@@ -401,7 +409,9 @@ fn connector_to_mcp_config(dir: &Path, manifest: &ConnectorManifest) -> Option<M
     // For OAuth2 connectors, auto-inject the stored access token as a Bearer
     // header unless the manifest declares its own Authorization header.
     if manifest.auth.method == "oauth2"
-        && !headers.keys().any(|k| k.eq_ignore_ascii_case("authorization"))
+        && !headers
+            .keys()
+            .any(|k| k.eq_ignore_ascii_case("authorization"))
     {
         if let Some(token) = creds.get("access_token").filter(|v| !v.is_empty()) {
             headers.insert("Authorization".into(), format!("Bearer {token}"));
@@ -448,8 +458,11 @@ pub fn resolve_named_connector_mcp_configs(
     config_dir: &Path,
     ids: &[String],
 ) -> Vec<McpServerConfig> {
-    let wanted: std::collections::HashSet<&str> =
-        ids.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let wanted: std::collections::HashSet<&str> = ids
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
     if wanted.is_empty() {
         return Vec::new();
     }
@@ -516,7 +529,11 @@ pub async fn connectors_install(app: AppHandle, source: String) -> Result<Connec
             .map_err(|e| format!("Read error: {e}"))?
     } else {
         let p = PathBuf::from(&source);
-        let file = if p.is_dir() { p.join("connector.json") } else { p };
+        let file = if p.is_dir() {
+            p.join("connector.json")
+        } else {
+            p
+        };
         std::fs::read_to_string(&file).map_err(|e| e.to_string())?
     };
 
@@ -724,7 +741,14 @@ pub async fn connectors_get_credentials(
     let mut out = HashMap::new();
     for (k, v) in creds {
         if secret_keys.contains(k.as_str()) {
-            out.insert(k, if v.is_empty() { String::new() } else { "••••••••".into() });
+            out.insert(
+                k,
+                if v.is_empty() {
+                    String::new()
+                } else {
+                    "••••••••".into()
+                },
+            );
         } else {
             out.insert(k, v);
         }

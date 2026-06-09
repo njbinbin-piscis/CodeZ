@@ -5,6 +5,26 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-10
+
+Trusted skill evolution — quadrant storage, background review, Curator, and Settings UI.
+Requires **piscis-engine v0.8.57**.
+
+### Added
+
+- **Quadrant skill storage**: `skills/installed/`, `.draft/`, `learned/`, `.archive/` under the global config dir.
+- **`skill_manage` tool**: agent-mode controlled writes to draft/learned skills (`safe_join` path guard).
+- **Background review**: post-turn memory extract + skill review fork (configurable via `skill_evolution` in settings).
+- **Curator**: stale marking, archive, LLM merge; idle scheduler every 30 minutes.
+- **Memory hardening**: L2 compaction (3×) triggers session memory consolidation.
+- **Settings → Skills**: evolution panel (promote/discard/lock), Curator controls, review toggle.
+- **Global skill DB**: `{config_dir}/piscis.db` for skill metadata/revisions (separate from project session DB).
+
+### Changed
+
+- **ClawHub install** targets `skills/installed/` and registers skills in the global DB.
+- **piscis-engine** dependency bumped to **v0.8.57**.
+
 ## [0.4.6] - 2026-06-09
 
 Edge drawer polish, explorer expand/collapse, and faster git refresh after agent edits.

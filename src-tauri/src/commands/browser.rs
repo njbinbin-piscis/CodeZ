@@ -9,7 +9,11 @@ use crate::state::AppState;
 
 #[tauri::command]
 pub async fn browser_navigate(state: State<'_, AppState>, url: String) -> Result<String, String> {
-    state.browser.navigate(&url).await.map_err(|e| e.to_string())
+    state
+        .browser
+        .navigate(&url)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -22,12 +26,12 @@ pub async fn browser_screenshot(state: State<'_, AppState>) -> Result<String, St
 }
 
 #[tauri::command]
-pub async fn browser_click_at(
-    state: State<'_, AppState>,
-    x: f64,
-    y: f64,
-) -> Result<bool, String> {
-    state.browser.click_at(x, y).await.map_err(|e| e.to_string())
+pub async fn browser_click_at(state: State<'_, AppState>, x: f64, y: f64) -> Result<bool, String> {
+    state
+        .browser
+        .click_at(x, y)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -73,7 +77,11 @@ pub async fn browser_scroll_by(
     x: f64,
     y: f64,
 ) -> Result<ScrollInfo, String> {
-    state.browser.scroll_by(x, y).await.map_err(|e| e.to_string())
+    state
+        .browser
+        .scroll_by(x, y)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -82,7 +90,11 @@ pub async fn browser_scroll_to(
     x: f64,
     y: f64,
 ) -> Result<ScrollInfo, String> {
-    state.browser.scroll_to(x, y).await.map_err(|e| e.to_string())
+    state
+        .browser
+        .scroll_to(x, y)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -96,5 +108,9 @@ pub async fn browser_inspect_at(
     x: f64,
     y: f64,
 ) -> Result<Option<PickedElement>, String> {
-    state.browser.inspect_at(x, y).await.map_err(|e| e.to_string())
+    state
+        .browser
+        .inspect_at(x, y)
+        .await
+        .map_err(|e| e.to_string())
 }

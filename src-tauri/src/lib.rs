@@ -8,12 +8,13 @@
 
 pub mod browser;
 pub mod commands;
-pub mod path_filter;
 pub mod context_assembly;
 pub mod gateway;
 pub mod journal;
 pub mod lsp;
+pub mod path_filter;
 pub mod runtime;
+pub mod skills;
 pub mod state;
 pub mod tools;
 
@@ -71,6 +72,18 @@ pub fn run() {
             app.manage(close_gate);
             // Phase 5: install built-in agent/team packs on first run.
             commands::seed::seed_builtin_packs(app.handle());
+            // Skill evolution: migrate flat skills + periodic curator idle check.
+            let app_migrate = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = commands::skills_migrate::skills_migrate_legacy_layout(app_migrate).await;
+            });
+            let app_curator = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
+                    commands::curator::maybe_run_curator_idle(&app_curator).await;
+                }
+            });
             // Phase 0A: drive headless agent turns for inbound IM messages.
             commands::gateway::spawn_inbound_consumer(app.handle().clone());
             Ok(())
@@ -250,6 +263,22 @@ pub fn run() {
             // Workbench management: installed skills, project rules, hooks
             commands::workbench::skills_list_installed,
             commands::workbench::skills_uninstall,
+            // Skill evolution (v0.5.0)
+            commands::skill_evolution::promote_skill,
+            commands::skill_evolution::discard_draft_skill,
+            commands::skill_evolution::lock_skill,
+            commands::skill_evolution::unlock_skill,
+            commands::skill_evolution::pin_skill,
+            commands::skill_evolution::unpin_skill,
+            commands::skill_evolution::list_skill_revisions,
+            commands::skill_evolution::list_skill_usage,
+            commands::skill_evolution::curator_status,
+            commands::skill_evolution::curator_run,
+            commands::skill_evolution::curator_rollback,
+            commands::skill_evolution::restore_archived_skill,
+            commands::skill_evolution::get_skill_evolution_settings,
+            commands::skill_evolution::save_skill_evolution_settings,
+            commands::skills_migrate::skills_migrate_legacy_layout,
             commands::workbench::rules_list,
             commands::workbench::rules_read,
             commands::workbench::rules_write,

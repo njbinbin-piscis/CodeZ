@@ -150,7 +150,10 @@ pub async fn get_im_settings(app: AppHandle) -> Result<ImSettingsDto, String> {
 /// Persist IM settings. Empty secret fields (and the masked placeholder) are
 /// treated as "unchanged" so we never clobber stored credentials.
 #[tauri::command]
-pub async fn save_im_settings(app: AppHandle, updates: ImSettingsDto) -> Result<ImSettingsDto, String> {
+pub async fn save_im_settings(
+    app: AppHandle,
+    updates: ImSettingsDto,
+) -> Result<ImSettingsDto, String> {
     const MASK: &str = "••••••••";
     let keep_secret = |new: &str, old: &str| -> String {
         if new.is_empty() || new == MASK {
@@ -660,8 +663,7 @@ async fn handle_inbound(
         register_mcp_tools(&mut registry, &mcp_servers).await;
     }
     if let Some(dir) = config_path.parent() {
-        let connector_configs =
-            crate::commands::connectors::resolve_connector_mcp_configs(dir);
+        let connector_configs = crate::commands::connectors::resolve_connector_mcp_configs(dir);
         if !connector_configs.is_empty() {
             register_mcp_tools(&mut registry, &connector_configs).await;
         }
@@ -681,20 +683,48 @@ async fn handle_inbound(
         crate::commands::chat_turn::materialize_headless_llm_settings(&mut s, &app, None);
     }
 
-    let deps = HeadlessDeps::new(db.clone(), settings, registry, sink);
-    let reply_text = match run_piscis_turn(request, deps).await {
+    let deps = HeadlessDeps::new(db.clone(), settings.clone(), registry, sink.clone());
+    let turn_ok = match run_piscis_turn(request, deps).await {
         Ok(resp) => {
-            if resp.response_text.trim().is_empty() {
+            let reply = if resp.response_text.trim().is_empty() {
                 "（Agent 未返回内容）".to_string()
             } else {
                 resp.response_text
-            }
+            };
+            let settings_guard = settings.lock().await;
+            let provider = settings_guard.provider.clone();
+            let api_key = settings_guard.active_api_key().to_string();
+            let base_url = if settings_guard.custom_base_url.is_empty() {
+                None
+            } else {
+                Some(settings_guard.custom_base_url.clone())
+            };
+            let model = settings_guard.model.clone();
+            let max_tokens = settings_guard.max_tokens;
+            drop(settings_guard);
+
+            let rows = {
+                let dbg = db.lock().await;
+                dbg.get_messages_latest(&session_id, 40).unwrap_or_default()
+            };
+            let msgs = crate::commands::post_turn::messages_from_db_rows(&rows);
+            let app_bg = app.clone();
+            let db_bg = db.clone();
+            let sid = session_id.clone();
+            tokio::spawn(async move {
+                crate::commands::post_turn::run_post_turn_hooks(
+                    &app_bg, db_bg, sid, msgs, provider, api_key, base_url, model, max_tokens,
+                )
+                .await;
+            });
+            reply
         }
         Err(e) => {
             warn!("IM headless turn failed for {}: {}", session_id, e);
             "（Agent 执行出错，请稍后再试）".to_string()
         }
     };
+    let reply_text = turn_ok;
 
     let (recipient, routing_state) = resolve_im_outbound_route(
         &db,
@@ -755,7 +785,10 @@ pub fn spawn_inbound_consumer(app: AppHandle) {
         info!("Gateway inbound consumer started");
         while let Some(msg) = rx.recv().await {
             let preview: String = msg.content.chars().take(80).collect();
-            info!("Inbound IM from {} via {}: {}", msg.sender, msg.channel, preview);
+            info!(
+                "Inbound IM from {} via {}: {}",
+                msg.sender, msg.channel, preview
+            );
 
             let session_key = msg.binding_key();
             let lock = {
@@ -823,7 +856,9 @@ pub async fn list_im_sessions(
     app: AppHandle,
     channel: Option<String>,
 ) -> Result<Vec<ImSessionMeta>, String> {
-    let want = channel.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+    let want = channel
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
     let db = open_global_db(&app)?;
     let sessions = db.list_sessions(500, 0).map_err(|e| e.to_string())?;
     Ok(sessions
@@ -854,7 +889,9 @@ pub async fn im_session_messages(
     session_id: String,
 ) -> Result<Vec<ImMessageDto>, String> {
     let db = open_global_db(&app)?;
-    let msgs = db.get_messages(&session_id, 1000, 0).map_err(|e| e.to_string())?;
+    let msgs = db
+        .get_messages(&session_id, 1000, 0)
+        .map_err(|e| e.to_string())?;
     Ok(msgs
         .into_iter()
         .filter(|m| m.role == "user" || m.role == "assistant")
@@ -871,7 +908,9 @@ pub async fn im_session_messages(
 /// otherwise clears every IM session.
 #[tauri::command]
 pub async fn clear_im_sessions(app: AppHandle, channel: Option<String>) -> Result<usize, String> {
-    let want = channel.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+    let want = channel
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
     let db = open_global_db(&app)?;
     let sessions = db.list_sessions(1000, 0).map_err(|e| e.to_string())?;
     let mut removed = 0usize;

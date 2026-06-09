@@ -73,31 +73,6 @@ async fn clawhub_get_with_retry(
     }
 }
 
-fn parse_skill_name(content: &str, fallback: &str) -> String {
-    if let Some(rest) = content.strip_prefix("---") {
-        if let Some(end) = rest.find("\n---") {
-            let fm = &rest[..end];
-            for line in fm.lines() {
-                if let Some(v) = line.strip_prefix("name:") {
-                    let n = v.trim().trim_matches('"').trim_matches('\'');
-                    if !n.is_empty() {
-                        return n.to_string();
-                    }
-                }
-            }
-        }
-    }
-    for line in content.lines() {
-        if let Some(h) = line.strip_prefix("# ") {
-            let t = h.trim();
-            if !t.is_empty() {
-                return t.to_string();
-            }
-        }
-    }
-    fallback.to_string()
-}
-
 fn sanitize_slug(slug: &str) -> Result<String, String> {
     if !slug
         .chars()
@@ -255,8 +230,9 @@ pub async fn clawhub_install(
 ) -> Result<ClawHubInstallResult, String> {
     let slug = sanitize_slug(slug.trim())?;
     let config_dir = resolve_config_dir(&app)?;
-    let skills_root = config_dir.join("skills");
-    let skill_dir = skills_root.join(&slug);
+    let skills_root = crate::skills::service::skills_root_from_config_dir(&config_dir);
+    crate::skills::provenance::ensure_evolution_dirs(&skills_root).map_err(|e| e.to_string())?;
+    let skill_dir = crate::skills::provenance::installed_dir(&skills_root).join(&slug);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -293,24 +269,30 @@ pub async fn clawhub_install(
         }
         let bytes = zip_resp.bytes().await.map_err(|e| e.to_string())?;
         if extract_zip_to_dir(&bytes, &skill_dir).is_ok() {
-            return Ok(ClawHubInstallResult {
-                name: parse_skill_name(
-                    &std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap_or_default(),
-                    &slug,
-                ),
-                slug: slug.clone(),
-                skill_dir: skill_dir.display().to_string(),
-            });
+            std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap_or_default()
+        } else {
+            extract_skill_md_from_zip(&bytes)?
         }
-        extract_skill_md_from_zip(&bytes)?
     };
 
-    std::fs::create_dir_all(&skill_dir).map_err(|e| e.to_string())?;
-    std::fs::write(skill_dir.join("SKILL.md"), &content).map_err(|e| e.to_string())?;
-    let name = parse_skill_name(&content, &slug);
+    let source_url = ver.map(|v| format!("{slug}@{v}"));
+    let (global_db, _) =
+        crate::commands::data_scope::open_global_kernel_state(&app).map_err(|e| e.to_string())?;
+    let db = global_db.lock().await;
+    let (installed_id, display_name) = crate::skills::service::install_to_installed(
+        &db,
+        &skills_root,
+        &content,
+        "clawhub",
+        source_url,
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+    drop(db);
+    let final_dir = crate::skills::provenance::installed_dir(&skills_root).join(&installed_id);
     Ok(ClawHubInstallResult {
-        slug,
-        name,
-        skill_dir: skill_dir.display().to_string(),
+        name: display_name,
+        slug: installed_id,
+        skill_dir: final_dir.display().to_string(),
     })
 }

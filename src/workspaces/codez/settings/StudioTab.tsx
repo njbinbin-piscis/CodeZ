@@ -124,12 +124,23 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
 
   const skillOptions = useMemo(
     () =>
-      skills.map((s) => ({
-        value: s.slug,
-        label: s.name || s.slug,
-        hint: s.description || s.slug,
-      })),
-    [skills],
+      skills.map((s) => {
+        const quadrantLabel =
+          s.quadrant === "draft"
+            ? t("skills.quadrantDraft")
+            : s.quadrant === "learned"
+              ? t("skills.quadrantLearned")
+              : s.quadrant === "installed"
+                ? t("skills.quadrantInstalled")
+                : null;
+        const base = s.name || s.slug;
+        return {
+          value: s.slug,
+          label: quadrantLabel && s.quadrant !== "installed" ? `${base} · ${quadrantLabel}` : base,
+          hint: s.description || s.slug,
+        };
+      }),
+    [skills, t],
   );
 
   const toolOptions = useMemo(

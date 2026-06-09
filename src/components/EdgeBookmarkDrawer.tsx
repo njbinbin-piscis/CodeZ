@@ -5,6 +5,7 @@ interface EdgeBookmarkDrawerProps {
   label: string;
   count: number;
   top: number;
+  /** When true, show a close button that calls `onClose` (e.g. pending review). */
   pinned?: boolean;
   hidden?: boolean;
   children: ReactNode;
@@ -15,9 +16,9 @@ interface EdgeBookmarkDrawerProps {
 /**
  * Right-edge hover tab that slides open a drawer.
  *
- * The tab is now a compact number badge — no label text — so it never overlaps
- * title-bar controls. A close button appears inside the drawer header when
- * `pinned` is true so users can dismiss it explicitly.
+ * The tab is a compact number badge so it does not overlap title-bar controls.
+ * Hover opens the drawer; mouse leave, click-outside, or list-item click closes it.
+ * `pinned` only adds a header close affordance — it does not lock the drawer open.
  */
 export default function EdgeBookmarkDrawer({
   label,
@@ -39,11 +40,15 @@ export default function EdgeBookmarkDrawer({
     }
   }, []);
 
+  const close = useCallback(() => {
+    clearHideTimer();
+    setOpen(false);
+  }, [clearHideTimer]);
+
   const scheduleHide = useCallback(() => {
-    if (pinned) return;
     clearHideTimer();
     hideTimer.current = window.setTimeout(() => setOpen(false), 280);
-  }, [pinned, clearHideTimer]);
+  }, [clearHideTimer]);
 
   const show = useCallback(() => {
     clearHideTimer();
@@ -51,11 +56,31 @@ export default function EdgeBookmarkDrawer({
   }, [clearHideTimer]);
 
   const handleClose = useCallback(() => {
-    setOpen(false);
+    close();
     onClose?.();
-  }, [onClose]);
+  }, [close, onClose]);
+
+  const handleBodyClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("button")) return;
+      close();
+    },
+    [close],
+  );
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const root = zoneRef.current;
+      if (!root || root.contains(event.target as Node)) return;
+      close();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open, close]);
 
   if (hidden) return null;
 
@@ -73,7 +98,7 @@ export default function EdgeBookmarkDrawer({
       <div className="agentz-edge-drawer">
         <div className="agentz-edge-drawer-head">
           <span>{label}</span>
-          {pinned && (
+          {(open || pinned) && (
             <button
               type="button"
               className="agentz-edge-drawer-close"
@@ -84,7 +109,9 @@ export default function EdgeBookmarkDrawer({
             </button>
           )}
         </div>
-        <div className="agentz-edge-drawer-body">{children}</div>
+        <div className="agentz-edge-drawer-body" onClick={handleBodyClick}>
+          {children}
+        </div>
       </div>
     </div>
   );

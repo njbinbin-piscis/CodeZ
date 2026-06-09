@@ -139,7 +139,11 @@ pub fn generate(root: &Path) -> Result<String, String> {
             "### `{name}/`\n- {} files · {} chunks · {}\n\n",
             stat.files.len(),
             stat.chunks,
-            if lang_str.is_empty() { "—".into() } else { lang_str }
+            if lang_str.is_empty() {
+                "—".into()
+            } else {
+                lang_str
+            }
         ));
     }
 
@@ -171,9 +175,7 @@ pub fn sample_hits(root: &Path, query: &str) -> Vec<CodeSearchHit> {
 /// Generate the Repo Wiki, write it to `.agentz/REPO_WIKI.md`, and return the
 /// markdown plus the relative path it was written to.
 #[tauri::command]
-pub async fn repo_wiki_generate(
-    project_dir: Option<String>,
-) -> Result<RepoWikiResult, String> {
+pub async fn repo_wiki_generate(project_dir: Option<String>) -> Result<RepoWikiResult, String> {
     let project = require_project_dir(project_dir.as_deref())?;
     let root = PathBuf::from(project);
     tokio::task::spawn_blocking(move || {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectEdge } from "../contexts/ProjectEdgeContext";
 import EdgeBookmarkDrawer from "./EdgeBookmarkDrawer";
@@ -40,7 +40,9 @@ export default function ProjectEdgePanel({
   const hasChanges = gitChanges.length > 0 || pendingReview != null;
   const hasArtifacts = artifacts.length > 0;
   const totalCount = artifacts.length;
-  const isPinned = (pendingReview != null || previewPath != null) && !forceDismissed;
+  // Only pending review pins the drawer (undo/keep). Opening a file in the editor
+  // must not block hover-dismiss or click-outside close.
+  const isPinned = pendingReview != null && !forceDismissed;
   const isHidden = !hasChanges && !hasArtifacts;
 
   // Build a flat, deduplicated, sorted list of artifact entries.
@@ -61,9 +63,11 @@ export default function ProjectEdgePanel({
     setPreviewPath(null);
   }, [setPreviewPath]);
 
-  // When artifacts/changes update, re-show the drawer if the user hasn't dismissed.
-  // (Clear forceDismissed when all items disappear so next round starts fresh.)
-  const effectivePinned = isPinned && totalCount > 0;
+  useEffect(() => {
+    if (!pendingReview && !hasChanges && !hasArtifacts) {
+      setForceDismissed(false);
+    }
+  }, [pendingReview, hasChanges, hasArtifacts]);
 
   if (!projectDir) return null;
 
@@ -73,7 +77,7 @@ export default function ProjectEdgePanel({
         label={t("agent.changes")}
         count={totalCount}
         top={8}
-        pinned={effectivePinned}
+        pinned={isPinned}
         hidden={isHidden}
         onClose={handleClose}
       >

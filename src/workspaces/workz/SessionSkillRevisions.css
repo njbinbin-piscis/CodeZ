@@ -1,0 +1,42 @@
+.agentz-workz-skill-revisions {
+  border-top: 1px solid var(--agentz-border, rgba(255, 255, 255, 0.08));
+  padding: 0.65rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.agentz-workz-skill-revisions-head {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  opacity: 0.85;
+}
+
+.agentz-workz-skill-revisions-empty {
+  opacity: 0.55;
+}
+
+.agentz-workz-skill-revisions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.agentz-workz-skill-revision-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.agentz-workz-skill-revision-skill {
+  font-weight: 500;
+}
+
+.agentz-workz-skill-revision-origin,
+.agentz-workz-skill-revision-summary {
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

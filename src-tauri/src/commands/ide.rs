@@ -8,9 +8,9 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write as StdWrite;
-use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::process::Command;
@@ -123,9 +123,7 @@ fn load_gitignore_patterns(root: &Path) -> Vec<String> {
 }
 
 fn is_ignored(name: &str, path: &Path, patterns: &[String]) -> bool {
-    let rel = path
-        .to_string_lossy()
-        .replace('\\', "/");
+    let rel = path.to_string_lossy().replace('\\', "/");
     crate::path_filter::is_ignored_tree_entry(name, &rel, patterns)
 }
 
@@ -759,9 +757,7 @@ async fn git_branches_at(repo: &Path) -> Result<Vec<BranchInfo>, String> {
 
 /// Discover all git repositories under a workspace (nested repos when root has no `.git`).
 #[tauri::command]
-pub async fn ide_git_workspace_status(
-    project_dir: String,
-) -> Result<Vec<GitRepoSnapshot>, String> {
+pub async fn ide_git_workspace_status(project_dir: String) -> Result<Vec<GitRepoSnapshot>, String> {
     let workspace = PathBuf::from(&project_dir);
     let repos = git_workspace::discover_git_repos(&workspace);
     let mut snapshots = Vec::new();
@@ -806,12 +802,9 @@ pub async fn ide_git_diff(
 
     // Get original content (from HEAD or specified base)
     let base_ref = base.as_deref().unwrap_or("HEAD");
-    let original = run_git_cmd(
-        &root,
-        &["show", &format!("{}:{}", base_ref, path_in_repo)],
-    )
-    .await
-    .unwrap_or_default();
+    let original = run_git_cmd(&root, &["show", &format!("{}:{}", base_ref, path_in_repo)])
+        .await
+        .unwrap_or_default();
 
     // Get current content
     let full_path = workspace.join(&path);
@@ -916,10 +909,7 @@ pub async fn ide_git_file_at_ref(
     let workspace = PathBuf::from(&project_dir);
     let (root, path_in_repo) = git_workspace::resolve_git_context(&workspace, &path)?;
     let _ = git_root; // reserved for explicit override in future
-    let content = run_git_cmd(
-        &root,
-        &["show", &format!("{}:{}", git_ref, path_in_repo)],
-    )
+    let content = run_git_cmd(&root, &["show", &format!("{}:{}", git_ref, path_in_repo)])
         .await
         .map_err(|e| format!("git show failed: {}", e))?;
 
@@ -968,12 +958,9 @@ pub async fn ide_git_discard(
 
     // Is the path tracked? `git ls-files --error-unmatch` exits non-zero for
     // untracked paths (run_git_cmd returns Err in that case).
-    let tracked = run_git_cmd(
-        &root,
-        &["ls-files", "--error-unmatch", "--", &path_in_repo],
-    )
-    .await
-    .is_ok();
+    let tracked = run_git_cmd(&root, &["ls-files", "--error-unmatch", "--", &path_in_repo])
+        .await
+        .is_ok();
 
     if tracked {
         run_git_cmd(&root, &["checkout", "HEAD", "--", &path_in_repo])
@@ -1021,7 +1008,10 @@ pub async fn ide_git_add_all(project_dir: String, git_root: Option<String>) -> R
 
 /// Unstage everything in the index (`git reset HEAD --`).
 #[tauri::command]
-pub async fn ide_git_reset_all(project_dir: String, git_root: Option<String>) -> Result<(), String> {
+pub async fn ide_git_reset_all(
+    project_dir: String,
+    git_root: Option<String>,
+) -> Result<(), String> {
     let workspace = PathBuf::from(&project_dir);
     let root = git_workspace::resolve_git_dir(&workspace, git_root.as_deref(), None)?;
     run_git_cmd(&root, &["reset", "HEAD", "--"])
@@ -1366,7 +1356,9 @@ pub async fn ide_terminal_read(
         .lock()
         .map_err(|e| format!("terminal output lock poisoned: {e}"))?;
     let out = if let Some(pattern) = grep.filter(|s| !s.is_empty()) {
-        let window = grep_lines.unwrap_or(100).clamp(1, TERMINAL_BUFFER_MAX_LINES);
+        let window = grep_lines
+            .unwrap_or(100)
+            .clamp(1, TERMINAL_BUFFER_MAX_LINES);
         log.grep_in_tail(&pattern, window)
     } else {
         let n = lines.unwrap_or(50).clamp(1, TERMINAL_BUFFER_MAX_LINES);

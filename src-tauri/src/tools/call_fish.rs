@@ -117,7 +117,9 @@ impl Tool for CallFishTool {
             .trim()
             .to_string();
         if task.is_empty() {
-            return Ok(ToolResult::err("'task' parameter is required for action=call"));
+            return Ok(ToolResult::err(
+                "'task' parameter is required for action=call",
+            ));
         }
 
         let Some(fish) = find_fish(&config_dir, &fish_id) else {
@@ -143,9 +145,10 @@ impl Tool for CallFishTool {
         .await;
 
         match findings {
-            Ok(text) if text.trim().is_empty() => {
-                Ok(ToolResult::ok(format!("[{} returned no findings]", fish.name)))
-            }
+            Ok(text) if text.trim().is_empty() => Ok(ToolResult::ok(format!(
+                "[{} returned no findings]",
+                fish.name
+            ))),
             Ok(text) => Ok(ToolResult::ok(format!("{} report:\n\n{text}", fish.name))),
             Err(e) => Ok(ToolResult::err(format!("call_fish failed: {e}"))),
         }

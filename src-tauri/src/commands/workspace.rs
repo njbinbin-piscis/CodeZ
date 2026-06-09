@@ -98,11 +98,9 @@ fn sanitize_snapshot(mut snap: WorkspaceSnapshot) -> WorkspaceSnapshot {
             snap.project_dir = Some(trimmed.to_string());
         }
     }
-    snap.editor.open_paths.retain(|p| {
-        !p.starts_with("diff:")
-            && p != "__agentz_browser__"
-            && !p.trim().is_empty()
-    });
+    snap.editor
+        .open_paths
+        .retain(|p| !p.starts_with("diff:") && p != "__agentz_browser__" && !p.trim().is_empty());
     snap.editor.dirty_buffers.retain(|path, content| {
         !path.starts_with("diff:")
             && path != "__agentz_browser__"

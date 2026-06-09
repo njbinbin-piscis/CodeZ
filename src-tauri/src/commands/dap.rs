@@ -85,7 +85,10 @@ pub async fn dap_start(
         loop {
             match reader.read(&mut chunk).await {
                 Ok(0) => {
-                    let _ = app_out.emit(DAP_EVENT, json!({ "channel": "exit", "data": "adapter stdout closed" }));
+                    let _ = app_out.emit(
+                        DAP_EVENT,
+                        json!({ "channel": "exit", "data": "adapter stdout closed" }),
+                    );
                     break;
                 }
                 Ok(n) => {

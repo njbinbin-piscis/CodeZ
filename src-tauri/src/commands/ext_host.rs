@@ -73,8 +73,7 @@ fn resolve_host_js(app: &AppHandle, explicit: Option<String>) -> Result<PathBuf,
 
     // Dev: always prefer a freshly built extension-host/dist over the stale
     // resource copy under target/debug (only refreshed on `cargo build`).
-    let dev_host =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../extension-host/dist/host.js");
+    let dev_host = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../extension-host/dist/host.js");
     candidates.push(dev_host.clone());
     if dev_host.exists() {
         return Ok(dev_host);
@@ -168,10 +167,16 @@ pub async fn ext_host_start(
                     if line.trim().is_empty() {
                         continue;
                     }
-                    let _ = app_out.emit(EXT_HOST_EVENT, json!({ "channel": "message", "data": line }));
+                    let _ = app_out.emit(
+                        EXT_HOST_EVENT,
+                        json!({ "channel": "message", "data": line }),
+                    );
                 }
                 Ok(None) => {
-                    let _ = app_out.emit(EXT_HOST_EVENT, json!({ "channel": "exit", "data": "stdout closed" }));
+                    let _ = app_out.emit(
+                        EXT_HOST_EVENT,
+                        json!({ "channel": "exit", "data": "stdout closed" }),
+                    );
                     break;
                 }
                 Err(e) => {
@@ -200,7 +205,11 @@ pub async fn ext_host_start(
         inner.project_dir = Some(project_dir.clone());
     }
 
-    info!("extension host started for {} ({})", project_dir, host_js_path.display());
+    info!(
+        "extension host started for {} ({})",
+        project_dir,
+        host_js_path.display()
+    );
     Ok(ExtHostStatus {
         running: true,
         project_dir: Some(project_dir),

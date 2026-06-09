@@ -13,5 +13,6 @@ pub mod delegate;
 pub mod lsp;
 pub mod plan_mode_ui;
 pub mod read_lints;
+pub mod skill_manage;
 pub mod terminal_read;
 pub mod web_fetch;

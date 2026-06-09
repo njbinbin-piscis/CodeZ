@@ -120,15 +120,17 @@ pub fn resolve_git_context(
             } else {
                 continue;
             }
-        } else if path == rel {
-            rel.len()
-        } else if path.starts_with(&format!("{}/", rel)) {
+        } else if path == rel || path.starts_with(&format!("{}/", rel)) {
             rel.len()
         } else {
             continue;
         };
 
-        if best.as_ref().map(|(_, _, l)| match_len > *l).unwrap_or(true) {
+        if best
+            .as_ref()
+            .map(|(_, _, l)| match_len > *l)
+            .unwrap_or(true)
+        {
             let path_in_repo = if rel.is_empty() {
                 path.clone()
             } else {
@@ -249,10 +251,7 @@ mod tests {
         std::fs::create_dir_all(base.join("node_modules/pkg/.git")).unwrap();
 
         let repos = discover_git_repos(&base);
-        let roots: Vec<String> = repos
-            .iter()
-            .map(|p| repo_root_rel(&base, p))
-            .collect();
+        let roots: Vec<String> = repos.iter().map(|p| repo_root_rel(&base, p)).collect();
         assert!(roots.contains(&"alpha".to_string()));
         assert!(roots.contains(&"beta".to_string()));
         assert!(!roots.contains(&"node_modules/pkg".to_string()));

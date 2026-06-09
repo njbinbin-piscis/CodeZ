@@ -49,7 +49,9 @@ pub async fn pool_members(
 ) -> Result<Vec<PoolMember>, String> {
     let (db, _s) = open_project_kernel_state(&app, &project_dir)?;
     let db = db.lock().await;
-    let ids = db.list_pool_member_ids(&pool_id).map_err(|e| e.to_string())?;
+    let ids = db
+        .list_pool_member_ids(&pool_id)
+        .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for koi_id in ids {
         if let Ok(Some(k)) = db.get_koi(&koi_id) {

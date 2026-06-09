@@ -86,14 +86,18 @@ pub async fn marketplace_install(
     version: Option<String>,
 ) -> Result<(), String> {
     match (category.as_str(), source.as_str()) {
-        ("skill", "clawhub") => {
-            clawhub::clawhub_install(app, identifier, version).await.map(|_| ())
-        }
-        ("tool", _) => user_tools::user_tools_install(app, identifier).await.map(|_| ()),
+        ("skill", "clawhub") => clawhub::clawhub_install(app, identifier, version)
+            .await
+            .map(|_| ()),
+        ("tool", _) => user_tools::user_tools_install(app, identifier)
+            .await
+            .map(|_| ()),
         ("agent", _) => agents::agents_install(app, identifier).await.map(|_| ()),
         ("team", _) => teams::teams_install(app, identifier).await.map(|_| ()),
         ("connector", "local") | ("connector", "remote") => {
-            connectors::connectors_install(app, identifier).await.map(|_| ())
+            connectors::connectors_install(app, identifier)
+                .await
+                .map(|_| ())
         }
         ("connector", _) => {
             // Built-in (already-installed) connectors: "install" = enable.
@@ -111,7 +115,7 @@ pub async fn marketplace_uninstall(
     id: String,
 ) -> Result<(), String> {
     match category.as_str() {
-        "skill" => workbench::skills_uninstall(app, id),
+        "skill" => workbench::skills_uninstall(app, id).await,
         "tool" => user_tools::user_tools_uninstall(app, id).await,
         "agent" => agents::agents_uninstall(app, id).await,
         "team" => teams::teams_uninstall(app, id).await,
@@ -123,7 +127,9 @@ pub async fn marketplace_uninstall(
 // ─── Per-category aggregation ───────────────────────────────────────────────
 
 async fn search_skills(app: AppHandle, query: String) -> Result<Vec<MarketItem>, String> {
-    let installed = workbench::skills_list_installed(app.clone()).unwrap_or_default();
+    let installed = workbench::skills_list_installed(app.clone())
+        .await
+        .unwrap_or_default();
     let installed_slugs: std::collections::HashSet<String> =
         installed.iter().map(|s| s.slug.clone()).collect();
 
@@ -173,7 +179,11 @@ async fn list_connectors(app: AppHandle) -> Result<Vec<MarketItem>, String> {
             it.id = c.id;
             it.name = c.name;
             it.description = c.description;
-            it.icon = if c.icon.is_empty() { "🔌".into() } else { c.icon };
+            it.icon = if c.icon.is_empty() {
+                "🔌".into()
+            } else {
+                c.icon
+            };
             it.tag = c.category;
             it
         })
@@ -208,7 +218,11 @@ async fn list_agents(app: AppHandle) -> Result<Vec<MarketItem>, String> {
             it.id = a.id;
             it.name = a.name;
             it.description = a.description;
-            it.icon = if a.icon.is_empty() { "🤖".into() } else { a.icon };
+            it.icon = if a.icon.is_empty() {
+                "🤖".into()
+            } else {
+                a.icon
+            };
             it.tag = a.role;
             it
         })

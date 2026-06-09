@@ -68,6 +68,13 @@ fn open_kernel_state_split(config_dir: &Path, db_dir: &Path) -> anyhow::Result<K
     Ok((Arc::new(Mutex::new(db)), Arc::new(Mutex::new(settings))))
 }
 
+/// Global LLM settings + global skill-evolution database (`{config_dir}/piscis.db`).
+pub fn open_global_kernel_state(app: &AppHandle) -> Result<KernelState, String> {
+    let config_dir = resolve_global_config_dir(app)?;
+    open_kernel_state_split(&config_dir, &config_dir)
+        .map_err(|e| format!("failed to initialise global kernel state: {e}"))
+}
+
 /// Global LLM settings + project-local session database.
 pub fn open_project_kernel_state(
     app: &AppHandle,

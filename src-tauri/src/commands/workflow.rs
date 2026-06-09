@@ -233,8 +233,11 @@ fn runs_dir(app: &AppHandle) -> Result<PathBuf, String> {
 fn save_run_to(dir: &Path, run: &WorkflowRun) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let pretty = serde_json::to_string_pretty(run).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{}.json", safe_run_id(&run.run_id))), pretty)
-        .map_err(|e| e.to_string())
+    std::fs::write(
+        dir.join(format!("{}.json", safe_run_id(&run.run_id))),
+        pretty,
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn load_run_from(dir: &Path, run_id: &str) -> Result<WorkflowRun, String> {

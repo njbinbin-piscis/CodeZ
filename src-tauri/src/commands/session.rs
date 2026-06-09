@@ -11,7 +11,7 @@ use crate::commands::session_sources::{
     excluded_from_workz_task_list, is_codez_source, is_coordinator_boilerplate_title,
     is_generic_codez_title, is_generic_workz_title, is_workz_task_source, normalize_source,
     prompt_text_for_title, source_matches_filter, sources_compatible, workz_goal_text_for_title,
-    SOURCE_WORKZ_TEAM, SOURCE_LEGACY,
+    SOURCE_LEGACY, SOURCE_WORKZ_TEAM,
 };
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -35,8 +35,8 @@ pub fn load_workz_meta(db: &Database, session_id: &str) -> Result<WorkzSessionMe
     let Some(text) = raw.filter(|s| !s.trim().is_empty()) else {
         return Ok(WorkzSessionMeta::default());
     };
-    let frame: StateFrameEnvelope = serde_json::from_str(&text)
-        .map_err(|e| format!("parse state_frame failed: {e}"))?;
+    let frame: StateFrameEnvelope =
+        serde_json::from_str(&text).map_err(|e| format!("parse state_frame failed: {e}"))?;
     Ok(frame.agentz_workz.unwrap_or_default())
 }
 
@@ -216,10 +216,7 @@ fn resolve_codez_list_title(db: &Database, session: &Session) -> Option<String> 
     if !is_generic_codez_title(session.title.as_deref()) {
         return session.title.clone();
     }
-    let msgs = db
-        .get_messages(&session.id, 8, 0)
-        .ok()
-        .unwrap_or_default();
+    let msgs = db.get_messages(&session.id, 8, 0).ok().unwrap_or_default();
     let first_user = msgs.into_iter().find(|m| m.role == "user")?;
     let title = truncate_title_line(&prompt_text_for_title(&first_user.content), 80);
     if title.is_empty() {
@@ -235,10 +232,7 @@ fn resolve_workz_task_list_title(db: &Database, session: &Session) -> Option<Str
     {
         return session.title.clone();
     }
-    let msgs = db
-        .get_messages(&session.id, 8, 0)
-        .ok()
-        .unwrap_or_default();
+    let msgs = db.get_messages(&session.id, 8, 0).ok().unwrap_or_default();
     let first_user = msgs.into_iter().find(|m| m.role == "user")?;
     let goal = workz_goal_text_for_title(&first_user.content);
     let title = truncate_title_line(&goal, 80);
@@ -356,10 +350,7 @@ pub async fn chat_list_sessions(
     let team_filter = team_id
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let workz_listing = !filter.is_empty()
-        && filter
-            .iter()
-            .any(|s| is_workz_task_source(s));
+    let workz_listing = !filter.is_empty() && filter.iter().any(|s| is_workz_task_source(s));
     with_db(&app, ProjectDirParam { project_dir }, move |db| {
         let sessions = db
             .list_sessions(200, 0)

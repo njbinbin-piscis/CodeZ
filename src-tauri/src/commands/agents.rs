@@ -154,7 +154,10 @@ fn load_all_manifests(dir: &Path) -> Vec<AgentManifest> {
 /// Resolve a single agent manifest by id from the global config dir. Used by
 /// the chat turn to fold the agent's persona / skills / tools into the run.
 pub fn resolve_agent(config_dir: &Path, id: &str) -> Option<AgentManifest> {
-    let path = config_dir.join("agents").join(safe_id(id)).join("agent.json");
+    let path = config_dir
+        .join("agents")
+        .join(safe_id(id))
+        .join("agent.json");
     AgentManifest::load(&path).ok()
 }
 
@@ -242,7 +245,10 @@ fn persist_synced_koi_ids(config_dir: &Path, manifests: &[AgentManifest]) {
 #[tauri::command]
 pub async fn agents_list(app: AppHandle) -> Result<Vec<AgentInfo>, String> {
     let dir = agents_dir(&app)?;
-    Ok(load_all_manifests(&dir).into_iter().map(Into::into).collect())
+    Ok(load_all_manifests(&dir)
+        .into_iter()
+        .map(Into::into)
+        .collect())
 }
 
 #[tauri::command]
@@ -367,12 +373,33 @@ fn builtin_tool_catalog() -> Vec<BuiltinToolInfo> {
         ("email", "Send email", "network"),
         ("ssh", "Run commands over SSH", "network"),
         ("memory_store", "Persist notes to agent memory", "memory"),
+        (
+            "skill_manage",
+            "Create or edit agent-learned draft skills",
+            "skills",
+        ),
         ("recall_tool_result", "Recall a prior tool output", "memory"),
-        ("vision_context", "Attach image context for vision models", "media"),
+        (
+            "vision_context",
+            "Attach image context for vision models",
+            "media",
+        ),
         ("pdf", "Extract text from PDF files", "media"),
-        ("plan_todo", "Manage agent-mode todo list from plan steps", "plan"),
-        ("plan_write", "Write structured plan markdown to .agentz/plans", "plan"),
-        ("plan_mode_ui", "Plan mode entry/exit and brainstorm survey UI", "plan"),
+        (
+            "plan_todo",
+            "Manage agent-mode todo list from plan steps",
+            "plan",
+        ),
+        (
+            "plan_write",
+            "Write structured plan markdown to .agentz/plans",
+            "plan",
+        ),
+        (
+            "plan_mode_ui",
+            "Plan mode entry/exit and brainstorm survey UI",
+            "plan",
+        ),
         ("pool_org", "Organize swarm pool todos and members", "pool"),
         ("pool_chat", "Post messages to swarm pool board", "pool"),
         ("lsp", "LSP diagnostics, hover, definitions", "ide"),
@@ -384,7 +411,11 @@ fn builtin_tool_catalog() -> Vec<BuiltinToolInfo> {
         ("chat_ui", "Render interactive UI cards in chat", "ui"),
         ("chat_ui_patch", "Patch interactive UI card state", "ui"),
         ("chat_ui_listen", "Listen for UI card user actions", "ui"),
-        ("api_connector", "Call configured HTTP API connectors", "connectors"),
+        (
+            "api_connector",
+            "Call configured HTTP API connectors",
+            "connectors",
+        ),
     ];
     ROWS.iter()
         .map(|(id, hint, group)| BuiltinToolInfo {
@@ -449,9 +480,6 @@ mod smoke_tests {
         for koi_id in &pool_members {
             db.add_pool_member(&pool.id, koi_id).expect("add member");
         }
-        assert_eq!(
-            db.list_pool_members(&pool.id).expect("members").len(),
-            3
-        );
+        assert_eq!(db.list_pool_members(&pool.id).expect("members").len(), 3);
     }
 }

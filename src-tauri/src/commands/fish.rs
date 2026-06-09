@@ -165,7 +165,9 @@ pub fn load_fish_library(config_dir: &Path) -> Vec<FishDef> {
 /// Look up a single Fish by id from the full library.
 pub fn find_fish(config_dir: &Path, id: &str) -> Option<FishDef> {
     let id = id.trim();
-    load_fish_library(config_dir).into_iter().find(|f| f.id == id)
+    load_fish_library(config_dir)
+        .into_iter()
+        .find(|f| f.id == id)
 }
 
 /// List all available Fish (for the settings/management UI).

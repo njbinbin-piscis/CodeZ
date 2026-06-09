@@ -23,6 +23,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { agentTaskApi, type AgentTaskInfo } from "../../services/tauri/agentTask";
 import { generateRepoWiki } from "../../services/tauri/repoWiki";
 import AgentTaskReview from "./AgentTaskReview";
+import SessionSkillRevisions from "./SessionSkillRevisions";
 import ChatComposer, { type ComposerMenuOption } from "../../components/ChatComposer";
 import DropdownSelect, { type DropdownOption } from "../../components/DropdownSelect";
 import {
@@ -1034,6 +1035,7 @@ export default function WorkZWorkspace({
             </div>
           ))}
         </div>
+        <SessionSkillRevisions sessionId={selectedId} />
       </aside>
 
       <section className="agentz-workz-main">

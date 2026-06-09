@@ -19,7 +19,6 @@ use piscis_kernel::agent::tool::{
     new_tool_registry_handle, ToolContext, ToolRegistry, ToolRegistryHandleExt,
 };
 
-use tauri::Emitter;
 use crate::browser::BrowserManager;
 use crate::lsp::manager::LspManager;
 use piscis_kernel::headless::KernelState;
@@ -27,8 +26,9 @@ use piscis_kernel::llm::{self, ContentBlock, LlmMessage, LlmRequest, MessageCont
 use piscis_kernel::policy::gate::PolicyGate;
 use piscis_kernel::store::settings::{LlmProviderConfig, Settings};
 use piscis_kernel::tools::NeutralToolsConfig;
+use tauri::Emitter;
 
-use super::agents::{sync_agents_to_kois, AgentManifest, safe_id};
+use super::agents::{safe_id, sync_agents_to_kois, AgentManifest};
 use super::chat::FrontendAttachment;
 use super::data_scope::resolve_global_config_dir;
 use super::session::{
@@ -165,7 +165,8 @@ fn auto_route_model(settings: &Settings, chat_mode: &str) -> Option<String> {
         .map(|p| p.id.clone())
 }
 
-const SESSION_TITLE_SUMMARY_SYSTEM: &str = "You write very short chat session titles for a sidebar. \
+const SESSION_TITLE_SUMMARY_SYSTEM: &str =
+    "You write very short chat session titles for a sidebar. \
 Rules: 4–12 words; same language as the user message; describe the topic; \
 no quotes; no trailing period; output ONLY the title on one line.";
 
@@ -197,8 +198,8 @@ async fn maybe_llm_rename_session_title(
             .ok()
             .and_then(|dir| crate::commands::flash::load_flash_provider_id(&dir));
         let flash = flash_id.filter(|id| s.find_llm_provider(id).is_some());
-        let runtime = resolve_llm_runtime(&s, flash.as_deref())
-            .or_else(|_| resolve_llm_runtime(&s, None))?;
+        let runtime =
+            resolve_llm_runtime(&s, flash.as_deref()).or_else(|_| resolve_llm_runtime(&s, None))?;
         (runtime, s.llm_read_timeout_secs.max(30))
     };
 
@@ -361,7 +362,11 @@ pub(crate) fn resolve_koi_model_id(
 }
 
 /// Ensure headless consumers see a concrete provider/model on the settings mutex.
-pub(crate) fn materialize_headless_llm_settings(settings: &mut Settings, app: &tauri::AppHandle, koi_llm_provider_id: Option<&str>) {
+pub(crate) fn materialize_headless_llm_settings(
+    settings: &mut Settings,
+    app: &tauri::AppHandle,
+    koi_llm_provider_id: Option<&str>,
+) {
     let model_id = resolve_koi_model_id(settings, app, koi_llm_provider_id);
     apply_model_id_to_settings(settings, model_id.as_deref());
     if settings.model.trim().is_empty() {
@@ -760,7 +765,10 @@ fn collect_terminal_snippet_refs(raw: &str) -> Vec<String> {
     refs
 }
 
-fn expand_terminal_snippets(raw: &str, snippets: &std::collections::HashMap<String, String>) -> String {
+fn expand_terminal_snippets(
+    raw: &str,
+    snippets: &std::collections::HashMap<String, String>,
+) -> String {
     let refs = collect_terminal_snippet_refs(raw);
     if refs.is_empty() {
         return raw.to_string();
@@ -818,7 +826,10 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
             total += block.len();
             blocks.push(block);
         } else {
-            tracing::info!("expand_file_refs: @{} → skipped (not found or unreadable)", ref_path);
+            tracing::info!(
+                "expand_file_refs: @{} → skipped (not found or unreadable)",
+                ref_path
+            );
         }
     }
     if wants_codebase {
@@ -847,6 +858,9 @@ fn expand_file_refs(raw: &str, workspace_root: &str) -> String {
 fn build_tool_registry(
     app: tauri::AppHandle,
     db: Arc<Mutex<piscis_kernel::store::db::Database>>,
+    global_db: Arc<Mutex<piscis_kernel::store::db::Database>>,
+    config_dir: PathBuf,
+    skill_loader: Arc<Mutex<crate::skills::loader::SkillLoader>>,
     settings: Arc<Mutex<Settings>>,
     event_sink: Arc<dyn EventSink>,
     plan_store: PlanStore,
@@ -855,6 +869,7 @@ fn build_tool_registry(
     user_tools_dir: Option<PathBuf>,
     extra_enabled_tools: &[String],
     enable_pool: bool,
+    enable_skill_manage: bool,
     loop_halt: Arc<std::sync::atomic::AtomicBool>,
 ) -> ToolRegistry {
     let mut builtin_tool_enabled = None;
@@ -951,9 +966,11 @@ fn build_tool_registry(
             loop_halt,
         }));
         if chat_mode == "plan" {
-            if let (Some(db), Some(settings), Some(plan)) =
-                (db_for_delegate.clone(), settings_for_delegate.clone(), plan_for_delegate.clone())
-            {
+            if let (Some(db), Some(settings), Some(plan)) = (
+                db_for_delegate.clone(),
+                settings_for_delegate.clone(),
+                plan_for_delegate.clone(),
+            ) {
                 registry.register(Box::new(crate::tools::delegate::DelegateTool {
                     db,
                     settings,
@@ -1003,9 +1020,14 @@ fn build_tool_registry(
                 }));
             }
             // App self-management: update settings, create assistants & teams.
-            registry.register(Box::new(crate::tools::app_control::AppControlTool {
-                app,
-            }));
+            registry.register(Box::new(crate::tools::app_control::AppControlTool { app }));
+            if enable_skill_manage {
+                registry.register(Box::new(crate::tools::skill_manage::SkillManageTool {
+                    db: global_db,
+                    config_dir: config_dir.clone(),
+                    loader: skill_loader,
+                }));
+            }
         }
     }
 
@@ -1027,9 +1049,17 @@ fn build_subagent_registry(
     plan_store: PlanStore,
     lsp_manager: Arc<LspManager>,
 ) -> ToolRegistry {
+    let config_dir = resolve_global_config_dir(&app).unwrap_or_else(|_| PathBuf::from("."));
+    let skills_root = crate::skills::service::skills_root_from_config_dir(&config_dir);
+    let skill_loader = Arc::new(Mutex::new(crate::skills::loader::SkillLoader::new(
+        skills_root,
+    )));
     build_tool_registry(
         app,
+        db.clone(),
         db,
+        config_dir,
+        skill_loader,
         settings,
         event_sink,
         plan_store,
@@ -1039,6 +1069,7 @@ fn build_subagent_registry(
         lsp_manager,
         None,
         &[],
+        false,
         false,
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
     )
@@ -1257,32 +1288,28 @@ pub(crate) struct SkillManifest {
     pub body: String,
 }
 
-/// Load all installed skills under `{config}/skills/*/SKILL.md`.
+/// Load installed + learned skills from quadrant storage.
 pub(crate) fn load_installed_skills(config_dir: &std::path::Path) -> Vec<SkillManifest> {
-    let skills_root = config_dir.join("skills");
+    let root = crate::skills::service::skills_root_from_config_dir(config_dir);
+    let mut loader = crate::skills::loader::SkillLoader::new(&root);
+    let _ = loader.load_all();
     let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(&skills_root) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        let dir = entry.path();
-        if !dir.is_dir() {
+    for skill in loader.list_skills() {
+        if skill.lifecycle != crate::skills::provenance::LIFECYCLE_INSTALLED
+            && skill.lifecycle != crate::skills::provenance::LIFECYCLE_LEARNED
+        {
             continue;
         }
-        let skill_md = dir.join("SKILL.md");
-        let Ok(content) = std::fs::read_to_string(&skill_md) else {
-            continue;
-        };
-        let slug = entry.file_name().to_string_lossy().to_string();
-        let meta = parse_skill_frontmatter(&content, &slug);
+        let skill_md = skill.source_path.join("SKILL.md");
+        let slug = skill.skill_id.clone();
         out.push(SkillManifest {
             slug,
-            name: meta.name,
-            description: meta.description,
+            name: skill.name.clone(),
+            description: skill.description.clone(),
             path: skill_md,
-            tools: meta.tools,
-            mcp_servers: meta.mcp_servers,
-            body: strip_frontmatter(&content).trim().to_string(),
+            tools: skill.tools.clone(),
+            mcp_servers: Vec::new(),
+            body: skill.instructions.clone(),
         });
     }
     out.sort_by_key(|m| m.name.to_lowercase());
@@ -1340,125 +1367,6 @@ fn skills_context(config_dir: &std::path::Path, enabled: &[String]) -> Option<St
          carefully and use the tools they prescribe:\n\n{}",
         blocks.join("\n\n---\n\n")
     ))
-}
-
-struct SkillMeta {
-    name: String,
-    description: String,
-    tools: Vec<String>,
-    mcp_servers: Vec<String>,
-}
-
-/// Remove a leading YAML frontmatter block (`---\n...\n---`) from a document.
-fn strip_frontmatter(content: &str) -> &str {
-    if let Some(rest) = content.strip_prefix("---") {
-        if let Some(end) = rest.find("\n---") {
-            // Skip past the closing `---` line.
-            let after = &rest[end + 4..];
-            return after.trim_start_matches(['\r', '\n']);
-        }
-    }
-    content
-}
-
-/// Parse a YAML list value that may be inline (`[a, b]` / `a, b`) or a block
-/// list on following lines (`- a`). Returns the items and how many *following*
-/// lines were consumed.
-fn parse_yaml_list(inline: &str, following: &[&str]) -> (Vec<String>, usize) {
-    let clean = |s: &str| {
-        s.trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .trim()
-            .to_string()
-    };
-    let inline = inline.trim();
-    if inline.starts_with('[') {
-        let inner = inline.trim_start_matches('[').trim_end_matches(']');
-        let items = inner
-            .split(',')
-            .map(clean)
-            .filter(|s| !s.is_empty())
-            .collect();
-        return (items, 0);
-    }
-    if !inline.is_empty() {
-        let items = inline
-            .split(',')
-            .map(clean)
-            .filter(|s| !s.is_empty())
-            .collect();
-        return (items, 0);
-    }
-    let mut items = Vec::new();
-    let mut consumed = 0;
-    for line in following {
-        let trimmed = line.trim();
-        if let Some(item) = trimmed.strip_prefix("- ") {
-            let v = clean(item);
-            if !v.is_empty() {
-                items.push(v);
-            }
-            consumed += 1;
-        } else {
-            break;
-        }
-    }
-    (items, consumed)
-}
-
-/// Extract `name`/`description`/`tools`/`mcp_servers` from a SKILL.md YAML
-/// frontmatter (falls back to the first non-heading line for description).
-fn parse_skill_frontmatter(content: &str, fallback: &str) -> SkillMeta {
-    let mut name = fallback.to_string();
-    let mut description = String::new();
-    let mut tools = Vec::new();
-    let mut mcp_servers = Vec::new();
-    if let Some(rest) = content.strip_prefix("---") {
-        if let Some(end) = rest.find("\n---") {
-            let lines: Vec<&str> = rest[..end].lines().collect();
-            let mut i = 0;
-            while i < lines.len() {
-                let line = lines[i];
-                if let Some(v) = line.strip_prefix("name:") {
-                    let n = v.trim().trim_matches('"').trim_matches('\'');
-                    if !n.is_empty() {
-                        name = n.to_string();
-                    }
-                } else if let Some(v) = line.strip_prefix("description:") {
-                    let d = v.trim().trim_matches('"').trim_matches('\'');
-                    if !d.is_empty() {
-                        description = d.to_string();
-                    }
-                } else if let Some(v) = line.strip_prefix("tools:") {
-                    let (items, consumed) = parse_yaml_list(v, &lines[i + 1..]);
-                    tools = items;
-                    i += consumed;
-                } else if let Some(v) = line.strip_prefix("mcp_servers:") {
-                    let (items, consumed) = parse_yaml_list(v, &lines[i + 1..]);
-                    mcp_servers = items;
-                    i += consumed;
-                }
-                i += 1;
-            }
-        }
-    }
-    if description.is_empty() {
-        description = content
-            .lines()
-            .find(|l| !l.trim().is_empty() && !l.starts_with("---") && !l.starts_with('#'))
-            .unwrap_or("")
-            .trim()
-            .chars()
-            .take(160)
-            .collect();
-    }
-    SkillMeta {
-        name,
-        description,
-        tools,
-        mcp_servers,
-    }
 }
 
 /// Read project rules from `{workspace}/.agentz/rules/` (preferred) or
@@ -1570,6 +1478,17 @@ pub async fn run_agentz_turn(
     let (db, settings) = kernel;
     let chat_mode = if chat_mode == "plan" { "plan" } else { "agent" };
 
+    let (global_db, _global_settings) =
+        super::data_scope::open_global_kernel_state(&app).map_err(|e| anyhow!(e))?;
+    let skills_root = crate::skills::service::skills_root_from_config_dir(&config_dir);
+    let skill_loader = Arc::new(Mutex::new(crate::skills::loader::SkillLoader::new(
+        skills_root.clone(),
+    )));
+    {
+        let mut loader = skill_loader.lock().await;
+        let _ = loader.load_all();
+    }
+
     // Phase 2: a selected agent contributes its persona (system prompt), skills,
     // tools, MCP bindings, and optional model. Skills/tools/MCP fold into the
     // same wiring the composer skill selector uses.
@@ -1663,6 +1582,9 @@ pub async fn run_agentz_turn(
     let mut registry = build_tool_registry(
         app.clone(),
         db.clone(),
+        global_db.clone(),
+        config_dir.clone(),
+        skill_loader.clone(),
         settings.clone(),
         event_sink.clone(),
         plan_store.clone(),
@@ -1671,6 +1593,7 @@ pub async fn run_agentz_turn(
         Some(config_dir.join("user-tools")),
         &skill_enabled_tools,
         chat_mode != "plan",
+        chat_mode == "agent",
         loop_halt.clone(),
     );
     // Register MCP server tools (M6) from settings.mcp_servers — async because
@@ -1697,8 +1620,7 @@ pub async fn run_agentz_turn(
     }
     // Connectors (Phase 0B): enabled + authorized external services resolve to
     // MCP configs and register their tools alongside the regular MCP servers.
-    let connector_configs =
-        crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
+    let connector_configs = crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
     if !connector_configs.is_empty() {
         piscis_kernel::tools::register_mcp_tools(&mut registry, &connector_configs).await;
     }
@@ -1744,7 +1666,10 @@ pub async fn run_agentz_turn(
     let with_browser = expand_browser_element_refs(&effective_prompt, &browser).await;
     let snippets = {
         use tauri::Manager as _;
-        let snippets_map = app.state::<crate::state::AppState>().terminal_snippets.clone();
+        let snippets_map = app
+            .state::<crate::state::AppState>()
+            .terminal_snippets
+            .clone();
         let guard = snippets_map.lock().await;
         guard.clone()
     };
@@ -1942,9 +1867,7 @@ pub async fn run_agentz_turn(
     if chat_mode == "plan" {
         let plan_path = session_plan_rel_path(&session_id);
         extra_sections.push(plan_mode_context(&plan_path));
-    } else if let Some((plan_path, excerpt)) =
-        active_plan_excerpt(&workspace_root, &session_id)
-    {
+    } else if let Some((plan_path, excerpt)) = active_plan_excerpt(&workspace_root, &session_id) {
         extra_sections.push(agent_active_plan_context(&plan_path, Some(&excerpt)));
     }
     // Run user-defined `beforeAgentTurn` hooks and inject their output as
@@ -1973,6 +1896,12 @@ pub async fn run_agentz_turn(
     ));
 
     let vision_override = vision_capable || vision_enabled_setting;
+    let hooks: Arc<dyn piscis_kernel::agent::hooks::AgentHooks> =
+        Arc::new(crate::runtime::journal_hooks::JournalWithIdeNotify::new(
+            journal.clone(),
+            app.clone(),
+            Some(db.clone()),
+        ));
     let harness = HarnessConfig::for_scheduler(
         runtime.model.clone(),
         fallback_models,
@@ -1986,7 +1915,7 @@ pub async fn run_agentz_turn(
         compaction,
         db.clone(),
     )
-    .with_hooks(journal.clone());
+    .with_hooks(hooks);
     let agent = harness.into_agent_loop(client, None, None);
 
     // Open a journal turn so before/after-tool hooks group this turn's file
@@ -2019,16 +1948,17 @@ pub async fn run_agentz_turn(
             std::collections::HashMap::new();
         while let Some(event) = rx.recv().await {
             if let AgentEvent::ToolStart {
-                ref id,
-                ref input,
-                ..
+                ref id, ref input, ..
             } = event
             {
                 tool_inputs.insert(id.clone(), input.clone());
             }
             // Bridge file-modifying tools → ide-file-changed with the real path
             // so the frontend reloads only affected tabs (watcher may lag).
-            if let AgentEvent::ToolEnd { ref id, ref name, .. } = event {
+            if let AgentEvent::ToolEnd {
+                ref id, ref name, ..
+            } = event
+            {
                 if matches!(name.as_str(), "file_write" | "file_edit") {
                     if let Some(input) = tool_inputs.remove(id) {
                         if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
@@ -2119,17 +2049,40 @@ pub async fn run_agentz_turn(
         let session_bg = session_id.clone();
         let sink_bg = event_sink.clone();
         tokio::spawn(async move {
-            if let Err(e) = maybe_llm_rename_session_title(
-                &app_bg,
-                &db_bg,
-                &settings_bg,
-                &session_bg,
-                &sink_bg,
-            )
-            .await
+            if let Err(e) =
+                maybe_llm_rename_session_title(&app_bg, &db_bg, &settings_bg, &session_bg, &sink_bg)
+                    .await
             {
                 tracing::debug!("session title summarize skipped: {e}");
             }
+        });
+
+        let project_db_ev = db.clone();
+        let app_ev = app.clone();
+        let session_ev = session_id.clone();
+        let msgs_ev = new_messages.clone();
+        let provider_ev = runtime.provider.clone();
+        let api_key_ev = runtime.api_key.clone();
+        let base_url_ev = if runtime.base_url.is_empty() {
+            None
+        } else {
+            Some(runtime.base_url.clone())
+        };
+        let model_ev = runtime.model.clone();
+        let max_tokens_ev = runtime.max_tokens;
+        tokio::spawn(async move {
+            crate::commands::post_turn::run_post_turn_hooks(
+                &app_ev,
+                project_db_ev,
+                session_ev,
+                msgs_ev,
+                provider_ev,
+                api_key_ev,
+                base_url_ev,
+                model_ev,
+                max_tokens_ev,
+            )
+            .await;
         });
     }
 

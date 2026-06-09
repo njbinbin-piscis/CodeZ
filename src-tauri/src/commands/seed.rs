@@ -292,10 +292,10 @@ mod tests {
         // Loop body + exit edges and agent ids are present.
         assert_eq!(graph.entry, "start");
         assert!(graph.nodes.iter().any(|n| n.kind == "loop"));
-        assert!(graph
-            .nodes
-            .iter()
-            .filter(|n| n.kind == "agent")
-            .all(|n| n.agent_id.as_deref().map(|s| !s.is_empty()).unwrap_or(false)));
+        assert!(graph.nodes.iter().filter(|n| n.kind == "agent").all(|n| n
+            .agent_id
+            .as_deref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)));
     }
 }

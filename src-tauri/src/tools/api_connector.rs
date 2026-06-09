@@ -88,7 +88,9 @@ impl Tool for ApiConnectorTool {
                 .unwrap_or("")
                 .trim();
             if id.is_empty() {
-                return Ok(ToolResult::err("'connector_id' is required for action=call"));
+                return Ok(ToolResult::err(
+                    "'connector_id' is required for action=call",
+                ));
             }
             let body = input.get("body").cloned();
             match call_api_connector(&self.config_dir, id, body).await {

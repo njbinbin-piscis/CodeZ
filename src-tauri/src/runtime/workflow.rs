@@ -62,8 +62,13 @@ fn branch_target(node: &WorkflowNode, label: &str) -> Option<String> {
 /// the exit edge (the single outgoing edge that is not the loop body).
 #[derive(Debug, PartialEq, Eq)]
 enum LoopDecision {
-    Enter { next_count: u32, body: Option<String> },
-    Exit { next: Option<String> },
+    Enter {
+        next_count: u32,
+        body: Option<String>,
+    },
+    Exit {
+        next: Option<String>,
+    },
 }
 
 fn loop_step(
@@ -129,7 +134,10 @@ pub fn request_cancel(run_id: &str) {
 /// Cancel the in-flight Koi turn for a run (if any). Pairs with
 /// [`request_cancel`] so a cancel aborts both the current step and the loop.
 pub async fn cancel_active_turn(run_id: &str) {
-    let active = active_turns().lock().ok().and_then(|m| m.get(run_id).cloned());
+    let active = active_turns()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(run_id).cloned());
     if let Some((runtime, handle)) = active {
         let _ = runtime.cancel_koi_turn(&handle).await;
     }
@@ -240,8 +248,11 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                                 finish(&app, &mut run, "cancelled", Some(&cursor))?;
                                 return Ok(());
                             }
-                            match fault_decision(attempt, node.max_retries, node.on_error.as_deref())
-                            {
+                            match fault_decision(
+                                attempt,
+                                node.max_retries,
+                                node.on_error.as_deref(),
+                            ) {
                                 FaultDecision::Retry => {
                                     attempt += 1;
                                     emit(
@@ -316,10 +327,13 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                     .get(&node.id)
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32;
-                let guard = node.guard.clone().unwrap_or(crate::commands::workflow::LoopGuard {
-                    max_iterations: 5,
-                    exit_when: None,
-                });
+                let guard = node
+                    .guard
+                    .clone()
+                    .unwrap_or(crate::commands::workflow::LoopGuard {
+                        max_iterations: 5,
+                        exit_when: None,
+                    });
                 let exit_early = guard
                     .exit_when
                     .as_deref()
@@ -336,7 +350,12 @@ async fn drive(app: AppHandle, run_id: &str) -> Result<(), String> {
                     LoopDecision::Enter { next_count, body } => {
                         run.iter_counts.insert(node.id.clone(), json!(next_count));
                         run.cursor = body;
-                        record(&mut run, &node, None, Some(format!("iteration {}", next_count)));
+                        record(
+                            &mut run,
+                            &node,
+                            None,
+                            Some(format!("iteration {}", next_count)),
+                        );
                         save_run(&app, &run)?;
                         emit(
                             &app,
@@ -381,7 +400,12 @@ fn finish(
     Ok(())
 }
 
-fn record(run: &mut WorkflowRun, node: &crate::commands::workflow::WorkflowNode, summary: Option<String>, label: Option<String>) {
+fn record(
+    run: &mut WorkflowRun,
+    node: &crate::commands::workflow::WorkflowNode,
+    summary: Option<String>,
+    label: Option<String>,
+) {
     run.history.push(StepRecord {
         node_id: node.id.clone(),
         kind: node.kind.clone(),
@@ -393,7 +417,13 @@ fn record(run: &mut WorkflowRun, node: &crate::commands::workflow::WorkflowNode,
     });
 }
 
-fn emit(app: &AppHandle, run: &WorkflowRun, kind: &str, node_id: Option<&str>, summary: Option<&str>) {
+fn emit(
+    app: &AppHandle,
+    run: &WorkflowRun,
+    kind: &str,
+    node_id: Option<&str>,
+    summary: Option<&str>,
+) {
     let _ = app.emit(
         WORKFLOW_EVENT_CHANNEL,
         json!({
@@ -432,10 +462,7 @@ async fn run_agent_node(
         (koi.id, koi.system_prompt)
     };
 
-    let user_prompt = render_template(
-        node.prompt_template.as_deref().unwrap_or("{{goal}}"),
-        run,
-    );
+    let user_prompt = render_template(node.prompt_template.as_deref().unwrap_or("{{goal}}"), run);
     let extra_context = assemble_step_context(run, node);
 
     let request = KoiTurnRequest {
@@ -518,7 +545,13 @@ async fn evaluate_branch(
             let judge_slug = agent_id
                 .map(|a| safe_id(&a))
                 .filter(|s| !s.is_empty())
-                .or_else(|| run.history.iter().rev().find_map(|h| h.agent_id.clone()).map(|a| safe_id(&a)));
+                .or_else(|| {
+                    run.history
+                        .iter()
+                        .rev()
+                        .find_map(|h| h.agent_id.clone())
+                        .map(|a| safe_id(&a))
+                });
 
             let (db, _settings) = open_project_kernel_state(app, &run.project_dir)?;
             let (koi_id, koi_system_prompt) = {
@@ -581,10 +614,16 @@ async fn evaluate_branch(
 /// Assemble the per-step extra system context: the run goal + the latest
 /// upstream outputs the step is likely to need. This is the workflow analogue
 /// of swarm's org_spec injection.
-fn assemble_step_context(run: &WorkflowRun, node: &crate::commands::workflow::WorkflowNode) -> String {
+fn assemble_step_context(
+    run: &WorkflowRun,
+    node: &crate::commands::workflow::WorkflowNode,
+) -> String {
     let mut out = String::new();
     out.push_str("## Workflow Context\n\n");
-    out.push_str(&format!("You are executing step `{}` of team `{}`.\n", node.id, run.team_name));
+    out.push_str(&format!(
+        "You are executing step `{}` of team `{}`.\n",
+        node.id, run.team_name
+    ));
     if let Some(goal) = run.blackboard.get("goal").and_then(|v| v.as_str()) {
         out.push_str(&format!("\n### Overall Goal\n{}\n", goal));
     }
@@ -631,7 +670,11 @@ fn eval_expr(expr: &str, run: &WorkflowRun) -> bool {
     let get = |key: &str| -> String {
         run.blackboard
             .get(key.trim())
-            .and_then(|v| v.as_str().map(|s| s.to_string()).or_else(|| Some(v.to_string())))
+            .and_then(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| Some(v.to_string()))
+            })
             .unwrap_or_default()
     };
     let strip = |s: &str| s.trim().trim_matches('"').trim_matches('\'').to_string();
@@ -647,10 +690,14 @@ fn eval_expr(expr: &str, run: &WorkflowRun) -> bool {
         }
     }
     if let Some(idx) = expr.find("==") {
-        return get(&expr[..idx]).trim().eq_ignore_ascii_case(&strip(&expr[idx + 2..]));
+        return get(&expr[..idx])
+            .trim()
+            .eq_ignore_ascii_case(&strip(&expr[idx + 2..]));
     }
     if let Some(idx) = expr.find("!=") {
-        return !get(&expr[..idx]).trim().eq_ignore_ascii_case(&strip(&expr[idx + 2..]));
+        return !get(&expr[..idx])
+            .trim()
+            .eq_ignore_ascii_case(&strip(&expr[idx + 2..]));
     }
     // Bare key truthiness.
     let v = get(expr).trim().to_lowercase();
@@ -804,7 +851,10 @@ mod tests {
         let d = loop_step(Some("body"), 0, 3, false, &edges, "lp");
         assert_eq!(
             d,
-            LoopDecision::Enter { next_count: 1, body: Some("body".into()) }
+            LoopDecision::Enter {
+                next_count: 1,
+                body: Some("body".into())
+            }
         );
     }
 
@@ -817,12 +867,16 @@ mod tests {
         // Count reached max -> exit, picking the non-body edge.
         assert_eq!(
             loop_step(Some("body"), 3, 3, false, &edges, "lp"),
-            LoopDecision::Exit { next: Some("done".into()) }
+            LoopDecision::Exit {
+                next: Some("done".into())
+            }
         );
         // exit_when true -> exit even with budget left.
         assert_eq!(
             loop_step(Some("body"), 0, 3, true, &edges, "lp"),
-            LoopDecision::Exit { next: Some("done".into()) }
+            LoopDecision::Exit {
+                next: Some("done".into())
+            }
         );
         // No body edge configured -> exit.
         assert!(matches!(

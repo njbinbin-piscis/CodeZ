@@ -10,14 +10,16 @@
 
 .agentz-edge-zone {
   position: absolute;
-  right: 0;
-  width: 280px;
-  height: 0;
+  right: 4px;
+  width: 16px;
+  height: 16px;
   pointer-events: none;
 }
 
-.agentz-edge-zone.open,
-.agentz-edge-zone.pinned {
+.agentz-edge-zone.open {
+  right: 0;
+  width: 276px;
+  min-height: min(420px, 70vh);
   pointer-events: auto;
 }
 
@@ -25,8 +27,9 @@
 .agentz-edge-badge {
   position: absolute;
   right: 0;
-  width: 22px;
-  height: 22px;
+  top: 0;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
@@ -36,6 +39,7 @@
   cursor: default;
   pointer-events: auto;
   transition: border-color 0.15s, background 0.15s;
+  z-index: 2;
 }
 
 .agentz-edge-zone.open .agentz-edge-badge,
@@ -45,7 +49,7 @@
 }
 
 .agentz-edge-badge-count {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
   color: var(--text-dim, #9a9ab0);
@@ -60,14 +64,14 @@
 .agentz-edge-drawer {
   position: absolute;
   top: 0;
-  right: 28px;
-  width: 260px;
+  right: 20px;
+  width: 256px;
   max-height: min(420px, 70vh);
   background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
   border-radius: 8px 0 0 8px;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
-  transform: translateX(calc(100% + 28px));
+  transform: translateX(calc(100% + 20px));
   opacity: 0;
   transition: transform 0.18s ease, opacity 0.18s ease;
   display: flex;
@@ -76,8 +80,7 @@
   pointer-events: auto;
 }
 
-.agentz-edge-zone.open .agentz-edge-drawer,
-.agentz-edge-zone.pinned .agentz-edge-drawer {
+.agentz-edge-zone.open .agentz-edge-drawer {
   transform: translateX(0);
   opacity: 1;
 }

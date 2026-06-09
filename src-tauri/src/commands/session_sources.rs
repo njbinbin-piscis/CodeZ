@@ -54,10 +54,7 @@ pub fn default_channel_for(mode: &str) -> &'static str {
 
 /// True when `source` is a WorkZ user task namespace (not Koi pool turns).
 pub fn is_workz_task_source(source: &str) -> bool {
-    matches!(
-        normalize_source(source),
-        SOURCE_WORKZ | SOURCE_WORKZ_TEAM
-    )
+    matches!(normalize_source(source), SOURCE_WORKZ | SOURCE_WORKZ_TEAM)
 }
 
 /// Pool Koi sessions and IM channels must never appear in the WorkZ task sidebar.
@@ -142,15 +139,14 @@ mod tests {
     #[test]
     fn workz_goal_extracts_after_swarm_task_marker() {
         let raw = "You are the coordinator of team pool \"squad\" (pool_id: abc).\n\nTask:\n写一个猜数字游戏";
-        assert_eq!(
-            workz_goal_text_for_title(raw),
-            "写一个猜数字游戏"
-        );
+        assert_eq!(workz_goal_text_for_title(raw), "写一个猜数字游戏");
     }
 
     #[test]
     fn workz_goal_ignores_bare_coordinator_preamble() {
-        assert!(workz_goal_text_for_title("You are the coordinator of team pool \"x\".").is_empty());
+        assert!(
+            workz_goal_text_for_title("You are the coordinator of team pool \"x\".").is_empty()
+        );
     }
 
     #[test]
