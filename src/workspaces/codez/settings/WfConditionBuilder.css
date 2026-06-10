@@ -1,0 +1,62 @@
+.wf-condition {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wf-condition-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.wf-condition-label {
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+}
+
+.wf-condition-row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wf-condition-preview {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim, #9a9ab0);
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.wf-condition-warn {
+  margin: 0;
+  font-size: 11px;
+  color: #f7b84e;
+}
+
+.wf-condition-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent, #7c6af7);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wf-condition-advanced {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.wf-branch-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #2a2a38);
+}

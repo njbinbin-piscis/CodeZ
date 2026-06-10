@@ -8,6 +8,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { blackboardKeysFromGraph, parseCondition } from "./workflowExpr";
 
 export type WorkflowNodeKind = "start" | "end" | "agent" | "branch" | "loop" | "human";
 
@@ -168,12 +169,38 @@ export function validateGraph(graph: WorkflowGraph): string[] {
     if (n.type === "branch") {
       if (!n.evaluator) issues.push(`分支「${label(n.id)}」未配置判定方式`);
       if (out.length === 0) issues.push(`分支「${label(n.id)}」没有任何分支连线`);
+      if (n.evaluator?.kind === "expr") {
+        if (!n.evaluator.expr.trim()) {
+          issues.push(`分支「${label(n.id)}」未配置条件表达式`);
+        } else {
+          const { key } = parseCondition(n.evaluator.expr);
+          const keys = blackboardKeysFromGraph(graph);
+          if (key && !keys.includes(key)) {
+            issues.push(`分支「${label(n.id)}」条件引用了未知黑板键「${key}」`);
+          }
+        }
+        const hasTrue = out.some((e) => (e.label ?? "").trim().toLowerCase() === "true");
+        const hasFalse = out.some((e) => {
+          const l = (e.label ?? "").trim().toLowerCase();
+          return l === "false" || l === "default" || !l;
+        });
+        if (!hasTrue) issues.push(`分支「${label(n.id)}」缺少标签为 true 的出线（条件成立）`);
+        if (!hasFalse) issues.push(`分支「${label(n.id)}」缺少标签为 false 的出线（条件不成立）`);
+      }
     }
     if (n.type === "loop") {
       const hasBody = out.some((e) => (e.label ?? "").trim().toLowerCase() === "body");
       const hasExit = out.some((e) => (e.label ?? "").trim().toLowerCase() !== "body");
       if (!hasBody) issues.push(`循环「${label(n.id)}」缺少标记为 body 的循环体连线`);
       if (!hasExit) issues.push(`循环「${label(n.id)}」缺少退出连线`);
+      const exitWhen = n.guard?.exit_when?.trim();
+      if (exitWhen) {
+        const { key } = parseCondition(exitWhen);
+        const keys = blackboardKeysFromGraph(graph);
+        if (key && !keys.includes(key)) {
+          issues.push(`循环「${label(n.id)}」退出条件引用了未知黑板键「${key}」`);
+        }
+      }
     }
     if ((n.type === "start" || n.type === "human") && out.length === 0) {
       issues.push(`「${label(n.id)}」没有后继连线`);

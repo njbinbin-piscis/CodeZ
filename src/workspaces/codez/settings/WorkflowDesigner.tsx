@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DropdownSelect from "../../../components/DropdownSelect";
 import ReactFlow, {
   Background,
@@ -28,6 +28,9 @@ import type {
 import WfNode, { type WfNodeData } from "./WfNode";
 import WfControls from "./WfControls";
 import WfConnectionLine from "./WfConnectionLine";
+import WfConditionBuilder from "./WfConditionBuilder";
+import WfBranchExprPaths from "./WfBranchExprPaths";
+import { blackboardKeysFromGraph } from "../../../services/tauri/workflowExpr";
 import "./WorkflowDesigner.css";
 
 const nodeTypes = { wf: WfNode };
@@ -226,6 +229,17 @@ function positionsFromNodes(nodes: Node[]): Map<string, { x: number; y: number }
   return new Map(nodes.map((n) => [n.id, n.position]));
 }
 
+const FIT_VIEW_OPTS = { padding: 0.2, duration: 250 } as const;
+
+/** Wait for React Flow to paint nodes before fitView. */
+function scheduleFitView(fitView: ReturnType<typeof useReactFlow>["fitView"]) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      void fitView(FIT_VIEW_OPTS);
+    });
+  });
+}
+
 function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
   const { t } = useTranslation();
   const { fitView } = useReactFlow();
@@ -233,6 +247,7 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const draggingRef = useRef(false);
   const graphRevRef = useRef(0);
+  const shouldFitViewRef = useRef(true);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node<WfNodeData>[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
@@ -248,6 +263,13 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
     setEdges(graphToRfEdges(graph, selectedEdge, pos));
     graphRevRef.current += 1;
   }, [graph, selectedNode, selectedEdge, setNodes, setEdges]);
+
+  // Enter editor or finish auto-layout: fit once nodes are on canvas.
+  useEffect(() => {
+    if (nodes.length === 0 || !shouldFitViewRef.current) return;
+    shouldFitViewRef.current = false;
+    scheduleFitView(fitView);
+  }, [nodes, fitView]);
 
   const commit = useCallback(
     (nodesIn: WorkflowNode[], edgesIn: WorkflowGraph["edges"]) => {
@@ -428,17 +450,23 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
     const pos = new Map(
       laid.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]),
     );
+    shouldFitViewRef.current = true;
     onChange({
       ...graph,
       nodes: laid,
       edges: withAutoHandles(graph.edges, pos),
     });
-    requestAnimationFrame(() => {
-      void fitView({ padding: 0.2, duration: 250 });
-    });
-  }, [graph, onChange, fitView]);
+  }, [graph, onChange]);
 
   const active = graph.nodes.find((n) => n.id === selectedNode) ?? null;
+  const blackboardKeys = useMemo(() => blackboardKeysFromGraph(graph), [graph]);
+
+  const updateEdges = useCallback(
+    (edges: WorkflowGraph["edges"]) => {
+      commit(graph.nodes, edges);
+    },
+    [graph.nodes, commit],
+  );
 
   return (
     <div className="wf-designer">
@@ -488,8 +516,6 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
               setSelectedNode(null);
               setSelectedEdge(null);
             }}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
             minZoom={0.15}
             maxZoom={2}
             panOnDrag={[1, 2]}
@@ -514,21 +540,36 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
             <p className="agentz-settings-hint">{t("workflow.inspectorHint")}</p>
           )}
 
-          {selectedEdge && (
-            <div className="wf-inspector-body agentz-settings-field">
-              <h4>{t("workflow.edge")}</h4>
-              <p className="agentz-settings-hint">{t("workflow.edgeReconnectHint")}</p>
-              <p className="agentz-settings-hint">{t("workflow.edgeLabelHint")}</p>
-              <input
-                value={graph.edges.find((e) => `${e.from}->${e.to}` === selectedEdge)?.label ?? ""}
-                placeholder={t("workflow.edgeLabelPlaceholder")}
-                onChange={(e) => updateEdgeLabel(selectedEdge, e.target.value)}
-              />
-              <button type="button" className="danger" onClick={() => removeEdge(selectedEdge)}>
-                {t("workflow.removeEdge")}
-              </button>
-            </div>
-          )}
+          {selectedEdge && (() => {
+            const [from, to] = selectedEdge.split("->");
+            const fromNode = graph.nodes.find((n) => n.id === from);
+            const edge = graph.edges.find((e) => e.from === from && e.to === to);
+            const exprBranch = fromNode?.type === "branch" && fromNode.evaluator?.kind === "expr";
+            return (
+              <div className="wf-inspector-body agentz-settings-field">
+                <h4>{t("workflow.edge")}</h4>
+                <p className="agentz-settings-hint">{t("workflow.edgeReconnectHint")}</p>
+                {exprBranch ? (
+                  <>
+                    <p className="agentz-settings-hint">{t("workflow.branchExprEdgeHint")}</p>
+                    <input value={edge?.label ?? ""} readOnly disabled />
+                  </>
+                ) : (
+                  <>
+                    <p className="agentz-settings-hint">{t("workflow.edgeLabelHint")}</p>
+                    <input
+                      value={edge?.label ?? ""}
+                      placeholder={t("workflow.edgeLabelPlaceholder")}
+                      onChange={(e) => updateEdgeLabel(selectedEdge, e.target.value)}
+                    />
+                  </>
+                )}
+                <button type="button" className="danger" onClick={() => removeEdge(selectedEdge)}>
+                  {t("workflow.removeEdge")}
+                </button>
+              </div>
+            );
+          })()}
 
           {active && (
             <div className="wf-inspector-body">
@@ -624,19 +665,25 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                     />
                   </div>
                   {active.evaluator?.kind === "expr" && (
-                    <div className="agentz-settings-field">
-                      <label>{t("workflow.expr")}</label>
-                      <input
-                        value={active.evaluator.expr}
-                        placeholder="review contains approved"
-                        onChange={(e) =>
-                          updateNode(active.id, {
-                            evaluator: { kind: "expr", expr: e.target.value },
-                          })
-                        }
+                    <>
+                      <div className="agentz-settings-field">
+                        <label>{t("workflow.expr")}</label>
+                        <WfConditionBuilder
+                          value={active.evaluator.expr}
+                          blackboardKeys={blackboardKeys}
+                          onChange={(expr) =>
+                            updateNode(active.id, {
+                              evaluator: { kind: "expr", expr },
+                            })
+                          }
+                        />
+                      </div>
+                      <WfBranchExprPaths
+                        graph={graph}
+                        branchId={active.id}
+                        onChangeEdges={updateEdges}
                       />
-                      <p className="agentz-settings-hint">{t("workflow.exprHint")}</p>
-                    </div>
+                    </>
                   )}
                   {active.evaluator?.kind === "llm" && (
                     <>
@@ -679,7 +726,11 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                       </div>
                     </>
                   )}
-                  <p className="agentz-settings-hint">{t("workflow.branchEdgeHint")}</p>
+                  <p className="agentz-settings-hint">
+                    {active.evaluator?.kind === "llm"
+                      ? t("workflow.branchEdgeHint")
+                      : t("workflow.branchExprHint")}
+                  </p>
                 </>
               )}
 
@@ -703,14 +754,15 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
                   </div>
                   <div className="agentz-settings-field">
                     <label>{t("workflow.exitWhen")}</label>
-                    <input
+                    <WfConditionBuilder
                       value={active.guard?.exit_when ?? ""}
-                      placeholder="review contains approved"
-                      onChange={(e) =>
+                      blackboardKeys={blackboardKeys}
+                      optional
+                      onChange={(exit_when) =>
                         updateNode(active.id, {
                           guard: {
                             max_iterations: active.guard?.max_iterations ?? 3,
-                            exit_when: e.target.value || null,
+                            exit_when: exit_when.trim() || null,
                           },
                         })
                       }

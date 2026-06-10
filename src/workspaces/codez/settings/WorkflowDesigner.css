@@ -171,6 +171,21 @@
   pointer-events: none;
 }
 
+/* Animated edges: flow source → target (along arrow direction). Default RF anim is 10→0. */
+.wf-canvas .react-flow__edge.animated path:not(.react-flow__edge-interaction) {
+  stroke-dasharray: 5;
+  animation: wf-edge-flow 0.5s linear infinite;
+}
+
+@keyframes wf-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 10;
+  }
+}
+
 /* Custom zoom controls (bottom-left) */
 .wf-controls {
   position: absolute;

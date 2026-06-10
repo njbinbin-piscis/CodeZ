@@ -65,7 +65,26 @@ describe("validateGraph", () => {
       edges: [{ from: "start", to: "a", label: null }],
       max_total_steps: 50,
     };
-    // The agent node `a` has no successor.
     expect(validateGraph(g).some((i) => i.includes("后继"))).toBe(true);
+  });
+
+  it("flags an expr branch missing true/false paths", () => {
+    const g: WorkflowGraph = {
+      entry: "start",
+      nodes: [
+        { id: "start", type: "start" },
+        {
+          id: "b",
+          type: "branch",
+          evaluator: { kind: "expr", expr: "review contains approved" },
+        },
+        { id: "end", type: "end" },
+      ],
+      edges: [{ from: "start", to: "b", label: null }],
+      max_total_steps: 50,
+    };
+    const issues = validateGraph(g);
+    expect(issues.some((i) => i.includes("true"))).toBe(true);
+    expect(issues.some((i) => i.includes("false"))).toBe(true);
   });
 });

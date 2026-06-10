@@ -5,6 +5,19 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-10
+
+Workflow designer UX — structured branch/loop conditions, auto fit view, and edge flow animation.
+
+### Added
+
+- **Condition builder** for workflow branch (expr) and loop `exit_when`: pick blackboard key, operator, and value with live expression preview; advanced raw-text mode still available.
+- **Expr branch paths**: true/false target dropdowns auto-set edge labels; graph validation for missing paths and unknown keys.
+
+### Changed
+
+- **Workflow canvas** auto fit view on open and after auto-layout; edge dash animation flows source → target (arrow direction).
+
 ## [0.5.0] - 2026-06-10
 
 Trusted skill evolution — quadrant storage, background review, Curator, and Settings UI.
