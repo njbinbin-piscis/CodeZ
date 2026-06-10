@@ -5,6 +5,16 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-06-10
+
+Complete i18n coverage for IDE explorer controls, git panel, unsaved prompts, and interactive chat forms.
+
+### Fixed
+
+- **Explorer**: expand-all / collapse-all tooltips showed raw keys (`ide.expandAll`) instead of translated text.
+- **Git panel**: `noGitRepos` message; **editor**: unsaved close confirmations.
+- **Interactive cards**: all validation and wizard strings now localized (EN + ZH).
+
 ## [0.5.1] - 2026-06-10
 
 Workflow designer UX — structured branch/loop conditions, auto fit view, and edge flow animation.
