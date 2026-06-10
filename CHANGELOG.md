@@ -5,6 +5,12 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-10
+
+### Fixed
+
+- **Workflow designer toolbar**: add-node and auto-layout buttons now share a fixed 28px height with aligned glyphs and labels.
+
 ## [0.5.2] - 2026-06-10
 
 Complete i18n coverage for IDE explorer controls, git panel, unsaved prompts, and interactive chat forms.

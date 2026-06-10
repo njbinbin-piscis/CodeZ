@@ -473,12 +473,18 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
       <div className="wf-toolbar">
         <span className="wf-toolbar-label">{t("workflow.addNode")}:</span>
         {(["agent", "branch", "loop", "human", "end"] as WorkflowNodeKind[]).map((k) => (
-          <button key={k} type="button" onClick={() => addNode(k)}>
-            {KIND_META[k].glyph} {t(`workflow.kind.${k}`)}
+          <button key={k} type="button" className="wf-toolbar-btn" onClick={() => addNode(k)}>
+            <span className="wf-toolbar-glyph" aria-hidden>
+              {KIND_META[k].glyph}
+            </span>
+            <span className="wf-toolbar-text">{t(`workflow.kind.${k}`)}</span>
           </button>
         ))}
-        <button type="button" className="wf-toolbar-layout" onClick={runAutoLayout}>
-          ⊞ {t("workflow.autoLayout")}
+        <button type="button" className="wf-toolbar-btn wf-toolbar-layout" onClick={runAutoLayout}>
+          <span className="wf-toolbar-glyph" aria-hidden>
+            ⊞
+          </span>
+          <span className="wf-toolbar-text">{t("workflow.autoLayout")}</span>
         </button>
       </div>
 
