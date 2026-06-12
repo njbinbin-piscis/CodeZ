@@ -18,6 +18,7 @@ interface EditorTabsProps {
   onCloseAll?: () => void;
   onCloseSaved?: () => void;
   onCloseOther?: (path: string) => void;
+  onReloadFromDisk?: (path: string) => void;
   contextMenu: TabContextMenu | null;
   onDismissContextMenu?: () => void;
 }
@@ -32,6 +33,7 @@ export default function EditorTabs({
   onCloseAll,
   onCloseSaved,
   onCloseOther,
+  onReloadFromDisk,
   contextMenu,
   onDismissContextMenu,
 }: EditorTabsProps) {
@@ -123,6 +125,14 @@ export default function EditorTabs({
           >
             {t("ide.saveFile") || "Save"}
           </button>
+          {onReloadFromDisk && ctxTarget && !isBrowserTab(ctxTarget.path) && (
+            <button
+              type="button"
+              onClick={runMenuAction(() => onReloadFromDisk(ctxTarget.path))}
+            >
+              {t("ide.reloadFromDisk") || "Reload from Disk"}
+            </button>
+          )}
           <div className="ide-tab-context-separator" />
           <button
             type="button"

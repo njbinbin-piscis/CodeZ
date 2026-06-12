@@ -792,16 +792,21 @@ export default function WorkZWorkspace({
   }, [wikiBuildNonce, buildWiki]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const ta = e.currentTarget;
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
+      const atEnd = ta.selectionStart === goal.length && ta.selectionEnd === goal.length;
+      if (e.key === "ArrowUp" && !atStart) return;
+      if (e.key === "ArrowDown" && !atEnd) return;
       const next = inputHistory.navigate(e.key === "ArrowUp" ? "up" : "down", goal);
       if (next !== null) {
         e.preventDefault();
         setGoal(next);
         requestAnimationFrame(() => {
-          const ta = taRef.current;
-          if (!ta) return;
+          const el = taRef.current;
+          if (!el) return;
           const pos = next.length;
-          ta.setSelectionRange(pos, pos);
+          el.setSelectionRange(pos, pos);
         });
         return;
       }

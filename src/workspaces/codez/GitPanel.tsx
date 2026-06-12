@@ -119,7 +119,17 @@ function GitRepoSection({
       setCommitMsg("");
       await refreshRepo();
     } catch (e) {
+      const msg = String(e);
       console.error("Commit error:", e);
+      const needsIdentity =
+        /user\.name|user\.email|Author identity unknown|unable to auto-detect/i.test(msg);
+      const hint = needsIdentity
+        ? (t("ide.gitIdentityHint") as string) ||
+          "Configure Git identity:\n  git config --global user.name \"Your Name\"\n  git config --global user.email \"you@example.com\""
+        : msg;
+      window.alert(
+        (t("ide.commitFailed", { error: hint }) as string) || `Commit failed: ${hint}`,
+      );
     } finally {
       setCommitting(false);
     }

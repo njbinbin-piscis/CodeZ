@@ -1,6 +1,6 @@
 [package]
 name = "agentz-desktop"
-version = "0.5.3"
+version = "0.5.4"
 description = "AgentZ — Cursor-like AI IDE desktop host"
 authors = ["AgentZ"]
 license = "Apache-2.0"
@@ -24,6 +24,10 @@ tauri-build = { version = "2", features = [] }
 # Shared agent kernel (used today for process spawning; agent loop wiring lands in M1).
 piscis-core = { workspace = true }
 piscis-kernel = { workspace = true }
+piscis-ide-tools = { workspace = true }
+
+# RobotZ browser tool
+robotz-browser = { git = "https://github.com/njbinbin-piscis/RobotZ.git", package = "robotz-browser", rev = "v0.1.2", features = ["piscis-kernel"] }
 
 # Tauri runtime + the plugins the IDE workspace needs.
 tauri = { version = "2", features = [] }
@@ -47,7 +51,7 @@ portable-pty = "0.8"
 # Embedded Chromium driver (CDP) for the Browser panel + agent `browser` tool.
 # No `fetcher`/TLS features: we drive the system-installed Chrome over a local
 # ws:// CDP socket, so the auto-download fetcher (and its zip backend) is unneeded.
-chromiumoxide = { version = "0.9", default-features = false }
+chromiumoxide = { version = "0.7", features = ["tokio-runtime"], default-features = false }
 
 # File metadata formatting + encoding detection for file reads.
 chrono = { version = "0.4", features = ["serde"] }

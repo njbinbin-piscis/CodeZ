@@ -46,6 +46,8 @@ pub struct LayoutSnapshot {
     pub bottom_tab: String,
     #[serde(default = "default_bottom_height")]
     pub bottom_height: u32,
+    #[serde(default)]
+    pub explorer_expanded_paths: Vec<String>,
 }
 
 fn default_true() -> bool {

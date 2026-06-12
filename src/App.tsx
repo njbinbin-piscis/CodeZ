@@ -19,13 +19,18 @@ import {
   getAppearanceTheme,
   toggleAppearanceTheme,
   type AppearanceTheme,
+  getUiFontScale,
+  applyUiFontScale,
+  UI_FONT_SCALES,
+  uiFontScaleLabel,
+  type UiFontScale,
 } from "./theme";
 import CodeZWorkspace from "./workspaces/codez";
 import WorkZWorkspace from "./workspaces/workz";
 import AssistantPanel from "./workspaces/codez/AssistantPanel";
 import SettingsPanel from "./workspaces/codez/SettingsPanel";
 import ZLogo from "./components/ZLogo";
-import { browserClose, type PickedElement } from "./services/tauri/browser";
+import { browserClose, browserCloseGuard, type PickedElement } from "./services/tauri/browser";
 import type { ChatAttachment } from "./services/tauri/chat";
 import { terminalSnippetPut } from "./services/tauri/terminal";
 import {
@@ -92,6 +97,7 @@ export default function App() {
     null,
   );
   const [appearance, setAppearance] = useState<AppearanceTheme>(() => getAppearanceTheme());
+  const [fontScale, setFontScale] = useState<UiFontScale>(() => getUiFontScale());
   const [exitToast, setExitToast] = useState(false);
   const [workspaceRestore, setWorkspaceRestore] = useState<{
     key: number;
@@ -108,7 +114,13 @@ export default function App() {
   const ideLayoutPatchRef = useRef<
     Pick<
       LayoutSnapshot,
-      "sidebar_tab" | "sidebar_collapsed" | "sidebar_width" | "bottom_open" | "bottom_tab" | "bottom_height"
+      | "sidebar_tab"
+      | "sidebar_collapsed"
+      | "sidebar_width"
+      | "bottom_open"
+      | "bottom_tab"
+      | "bottom_height"
+      | "explorer_expanded_paths"
     >
   >({
     sidebar_tab: "explorer",
@@ -117,6 +129,7 @@ export default function App() {
     bottom_open: false,
     bottom_tab: "terminal",
     bottom_height: 240,
+    explorer_expanded_paths: [],
   });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -324,6 +337,17 @@ export default function App() {
       if (!ok) return;
       await destroyAllTerminals();
       setIdeWikiOpenPath(null);
+      try {
+        const guard = await browserCloseGuard();
+        if (!guard.can_close || guard.agent_active) {
+          const msg = guard.reason ?? t("browser.closeConfirm");
+          // eslint-disable-next-line no-alert
+          if (!window.confirm(msg)) return;
+        }
+      } catch {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(t("browser.closeConfirm"))) return;
+      }
       setBrowserOpen(false);
       setChatInsertElement(null);
       void browserClose().catch(() => {});
@@ -516,6 +540,23 @@ export default function App() {
           >
             <WikiIcon />
           </button>
+          <select
+            className="agentz-font-scale-select"
+            value={fontScale}
+            title={t("app.fontScaleTitle")}
+            aria-label={t("app.fontScale")}
+            onChange={(e) => {
+              const next = Number(e.target.value) as UiFontScale;
+              applyUiFontScale(next);
+              setFontScale(next);
+            }}
+          >
+            {UI_FONT_SCALES.map((s) => (
+              <option key={s} value={s}>
+                {uiFontScaleLabel(s)}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="agentz-titlebar-icon"

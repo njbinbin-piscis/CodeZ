@@ -15,6 +15,7 @@ use piscis_kernel::agent::plan::new_plan_store;
 use piscis_kernel::agent::plan::PlanStore;
 
 use crate::browser::BrowserManager;
+use crate::browser::activity::BrowserActivity;
 use crate::commands::dap::DapManager;
 use crate::commands::ext_host::ExtHostManager;
 use crate::commands::ide::TerminalRegistry;
@@ -49,6 +50,8 @@ pub struct AppState {
     /// Embedded Chromium session shared by the Browser panel and the agent
     /// `browser` tool (lazily launched on first use).
     pub browser: BrowserManager,
+    /// Tracks agent turns and recent browser tool usage for close-guard UX.
+    pub browser_activity: BrowserActivity,
     /// VS Code extension host sidecar lifecycle (Node process + RPC stdin).
     pub ext_host: Arc<ExtHostManager>,
     /// Debug Adapter Protocol broker (one active adapter at a time).
@@ -78,13 +81,14 @@ impl AppState {
         Self {
             terminals: Arc::new(Mutex::new(TerminalRegistry::new())),
             file_watchers: Arc::new(Mutex::new(HashMap::new())),
-            lsp_manager: Arc::new(LspManager::new()),
+            lsp_manager: Arc::new(LspManager::with_bridge_name("AgentZ")),
             chat_cancel: Arc::new(Mutex::new(None)),
             task_cancel: Arc::new(Mutex::new(HashMap::new())),
             agent_slots: Arc::new(Semaphore::new(agent_concurrency())),
             plan_state: new_plan_store(),
             interactive_responses: Arc::new(Mutex::new(HashMap::new())),
             browser: BrowserManager::new(),
+            browser_activity: BrowserActivity::default(),
             ext_host: Arc::new(ExtHostManager::new()),
             dap: Arc::new(DapManager::new()),
             terminal_snippets: Arc::new(Mutex::new(HashMap::new())),

@@ -4,7 +4,8 @@
 
 use tauri::State;
 
-use crate::browser::{PickedElement, ScrollInfo};
+use crate::browser::{BrowserState, PickedElement, ScrollInfo};
+use crate::browser::activity::BrowserCloseGuard;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -113,4 +114,14 @@ pub async fn browser_inspect_at(
         .inspect_at(x, y)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn browser_state(state: State<'_, AppState>) -> Result<BrowserState, String> {
+    Ok(state.browser.state().await)
+}
+
+#[tauri::command]
+pub async fn browser_close_guard(state: State<'_, AppState>) -> Result<BrowserCloseGuard, String> {
+    Ok(state.browser_activity.close_guard().await)
 }

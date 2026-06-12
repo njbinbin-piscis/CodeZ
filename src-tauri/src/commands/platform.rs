@@ -7,11 +7,7 @@ use tauri::AppHandle;
 
 use super::data_scope::resolve_global_config_dir;
 
-/// Reveal a path in the OS file manager (or open it with the default handler).
-///
-/// Mirrors the `openPath` IPC the frontend calls from the file-tree context
-/// menu. Uses the platform's native opener so no extra plugin permission is
-/// required.
+/// Open a path with the OS default handler (file → default app, dir → file manager).
 #[tauri::command]
 pub async fn open_path(path: String) -> Result<(), String> {
     let p = Path::new(&path);
@@ -30,6 +26,50 @@ pub async fn open_path(path: String) -> Result<(), String> {
         .arg(&path)
         .spawn()
         .map_err(|e| format!("Failed to open '{path}': {e}"))?;
+    Ok(())
+}
+
+/// Reveal a file or folder in the system file manager (select/highlight when supported).
+#[tauri::command]
+pub async fn reveal_in_folder(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err(format!("Path not found: {path}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let arg = format!("/select,\"{}\"", p.to_string_lossy().replace('/', "\\"));
+        piscis_kernel::proc::tokio_command("explorer")
+            .arg(arg)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal '{path}': {e}"))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        piscis_kernel::proc::tokio_command("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal '{path}': {e}"))?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let open_target = if p.is_file() {
+            p.parent()
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or(path.clone())
+        } else {
+            path.clone()
+        };
+        piscis_kernel::proc::tokio_command("xdg-open")
+            .arg(&open_target)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal '{path}': {e}"))?;
+    }
+
     Ok(())
 }
 

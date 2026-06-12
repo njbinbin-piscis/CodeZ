@@ -1,4 +1,4 @@
-import { memo, useMemo, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { JournalFileDiff } from "../../services/tauri/chat";
 import TaskCard from "../../components/TaskCard";
@@ -19,6 +19,7 @@ interface AssistantMessageListProps {
   turnDiffsByTurnId: Record<string, JournalFileDiff[]>;
   busy: boolean;
   queuedView: string[];
+  onRemoveQueued?: (index: number) => void;
   pendingCards: InteractiveCardState[];
   scrollRef: RefObject<HTMLDivElement>;
   onSelectPath?: (path: string) => void;
@@ -36,6 +37,7 @@ function AssistantMessageList({
   turnDiffsByTurnId,
   busy,
   queuedView,
+  onRemoveQueued,
   pendingCards,
   scrollRef,
   onSelectPath,
@@ -47,32 +49,78 @@ function AssistantMessageList({
   onPlanBuild,
 }: AssistantMessageListProps) {
   const { t } = useTranslation();
+  const INITIAL_VISIBLE = 200;
+  const LOAD_MORE = 50;
+  const [visibleFrom, setVisibleFrom] = useState(0);
+  const loadLockRef = useRef(false);
+
+  useEffect(() => {
+    setVisibleFrom((prev) => {
+      const next = Math.max(0, messages.length - INITIAL_VISIBLE);
+      return messages.length > prev + LOAD_MORE ? next : Math.min(prev, next);
+    });
+  }, [messages.length]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || loadLockRef.current || visibleFrom <= 0) return;
+    if (el.scrollTop > 40) return;
+    loadLockRef.current = true;
+    const prevTop = el.scrollHeight;
+    setVisibleFrom((v) => Math.max(0, v - LOAD_MORE));
+    requestAnimationFrame(() => {
+      const node = scrollRef.current;
+      if (node) node.scrollTop = node.scrollHeight - prevTop;
+      loadLockRef.current = false;
+    });
+  }, [scrollRef, visibleFrom]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [onScroll, scrollRef]);
+
+  const visibleMessages = useMemo(
+    () => messages.slice(visibleFrom),
+    [messages, visibleFrom],
+  );
 
   const lastUserMessageIndex = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user" && messages[i].text.trim()) return i;
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      if (visibleMessages[i].role === "user" && visibleMessages[i].text.trim()) return i;
     }
     return -1;
-  }, [messages]);
+  }, [visibleMessages]);
 
   return (
     <div className="agentz-assistant-messages" ref={scrollRef}>
+      {visibleFrom > 0 && (
+        <button
+          type="button"
+          className="agentz-load-more-msgs"
+          onClick={() => setVisibleFrom((v) => Math.max(0, v - LOAD_MORE))}
+        >
+          {t("chat.loadOlderMessages", { count: visibleFrom })}
+        </button>
+      )}
       {messages.length === 0 && <div className="agentz-assistant-empty">{t("chat.empty")}</div>}
-      {messages.map((m, i) => {
+      {visibleMessages.map((m, i) => {
         if (m.role === "user") {
           return (
-            <div key={m.id ?? `msg-${i}`} className="agentz-turn-user agentz-msg-virtual">
+            <div key={m.id ?? `msg-${visibleFrom + i}`} className="agentz-turn-user agentz-msg-virtual">
               <TaskCard text={m.text} sticky={i === lastUserMessageIndex} />
             </div>
           );
         }
 
-        const isStreamingLast = busy && i === messages.length - 1;
+        const isStreamingLast = busy && visibleFrom + i === messages.length - 1;
         const showCheckpoint = m.id && m.text.trim() && !isStreamingLast;
         const diffs = m.turnId ? turnDiffsByTurnId[m.turnId] : undefined;
 
           return (
-            <div key={m.id ?? `msg-${i}`} className="agentz-msg assistant agentz-msg-virtual">
+            <div key={m.id ?? `msg-${visibleFrom + i}`} className="agentz-msg assistant agentz-msg-virtual">
               {m.text ? (
                 isStreamingLast ? (
                   <pre className="agentz-msg-text agentz-streaming">{m.text}</pre>
@@ -116,6 +164,16 @@ function AssistantMessageList({
       {queuedView.map((q, i) => (
         <div key={`q-${i}`} className="agentz-turn-user queued">
           <TaskCard text={q} />
+          {onRemoveQueued && (
+            <button
+              type="button"
+              className="agentz-queue-remove"
+              title={t("chat.removeFromQueue")}
+              onClick={() => onRemoveQueued(i)}
+            >
+              ✕
+            </button>
+          )}
         </div>
       ))}
       {pendingCards.map((card) => (

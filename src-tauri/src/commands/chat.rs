@@ -153,6 +153,8 @@ pub async fn chat_send(
         ..Default::default()
     };
 
+    state.browser_activity.set_chat_turn_active(true);
+
     let result = run_agentz_turn(
         app.clone(),
         request,
@@ -175,6 +177,8 @@ pub async fn chat_send(
         pool_id.filter(|s| !s.trim().is_empty()),
     )
     .await;
+
+    state.browser_activity.set_chat_turn_active(false);
 
     match &task_key {
         Some(key) => {

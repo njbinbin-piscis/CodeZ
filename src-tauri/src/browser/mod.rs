@@ -1,28 +1,20 @@
-//! Headless Chromium driver (CDP via `chromiumoxide`).
+//! IDE Browser panel driver (CDP) backed by [`robotz_browser`].
 //!
-//! AgentZ embeds a real Chromium instance driven over the Chrome DevTools
-//! Protocol — the same approach Cursor/Playwright use. The browser runs
-//! headless; its frames are streamed into the IDE's Browser panel as PNG
-//! screenshots, and pointer events from the panel are forwarded back. The
-//! shared [`BrowserManager`] is also handed to the agent's `browser` tool so
-//! automation (navigate / click / type / eval / screenshot) drives the exact
-//! same page the user sees.
-//!
-//! One page/tab is kept live at a time. Launch is lazy: the first navigate (or
-//! the panel opening) spawns Chromium; [`BrowserManager::close`] tears it down.
+//! The panel streams PNG screenshots and forwards pointer events. The same
+//! [`SharedBrowserManager`] is registered as the agent `browser` tool so
+//! automation and the user see one page.
 
-use std::path::{Path, PathBuf};
+pub mod activity;
+pub mod events;
+
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Result};
-use chromiumoxide::browser::{Browser, BrowserConfig};
+use anyhow::{Context, Result};
 use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
-use chromiumoxide::page::ScreenshotParams;
-use chromiumoxide::Page;
-use futures::StreamExt;
+use chromiumoxide::page::{Page, ScreenshotParams};
+use robotz_browser::{create_browser_manager, BrowserOptions, SharedBrowserManager};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 /// Page scroll geometry, returned to the panel so it can drive a synthetic
 /// scrollbar (the screenshot-based view has no native one).
@@ -61,29 +53,32 @@ pub struct PickedElement {
     pub react_component: String,
 }
 
-struct Live {
-    browser: Browser,
-    page: Page,
-    handler_task: JoinHandle<()>,
+/// Live browser session snapshot for frontend hydration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BrowserState {
+    pub open: bool,
+    pub url: String,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
 }
 
-/// Cloneable handle to the single live Chromium session. Stored in `AppState`
-/// and shared with the agent `browser` tool.
+/// Cloneable handle to the live Chromium session. Stored in `AppState` and
+/// shared with the agent `browser` tool (RobotZ).
 #[derive(Clone)]
 pub struct BrowserManager {
-    inner: Arc<Mutex<Option<Live>>>,
+    inner: SharedBrowserManager,
     viewport: Arc<Mutex<(u32, u32)>>,
-    /// Per-session profile dir (chromiumoxide defaults to a fixed `/tmp/chromiumoxide-runner`
-    /// which breaks when a prior instance did not shut down cleanly).
-    profile_dir: Arc<Mutex<PathBuf>>,
 }
 
 impl Default for BrowserManager {
     fn default() -> Self {
+        let options = BrowserOptions {
+            headless: true,
+            ..BrowserOptions::default()
+        };
         Self {
-            inner: Arc::new(Mutex::new(None)),
+            inner: create_browser_manager(options),
             viewport: Arc::new(Mutex::new((1280, 800))),
-            profile_dir: Arc::new(Mutex::new(fresh_profile_dir())),
         }
     }
 }
@@ -93,100 +88,21 @@ impl BrowserManager {
         Self::default()
     }
 
-    /// Launch Chromium if not already running. Idempotent.
-    async fn ensure(&self) -> Result<()> {
-        let mut guard = self.inner.lock().await;
-        if guard.is_some() {
-            return Ok(());
-        }
-        let (vw, vh) = *self.viewport.lock().await;
-        let chrome = resolve_chrome_executable().context(
-            "Chrome/Chromium not found — install Google Chrome or set CODEZ_CHROME to the executable path",
-        )?;
-
-        let mut last_err: Option<anyhow::Error> = None;
-        for attempt in 0..2 {
-            let profile = self.profile_dir.lock().await.clone();
-            // Drop stale SingletonLock from a crashed prior attempt on this profile.
-            let _ = tokio::fs::remove_dir_all(&profile).await;
-
-            let mut config_builder = BrowserConfig::builder()
-                .chrome_executable(&chrome)
-                .user_data_dir(&profile)
-                .window_size(vw, vh)
-                .no_sandbox()
-                .arg("--disable-gpu")
-                .arg("--disable-dev-shm-usage");
-            if attempt == 0 {
-                config_builder = config_builder.new_headless_mode();
-            }
-            let config = config_builder
-                .build()
-                .map_err(|e| anyhow!("browser config: {e}"))?;
-
-            let launch = Browser::launch(config).await;
-            let (mut browser, mut handler) = match launch {
-                Ok(pair) => pair,
-                Err(e) => {
-                    last_err = Some(anyhow::Error::new(e).context(format!(
-                        "failed to launch Chromium at {} (profile: {}, attempt {})",
-                        chrome.display(),
-                        profile.display(),
-                        attempt + 1
-                    )));
-                    *self.profile_dir.lock().await = fresh_profile_dir();
-                    continue;
-                }
-            };
-
-            let handler_task = tokio::spawn(async move {
-                while let Some(h) = handler.next().await {
-                    if h.is_err() {
-                        break;
-                    }
-                }
-            });
-
-            match browser.new_page("about:blank").await {
-                Ok(page) => {
-                    *guard = Some(Live {
-                        browser,
-                        page,
-                        handler_task,
-                    });
-                    return Ok(());
-                }
-                Err(e) => {
-                    let _ = browser.close().await;
-                    handler_task.abort();
-                    last_err = Some(
-                        anyhow::Error::new(e)
-                            .context("failed to open initial page after Chromium launch"),
-                    );
-                    *self.profile_dir.lock().await = fresh_profile_dir();
-                }
-            }
-        }
-
-        Err(last_err
-            .unwrap_or_else(|| anyhow!("failed to launch Chromium at {}", chrome.display())))
+    /// Shared handle for [`robotz_browser::BrowserTool`] registration.
+    pub fn shared(&self) -> SharedBrowserManager {
+        self.inner.clone()
     }
 
-    /// Run a closure with the live page, launching first if needed.
+    /// Run a closure with the active page, launching Chrome first if needed.
     async fn with_page<T, F, Fut>(&self, f: F) -> Result<T>
     where
         F: FnOnce(Page) -> Fut,
         Fut: std::future::Future<Output = Result<T>>,
     {
-        self.ensure().await?;
-        let page = {
-            let guard = self.inner.lock().await;
-            guard
-                .as_ref()
-                .map(|l| l.page.clone())
-                .ok_or_else(|| anyhow!("browser not initialised"))?
-        };
-        f(page).await
+        let mut mgr = self.inner.lock().await;
+        mgr.launch().await.context("failed to launch browser")?;
+        let page = mgr.active_page().await.context("no active browser page")?;
+        f(page.as_ref().clone()).await
     }
 
     /// Resize the Chromium viewport to match the IDE browser panel (CSS pixels).
@@ -404,19 +320,29 @@ impl BrowserManager {
 
     /// Whether a Chromium session is currently live.
     pub async fn is_open(&self) -> bool {
-        self.inner.lock().await.is_some()
+        self.inner.lock().await.is_running()
     }
 
-    /// Close the browser and tear down the handler task.
-    pub async fn close(&self) -> Result<()> {
-        let live = self.inner.lock().await.take();
-        let profile = self.profile_dir.lock().await.clone();
-        if let Some(mut live) = live {
-            let _ = live.browser.close().await;
-            live.handler_task.abort();
+    /// Current browser session snapshot for the IDE panel.
+    pub async fn state(&self) -> BrowserState {
+        let open = self.is_open().await;
+        let (width, height) = *self.viewport.lock().await;
+        let url = if open {
+            self.current_url().await.unwrap_or_default()
+        } else {
+            String::new()
+        };
+        BrowserState {
+            open,
+            url,
+            viewport_width: width,
+            viewport_height: height,
         }
-        let _ = tokio::fs::remove_dir_all(&profile).await;
-        *self.profile_dir.lock().await = fresh_profile_dir();
+    }
+
+    /// Close the browser.
+    pub async fn close(&self) -> Result<()> {
+        self.inner.lock().await.close().await;
         Ok(())
     }
 }
@@ -448,10 +374,6 @@ const SCROLL_INFO_JS: &str = r#"(() => {
         client_height: se.clientHeight || window.innerHeight || 0,
     };
 })()"#;
-
-fn fresh_profile_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("agentz-browser-{}", uuid::Uuid::new_v4()))
-}
 
 async fn current_url(page: &Page) -> Result<String> {
     let res = page.evaluate("window.location.href").await;
@@ -554,108 +476,6 @@ fn normalise_url(input: &str) -> String {
     format!("https://{trimmed}")
 }
 
-/// Resolve a Chrome/Chromium binary. GUI apps often have a minimal `PATH`, so we
-/// probe well-known locations before falling back to chromiumoxide detection.
-fn resolve_chrome_executable() -> Result<PathBuf> {
-    for key in ["CODEZ_CHROME", "CHROME", "GOOGLE_CHROME_BIN"] {
-        if let Ok(raw) = std::env::var(key) {
-            if let Some(path) = normalize_chrome_path(Path::new(raw.trim())) {
-                return Ok(path);
-            }
-        }
-    }
-
-    for candidate in chrome_executable_candidates() {
-        if let Some(path) = normalize_chrome_path(Path::new(candidate)) {
-            return Ok(path);
-        }
-    }
-
-    if let Ok(path) = chromiumoxide::detection::default_executable(
-        chromiumoxide::detection::DetectionOptions::default(),
-    ) {
-        if let Some(exe) = normalize_chrome_path(&path) {
-            return Ok(exe);
-        }
-    }
-
-    Err(anyhow!(
-        "no Chrome/Chromium executable found (tried common install paths and PATH)"
-    ))
-}
-
-fn chrome_executable_candidates() -> &'static [&'static str] {
-    #[cfg(target_os = "linux")]
-    {
-        &[
-            "/usr/bin/google-chrome",
-            "/usr/bin/google-chrome-stable",
-            "/opt/google/chrome/google-chrome",
-            "/snap/bin/chromium",
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-        ]
-    }
-    #[cfg(target_os = "macos")]
-    {
-        &[
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        ]
-    }
-    #[cfg(target_os = "windows")]
-    {
-        &[
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        ]
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
-        &[] as &[&str]
-    }
-}
-
-/// Accept a file path or a directory (chromiumoxide on Linux returns `/opt/google/chrome`).
-fn normalize_chrome_path(path: &Path) -> Option<PathBuf> {
-    if chrome_path_is_executable(path) {
-        return Some(path.to_path_buf());
-    }
-    if path.is_dir() {
-        for name in ["google-chrome", "chrome", "chromium", "chromium-browser"] {
-            let candidate = path.join(name);
-            if chrome_path_is_executable(&candidate) {
-                return Some(candidate);
-            }
-        }
-    }
-    None
-}
-
-impl BrowserManager {
-    #[cfg(test)]
-    async fn ensure_launch_for_test(&self) -> Result<()> {
-        self.ensure().await
-    }
-}
-
-fn chrome_path_is_executable(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -664,7 +484,7 @@ mod tests {
     async fn launch_with_unique_profile() {
         let mgr = BrowserManager::new();
         mgr.set_viewport(800, 600).await.unwrap();
-        mgr.ensure_launch_for_test()
+        mgr.navigate("about:blank")
             .await
             .expect("browser should launch");
         assert!(mgr.is_open().await);

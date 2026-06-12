@@ -3,6 +3,31 @@
  * The same page is shared with the agent's `browser` automation tool.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+/** Tauri event emitted after agent browser tool actions. */
+export const BROWSER_CHANGED = "browser-changed";
+
+export interface BrowserChangedPayload {
+  action: string;
+  url?: string | null;
+  selector?: string | null;
+  ref?: string | null;
+  session_id?: string | null;
+}
+
+export interface BrowserState {
+  open: boolean;
+  url: string;
+  viewport_width: number;
+  viewport_height: number;
+}
+
+export interface BrowserCloseGuard {
+  can_close: boolean;
+  agent_active: boolean;
+  reason?: string | null;
+}
 
 export interface PickedElement {
   selector: string;
@@ -84,6 +109,21 @@ export function browserIsOpen(): Promise<boolean> {
 
 export function browserClose(): Promise<void> {
   return invoke<void>("browser_close");
+}
+
+export function browserState(): Promise<BrowserState> {
+  return invoke<BrowserState>("browser_state");
+}
+
+export function browserCloseGuard(): Promise<BrowserCloseGuard> {
+  return invoke<BrowserCloseGuard>("browser_close_guard");
+}
+
+/** Subscribe to agent-driven browser mutations (immediate panel refresh). */
+export function onBrowserChanged(
+  handler: (payload: BrowserChangedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<BrowserChangedPayload>(BROWSER_CHANGED, (ev) => handler(ev.payload));
 }
 
 /** Compact chat token for a picked browser element (stored in session history). */

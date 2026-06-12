@@ -129,6 +129,7 @@ pub fn run() {
             commands::ide::ide_lsp_stop,
             // platform
             commands::platform::open_path,
+            commands::platform::reveal_in_folder,
             commands::platform::composer_debug_log,
             // AI chat (agent turn on the piscis-engine kernel)
             commands::chat::chat_send,
@@ -160,6 +161,10 @@ pub fn run() {
             commands::browser::browser_current_url,
             commands::browser::browser_is_open,
             commands::browser::browser_close,
+            commands::browser::browser_state,
+            commands::browser::browser_close_guard,
+            // Debug regression scenarios (browser E2E, etc.)
+            commands::debug_scenarios::debug_scenarios_list,
             // Repo Wiki — module/architecture overview from the index (M8)
             commands::repo_wiki::repo_wiki_generate,
             // VS Code .vsix contribution-point ingestion

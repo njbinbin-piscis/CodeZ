@@ -163,6 +163,28 @@
   50% { opacity: 0.45; }
 }
 
+.agentz-font-scale-select {
+  height: 28px;
+  min-width: 58px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agentz-font-scale-select:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.agentz-font-scale-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .agentz-ide-split {
   display: flex;
   height: 100%;

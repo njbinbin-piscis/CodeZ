@@ -284,6 +284,8 @@ const en = {
     noProjectOpen: "No folder open",
     themeSwitchLight: "Switch to light theme",
     themeSwitchDark: "Switch to dark theme",
+    fontScale: "UI font size",
+    fontScaleTitle: "Adjust interface font size",
     activityOpen: "Open",
     activityChange: "Chg",
   },
@@ -366,10 +368,16 @@ const en = {
     noBranches: "No branches",
     current: "current",
     checkoutDirtyWarn: "You have uncommitted changes that may be overwritten. Continue?",
+    commitFailed: "Commit failed: {{error}}",
+    gitIdentityHint:
+      "Git user.name / user.email is not configured. Run in a terminal:\n  git config --global user.name \"Your Name\"\n  git config --global user.email \"you@example.com\"",
     koiBranches: "Assistant Branches",
     noGitRepos: "No git repositories found in this folder.",
     unsavedConfirm: '"{{name}}" has unsaved changes. Close without saving?',
     unsavedBulkConfirm: "{{count}} file(s) have unsaved changes. Close without saving?",
+    externalChangeConflict:
+      '"{{name}}" changed on disk but you have unsaved edits. Reload from disk and discard local changes?',
+    reloadFromDisk: "Reload from Disk",
   },
 
   settings: {
@@ -672,6 +680,8 @@ const en = {
     interactiveDateMax: "Not after {{max}}",
     interactiveMinSelections: "Select at least {{count}}",
     interactiveMaxSelections: "Select at most {{count}}",
+    loadOlderMessages: "Load {{count}} older messages",
+    removeFromQueue: "Remove from queue",
   },
 
   agent: {
@@ -770,6 +780,11 @@ const en = {
     text: "Text",
     sendToChat: "Send to chat",
     needsProject: "Open a project folder first",
+    zoomReset: "Reset zoom (Ctrl+0)",
+    zoomLevel: "Zoom {{percent}}%",
+    closeConfirm:
+      "The agent may be using the browser. Close anyway? This ends the browser session.",
+    agentAction: "Agent: {{action}}",
   },
 
   clawhub: {

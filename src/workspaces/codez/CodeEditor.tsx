@@ -346,11 +346,11 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
   // callback happen during the React commit phase.
   const lastPathRef = useRef<string>(tab.path);
   if (tab.path !== lastPathRef.current) {
-    // Different file entirely — reset tracked content so the next
-    // onChange (which fires with the new file's content during Monaco
-    // hydration) does NOT mark the tab dirty.
     lastContentRef.current = tab.content;
     lastPathRef.current = tab.path;
+  } else if (!tab.isDirty && tab.content !== lastContentRef.current) {
+    // External disk sync — update tracked content before Monaco onChange fires.
+    lastContentRef.current = tab.content;
   }
 
   // Stable ref for the latest onSave callback so Monaco's Ctrl+S command

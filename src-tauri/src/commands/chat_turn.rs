@@ -27,6 +27,7 @@ use piscis_kernel::policy::gate::PolicyGate;
 use piscis_kernel::store::settings::{LlmProviderConfig, Settings};
 use piscis_kernel::tools::NeutralToolsConfig;
 use tauri::Emitter;
+use tauri::Manager;
 
 use super::agents::{safe_id, sync_agents_to_kois, AgentManifest};
 use super::chat::FrontendAttachment;
@@ -936,14 +937,13 @@ fn build_tool_registry(
     piscis_kernel::tools::register_neutral_tools(&mut handle, &cfg);
 
     if let Some(registry) = handle.as_registry_mut() {
-        registry.register(Box::new(crate::tools::lsp::LspTool {
+        registry.register(Box::new(crate::tools::LspTool {
             lsp_manager: lsp_manager.clone(),
         }));
-        registry.register(Box::new(crate::tools::read_lints::ReadLintsTool {
+        registry.register(Box::new(crate::tools::ReadLintsTool {
             lsp_manager: lsp_manager.clone(),
         }));
         registry.register(Box::new(crate::tools::codebase_search::CodebaseSearchTool));
-        registry.register(Box::new(crate::tools::web_fetch::WebFetchTool));
         if let Ok(config_dir) = crate::commands::data_scope::resolve_global_config_dir(&app) {
             registry.register(Box::new(crate::tools::api_connector::ApiConnectorTool {
                 config_dir,
@@ -1001,20 +1001,12 @@ fn build_tool_registry(
                     app: app.clone(),
                 }));
             }
-            // Browser automation (CDP) — drives the same headless page the IDE
-            // Browser panel shows. Off in plan mode (it mutates page state).
+            // Browser automation (CDP) — same RobotZ tool as openpiscis; drives the
+            // page shown in the IDE Browser panel. Off in plan mode.
             {
                 use tauri::Manager as _;
-                let manager = app.state::<crate::state::AppState>().browser.clone();
-                let shots_dir = app
-                    .path()
-                    .app_data_dir()
-                    .ok()
-                    .map(|d| d.join("browser-shots"));
-                registry.register(Box::new(crate::tools::browser::BrowserTool {
-                    manager,
-                    shots_dir,
-                }));
+                let manager = app.state::<crate::state::AppState>().browser.shared();
+                registry.register(Box::new(robotz_browser::BrowserTool::new(manager)));
                 registry.register(Box::new(crate::tools::terminal_read::TerminalReadTool {
                     terminals: app.state::<crate::state::AppState>().terminals.clone(),
                 }));
@@ -1956,7 +1948,10 @@ pub async fn run_agentz_turn(
             // Bridge file-modifying tools → ide-file-changed with the real path
             // so the frontend reloads only affected tabs (watcher may lag).
             if let AgentEvent::ToolEnd {
-                ref id, ref name, ..
+                ref id,
+                ref name,
+                is_error,
+                ..
             } = event
             {
                 if matches!(name.as_str(), "file_write" | "file_edit") {
@@ -1977,6 +1972,16 @@ pub async fn run_agentz_turn(
                                 );
                             }
                         }
+                    }
+                } else if name.as_str() == "browser" && !is_error {
+                    if let Some(input) = tool_inputs.remove(id) {
+                        let state = collector_app.state::<crate::state::AppState>();
+                        state.browser_activity.mark_browser_tool().await;
+                        crate::browser::events::emit_browser_changed(
+                            &collector_app,
+                            &input,
+                            Some(collector_session.as_str()),
+                        );
                     }
                 } else {
                     tool_inputs.remove(id);

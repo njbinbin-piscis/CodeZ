@@ -245,6 +245,7 @@ export default function AssistantPanel({
   );
   const queueRef = useRef<QueuedTurn[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const runTurnRef = useRef<(turn: QueuedTurn) => Promise<void>>(async () => {});
@@ -566,8 +567,26 @@ export default function AssistantPanel({
   }, [applyDroppedPaths]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = gap < Math.max(48, el.clientHeight * 0.1);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (stickToBottomRef.current) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }
   }, [messages, queuedView]);
+
+  const removeQueued = useCallback((index: number) => {
+    queueRef.current.splice(index, 1);
+    setQueuedView(queueRef.current.map((q) => q.text));
+  }, []);
 
   runTurnRef.current = async (turn: QueuedTurn) => {
     const done = composerDbgMark("runTurn");
@@ -1017,7 +1036,12 @@ export default function AssistantPanel({
   );
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mention && matches.length > 0) {
+    const ta = e.currentTarget;
+    const mentionActive =
+      mention &&
+      matches.length > 1 &&
+      mention.query.length > 0;
+    if (mentionActive) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setMention({ ...mention, active: (mention.active + 1) % matches.length });
@@ -1040,16 +1064,20 @@ export default function AssistantPanel({
       }
     }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
+      const atEnd = ta.selectionStart === input.length && ta.selectionEnd === input.length;
+      if (e.key === "ArrowUp" && !atStart) return;
+      if (e.key === "ArrowDown" && !atEnd) return;
       const next = inputHistory.navigate(e.key === "ArrowUp" ? "up" : "down", input);
       if (next !== null) {
         e.preventDefault();
         setInput(next);
         setMention(null);
         requestAnimationFrame(() => {
-          const ta = taRef.current;
-          if (!ta) return;
+          const el = taRef.current;
+          if (!el) return;
           const pos = next.length;
-          ta.setSelectionRange(pos, pos);
+          el.setSelectionRange(pos, pos);
         });
         return;
       }
@@ -1140,6 +1168,7 @@ export default function AssistantPanel({
         turnDiffsByTurnId={turnDiffsByTurnId}
         busy={busy}
         queuedView={queuedView}
+        onRemoveQueued={removeQueued}
         pendingCards={pendingCards}
         scrollRef={scrollRef}
         onSelectPath={onSelectPath}

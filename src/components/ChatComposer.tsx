@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject } from "react";
+import { type ReactNode, type RefObject, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComposerChip } from "./composerChips";
 import { chipDisplayLabel } from "./composerChips";
@@ -194,7 +194,16 @@ export default function ChatComposer({
 }: ChatComposerProps) {
   const { t } = useTranslation();
   const canSend = canSendProp ?? Boolean(value.trim() || attachment || chips.length > 0);
-  const locked = inputDisabled && !busy;
+  const locked = inputDisabled;
+
+  useEffect(() => {
+    const ta = textareaRef?.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const maxPx = 20 * 5 + 24;
+    ta.style.height = `${Math.min(ta.scrollHeight, maxPx)}px`;
+    ta.style.overflowY = ta.scrollHeight > maxPx ? "auto" : "hidden";
+  }, [value, textareaRef]);
 
   return (
     <div className="agentz-composer-wrap">
@@ -280,7 +289,7 @@ export default function ChatComposer({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           rows={1}
-          disabled={busy || locked}
+          disabled={locked}
         />
 
         <div className="agentz-composer-footer">

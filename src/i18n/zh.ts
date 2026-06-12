@@ -282,6 +282,8 @@ const zh = {
     noProjectOpen: "未打开文件夹",
     themeSwitchLight: "切换到浅色主题",
     themeSwitchDark: "切换到深色主题",
+    fontScale: "界面字号",
+    fontScaleTitle: "调整界面字体大小",
     activityOpen: "打开",
     activityChange: "更换",
   },
@@ -364,10 +366,16 @@ const zh = {
     noBranches: "无分支",
     current: "当前",
     checkoutDirtyWarn: "存在未提交更改，可能会被覆盖。是否继续？",
+    commitFailed: "提交失败：{{error}}",
+    gitIdentityHint:
+      "尚未配置 Git 用户信息。请在终端执行：\n  git config --global user.name \"您的姓名\"\n  git config --global user.email \"you@example.com\"",
     koiBranches: "助手分支",
     noGitRepos: "此文件夹中未找到 Git 仓库。",
     unsavedConfirm: "「{{name}}」有未保存的更改。不保存就关闭？",
     unsavedBulkConfirm: "{{count}} 个文件有未保存的更改。不保存就关闭？",
+    externalChangeConflict:
+      "「{{name}}」已在磁盘上被修改，但您有未保存的编辑。从磁盘重新加载并丢弃本地更改？",
+    reloadFromDisk: "从磁盘重新加载",
   },
 
   settings: {
@@ -667,6 +675,8 @@ const zh = {
     interactiveDateMax: "不能晚于 {{max}}",
     interactiveMinSelections: "至少选择 {{count}} 项",
     interactiveMaxSelections: "最多选择 {{count}} 项",
+    loadOlderMessages: "加载更早的 {{count}} 条消息",
+    removeFromQueue: "从队列中移除",
   },
 
   agent: {
@@ -762,6 +772,10 @@ const zh = {
     text: "文本",
     sendToChat: "发送到聊天",
     needsProject: "请先打开项目文件夹",
+    zoomReset: "重置缩放 (Ctrl+0)",
+    zoomLevel: "缩放 {{percent}}%",
+    closeConfirm: "Agent 可能正在使用浏览器。确定关闭吗？这将结束浏览器会话。",
+    agentAction: "Agent：{{action}}",
   },
 
   clawhub: {

@@ -34,6 +34,20 @@
   border-color: var(--accent);
 }
 
+.agentz-browser-agent-badge {
+  flex-shrink: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .agentz-browser-btn {
   height: 28px;
   min-width: 28px;
@@ -104,11 +118,10 @@
 
 .agentz-browser-shot {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
   display: block;
-  object-fit: fill;
+  object-fit: none;
   object-position: top left;
   pointer-events: none;
 }

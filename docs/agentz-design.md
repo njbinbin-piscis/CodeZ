@@ -144,6 +144,26 @@ CodeZ 的 Plan 流程分为两级，计划文件统一保存在 `{project}/.agen
 每个 turn 通过 `FileJournal::begin_turn` + before/after-tool 钩子把这一轮的文件快照
 分组，`journal_list_changes` / `journal_undo_turn` 支持回看与整轮撤销。
 
+### 4.5 嵌入式 Browser 与 E2E 自动化
+
+CodeZ 编辑器区提供 **Browser 面板**（截图流 + 元素 pick），与 Agent 的 `browser` 工具共用
+同一 CDP Chromium 会话（`robotz-browser` + `BrowserManager`）。
+
+**工具分层**
+
+| 层 | 工具 | 用途 |
+|----|------|------|
+| Kernel | `web_fetch` | 静态 URL 轻量读取 |
+| Host | `browser` | JS/SPA、点击、snapshot/ref、assert、截图 |
+
+**E2E 推荐流程**：`navigate` → `lock` → `snapshot` → 用 `ref` 交互 → `assert_*` →
+`screenshot(save_path=…)` → `unlock`。Plan 模式禁用 `browser`；静态调研用 `web_fetch`。
+
+**面板同步**：Agent 调用 `browser` 后 emit `browser-changed`；前端立即刷新截图与地址栏；
+首次 `tool_start(browser)` 自动打开 Browser tab。关 tab 时若 Agent 活跃则 confirm。
+
+**回归场景**：`debug_scenarios_list` 含 4 个 browser 场景；技能 `codez-e2e-testing` 提供详细 playbook。
+
 ---
 
 ## 5. 多 agent / 子 agent：`delegate`（已完成，M7）

@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import FileTree, { type FileTreeContextMenu } from "./FileTree";
+import FileTree, {
+  type FileTreeContextMenu,
+  joinProjectPath,
+  parentPathForCreate,
+  defaultExplorerExpanded,
+} from "./FileTree";
 import { ExplorerIcon, SearchIcon, SourceControlIcon, TerminalIcon, ExtensionsIcon } from "./ActivityIcons";
 import EditorTabs from "./EditorTabs";
 import FileViewer from "./FileViewer";
@@ -10,11 +15,21 @@ import ExtensionsManager from "./ExtensionsManager";
 import BottomPanel, { type BottomTab } from "./BottomPanel";
 import IdeStatusBar from "./IdeStatusBar";
 import { ideApi, onFileChanged } from "../../services/tauri/ide";
-import { openPath } from "../../services/tauri";
+import { revealInFolder } from "../../services/tauri";
 import BrowserPanel from "./BrowserPanel";
 import { BROWSER_TAB_PATH, isBrowserTab } from "./browserTab";
-import { browserClose } from "../../services/tauri/browser";
-import type { PickedElement } from "../../services/tauri/browser";
+import {
+  browserClose,
+  browserCloseGuard,
+  onBrowserChanged,
+  type PickedElement,
+} from "../../services/tauri/browser";
+import {
+  CHAT_EVENT,
+  type AgentEvent,
+  type ChatEventEnvelope,
+} from "../../services/tauri/chat";
+import { listen } from "@tauri-apps/api/event";
 import type { FileNode, OpenTab, TabViewMode } from "./types";
 import type { EditorSnapshot, LayoutSnapshot } from "../../services/tauri/workspace";
 import { editorSnapshotFromTabs } from "../../services/tauri/workspace";
@@ -65,7 +80,7 @@ interface IDEProps {
 interface FileTreeHandle {
   deleteSelected?: () => void;
   renameActive?: () => void;
-  startCreate?: (isDir: boolean) => void;
+  startCreate?: (isDir: boolean, parentPathOverride?: string) => void;
 }
 
 function collectSelectedPaths(nodes: FileNode[], selected: Set<string>): string[] {
@@ -144,6 +159,8 @@ export default function CodeZWorkspace({
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [bottomHeight, setBottomHeight] = useState(240);
   const ideRef = useRef<HTMLDivElement>(null);
+  const [browserRefreshSignal, setBrowserRefreshSignal] = useState(0);
+  const [agentBrowserAction, setAgentBrowserAction] = useState<string | null>(null);
 
   const openBottomPanel = useCallback((tab: BottomTab) => {
     setBottomTab(tab);
@@ -182,11 +199,70 @@ export default function CodeZWorkspace({
     );
   }, [browserOpen, projectDir]);
 
+  const requestBrowserClose = useCallback(async (): Promise<boolean> => {
+    try {
+      const guard = await browserCloseGuard();
+      if (guard.can_close && !guard.agent_active) return true;
+      const msg = guard.reason ?? t("browser.closeConfirm");
+      // eslint-disable-next-line no-alert
+      return window.confirm(msg);
+    } catch {
+      // eslint-disable-next-line no-alert
+      return window.confirm(t("browser.closeConfirm"));
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (!projectDir) return;
+    let unlistenChat: (() => void) | undefined;
+    void listen<ChatEventEnvelope>(CHAT_EVENT, (ev) => {
+      const env = ev.payload;
+      if (env.channel !== "agent_event") return;
+      const payload = env.payload as AgentEvent;
+      if (payload.type === "tool_start" && payload.name === "browser") {
+        onBrowserOpenChange?.(true);
+        const input = payload.input as Record<string, unknown> | null;
+        const action = String(input?.action ?? "browser");
+        const detail =
+          (input?.url as string | undefined) ??
+          (input?.ref as string | undefined) ??
+          (input?.selector as string | undefined);
+        setAgentBrowserAction(
+          detail ? `${action} → ${String(detail).slice(0, 40)}` : action,
+        );
+      }
+      if (payload.type === "tool_end" && payload.name === "browser") {
+        setBrowserRefreshSignal((n) => n + 1);
+        setAgentBrowserAction(null);
+      }
+    }).then((fn) => {
+      unlistenChat = fn;
+    });
+    return () => {
+      unlistenChat?.();
+    };
+  }, [projectDir, onBrowserOpenChange]);
+
+  useEffect(() => {
+    if (!browserOpen) return;
+    let unlistenChanged: (() => void) | undefined;
+    void onBrowserChanged(() => {
+      setBrowserRefreshSignal((n) => n + 1);
+    }).then((fn) => {
+      unlistenChanged = fn;
+    });
+    return () => {
+      unlistenChanged?.();
+    };
+  }, [browserOpen]);
+
   // Right-click context menu for tab headers
   const [tabContextMenu, setTabContextMenu] = useState<TabContextMenu | null>(null);
 
   // File tree: selected paths (Ctrl/Cmd multi-select) + right-click menu.
   const [fileTreeSelection, setFileTreeSelection] = useState<Set<string>>(new Set());
+  const [explorerExpanded, setExplorerExpanded] = useState<Set<string>>(new Set());
+  const explorerExpandedInitRef = useRef(false);
   const [fileTreeContextMenu, setFileTreeContextMenu] = useState<FileTreeContextMenu | null>(null);
   const fileTreeRef = useRef<(HTMLDivElement & FileTreeHandle) | null>(null);
 
@@ -219,6 +295,8 @@ export default function CodeZWorkspace({
       setReveal(null);
       setFileTree([]);
       setFileTreeSelection(new Set());
+      setExplorerExpanded(new Set());
+      explorerExpandedInitRef.current = false;
       setBottomOpen(false);
       setBottomTab("terminal");
       return;
@@ -231,6 +309,8 @@ export default function CodeZWorkspace({
       setFileLoadError(null);
       setReveal(null);
       setFileTreeSelection(new Set());
+      setExplorerExpanded(new Set());
+      explorerExpandedInitRef.current = false;
       setBottomOpen(false);
       setBottomTab("terminal");
     }
@@ -249,6 +329,10 @@ export default function CodeZWorkspace({
     }
     setSidebarCollapsed(layout.sidebar_collapsed);
     if (layout.sidebar_width >= 220) setSidebarWidth(layout.sidebar_width);
+    if (layout.explorer_expanded_paths?.length) {
+      setExplorerExpanded(new Set(layout.explorer_expanded_paths));
+      explorerExpandedInitRef.current = true;
+    }
     setBottomOpen(layout.bottom_open);
     const bottomTabs: BottomTab[] = ["terminal", "output", "debug", "scm", "tests", "views", "webviews"];
     if (bottomTabs.includes(layout.bottom_tab as BottomTab)) {
@@ -299,6 +383,11 @@ export default function CodeZWorkspace({
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) || null;
 
+  const fileTreeFocusPath = useMemo(() => {
+    if (fileTreeSelection.size > 0) return [...fileTreeSelection][0];
+    return activeTabPath;
+  }, [fileTreeSelection, activeTabPath]);
+
   const switchSidebarTab = useCallback((tab: SidebarTab) => {
     if (sidebarTab === tab && !sidebarCollapsed) {
       setSidebarCollapsed(true);
@@ -318,6 +407,12 @@ export default function CodeZWorkspace({
       console.error("Failed to load file tree:", e);
     }
   }, [projectDir]);
+
+  useEffect(() => {
+    if (fileTree.length === 0 || explorerExpandedInitRef.current) return;
+    setExplorerExpanded(defaultExplorerExpanded(fileTree, fileTreeFocusPath));
+    explorerExpandedInitRef.current = true;
+  }, [fileTree, fileTreeFocusPath]);
 
   const agentTurnBusyRef = useRef(agentTurnBusy);
   agentTurnBusyRef.current = agentTurnBusy;
@@ -373,9 +468,31 @@ export default function CodeZWorkspace({
   const tabReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTabPaths = useRef<Set<string>>(new Set());
 
-  const scheduleTabReload = useCallback((evtPath: string) => {
-    const hasOpenTab = tabsRef.current.some((t) => t.path === evtPath && !t.isDirty);
-    if (!hasOpenTab || !projectDirRef.current) return;
+  const scheduleTabReload = useCallback((evtPath: string, kind: "modified" | "deleted") => {
+    if (!projectDirRef.current) return;
+
+    if (kind === "deleted") {
+      setTabs((p) => p.filter((t) => t.path !== evtPath));
+      setActiveTabPath((cur) => {
+        if (cur !== evtPath) return cur;
+        const rest = tabsRef.current.filter((t) => t.path !== evtPath);
+        return rest[0]?.path ?? null;
+      });
+      return;
+    }
+
+    const tab = tabsRef.current.find((t) => t.path === evtPath);
+    if (!tab) return;
+
+    if (tab.isDirty) {
+      const name = evtPath.split("/").pop() || evtPath;
+      const ok = window.confirm(
+        (t("ide.externalChangeConflict", { name }) as string) ||
+          `"${name}" changed on disk but you have unsaved edits. Reload from disk and discard local changes?`,
+      );
+      if (!ok) return;
+      setTabs((p) => p.map((row) => (row.path === evtPath ? { ...row, isDirty: false } : row)));
+    }
 
     pendingTabPaths.current.add(evtPath);
     perfCounters.recordTabReloadScheduled();
@@ -387,18 +504,45 @@ export default function CodeZWorkspace({
       const paths = [...pendingTabPaths.current];
       pendingTabPaths.current.clear();
       for (const path of paths) {
-        if (!tabsRef.current.some((t) => t.path === path && !t.isDirty)) continue;
         const fullPath = `${dir}/${path}`;
         void ideApi.readFile(fullPath).then((fc) => {
           setTabs((p) =>
-            p.map((t) =>
-              t.path === path && !t.isDirty ? { ...t, content: fc.content } : t,
+            p.map((row) =>
+              row.path === path ? { ...row, content: fc.content, isDirty: false } : row,
             ),
           );
         }).catch(() => {});
       }
     }, 250);
-  }, []);
+  }, [t]);
+
+  const reloadTabFromDisk = useCallback(
+    async (path: string) => {
+      const dir = projectDirRef.current;
+      if (!dir || isBrowserTab(path)) return;
+      const tab = tabsRef.current.find((t) => t.path === path);
+      if (!tab) return;
+      if (tab.isDirty) {
+        const name = path.split("/").pop() || path;
+        const ok = window.confirm(
+          (t("ide.externalChangeConflict", { name }) as string) ||
+            `"${name}" changed on disk but you have unsaved edits. Reload from disk and discard local changes?`,
+        );
+        if (!ok) return;
+      }
+      try {
+        const fc = await ideApi.readFile(`${dir}/${path}`);
+        setTabs((p) =>
+          p.map((row) =>
+            row.path === path ? { ...row, content: fc.content, isDirty: false } : row,
+          ),
+        );
+      } catch {
+        /* ignore read errors */
+      }
+    },
+    [t],
+  );
 
   useEffect(() => registerWorkspaceRefresh("fileTree", loadFileTree), [registerWorkspaceRefresh, loadFileTree]);
 
@@ -427,7 +571,7 @@ export default function CodeZWorkspace({
       }
 
       if (evt.kind === "modified" || evt.kind === "deleted") {
-        scheduleTabReload(evtPath);
+        scheduleTabReload(evtPath, evt.kind);
       }
     });
 
@@ -640,16 +784,20 @@ export default function CodeZWorkspace({
   const handleTabClose = useCallback(
     (path: string) => {
       if (isBrowserTab(path)) {
-        onBrowserOpenChange?.(false);
-        void browserClose().catch(() => {});
-        setActiveTabPath((cur) =>
-          isBrowserTab(cur) ? tabsRef.current[0]?.path ?? null : cur,
-        );
+        void (async () => {
+          const ok = await requestBrowserClose();
+          if (!ok) return;
+          onBrowserOpenChange?.(false);
+          void browserClose().catch(() => {});
+          setActiveTabPath((cur) =>
+            isBrowserTab(cur) ? tabsRef.current[0]?.path ?? null : cur,
+          );
+        })();
         return;
       }
       closeTab(path);
     },
-    [closeTab, onBrowserOpenChange],
+    [closeTab, onBrowserOpenChange, requestBrowserClose],
   );
 
   // ─── Context menu actions ─────────────────────────────────────────
@@ -829,6 +977,7 @@ export default function CodeZWorkspace({
           bottom_open: bottomOpen,
           bottom_tab: bottomTab,
           bottom_height: bottomHeight,
+          explorer_expanded_paths: [...explorerExpanded],
         },
       });
     }, 800);
@@ -844,6 +993,7 @@ export default function CodeZWorkspace({
     bottomOpen,
     bottomTab,
     bottomHeight,
+    explorerExpanded,
   ]);
 
   return (
@@ -922,7 +1072,7 @@ export default function CodeZWorkspace({
               {sidebarTab === "explorer" && (
                 <FileTree
                   nodes={fileTree}
-                  activePath={activeTabPath}
+                  activePath={fileTreeFocusPath}
                   selectedPaths={fileTreeSelection}
                   gitModified={gitModified}
                   gitAdded={gitAdded}
@@ -934,6 +1084,8 @@ export default function CodeZWorkspace({
                   onSelect={handleFileTreeSelect}
                   onContextMenu={handleFileTreeContextMenu}
                   containerRef={fileTreeRef}
+                  expandedPaths={explorerExpanded}
+                  onExpandedPathsChange={setExplorerExpanded}
                 />
               )}
               {sidebarTab === "search" && (
@@ -977,6 +1129,7 @@ export default function CodeZWorkspace({
           onCloseAll={closeAllTabs}
           onCloseSaved={closeSavedTabs}
           onCloseOther={closeOtherTabs}
+          onReloadFromDisk={(path) => void reloadTabFromDisk(path)}
           contextMenu={tabContextMenu}
           onDismissContextMenu={() => setTabContextMenu(null)}
         />
@@ -1009,6 +1162,9 @@ export default function CodeZWorkspace({
               onSendElementToChat={(el) => onSendElementToChat?.(el)}
               onScreenshotToChat={(base64) => onScreenshotToChat?.(base64)}
               chatEnabled={Boolean(projectDir)}
+              refreshSignal={browserRefreshSignal}
+              agentAction={agentBrowserAction}
+              onRequestClose={requestBrowserClose}
             />
           ) : activeTab ? (
             <FileViewer
@@ -1115,16 +1271,36 @@ export default function CodeZWorkspace({
           </button>
           <button onClick={() => {
             const dir = projectDirRef.current;
-            if (dir) openPath(`${dir}/${fileTreeContextMenu.targetPath}`).catch(() => {});
+            if (!dir || !fileTreeContextMenu) return;
+            const abs = joinProjectPath(dir, fileTreeContextMenu.targetPath);
+            void revealInFolder(abs).catch((e) => {
+              window.alert(String(e));
+            });
             setFileTreeContextMenu(null);
           }}>
             {t("ide.revealInExplorer") || "Reveal in File Manager"}
           </button>
           <div className="ide-tab-context-menu-sep" />
-          <button onClick={() => { fileTreeRef.current?.startCreate?.(false); setFileTreeContextMenu(null); }}>
+          <button onClick={() => {
+            if (!fileTreeContextMenu) return;
+            const parent = parentPathForCreate(
+              fileTreeContextMenu.targetPath,
+              fileTreeContextMenu.isDir,
+            );
+            fileTreeRef.current?.startCreate?.(false, parent);
+            setFileTreeContextMenu(null);
+          }}>
             {t("ide.newFile") || "New File"}
           </button>
-          <button onClick={() => { fileTreeRef.current?.startCreate?.(true); setFileTreeContextMenu(null); }}>
+          <button onClick={() => {
+            if (!fileTreeContextMenu) return;
+            const parent = parentPathForCreate(
+              fileTreeContextMenu.targetPath,
+              fileTreeContextMenu.isDir,
+            );
+            fileTreeRef.current?.startCreate?.(true, parent);
+            setFileTreeContextMenu(null);
+          }}>
             {t("ide.newFolder") || "New Folder"}
           </button>
         </div>

@@ -43,9 +43,25 @@ pub fn agent_system_prompt(
          - `read_lints` — LSP diagnostics after substantive edits (before continuing).\n\
          - `shell` / `code_run` — builds, tests, and scripts. Prefer file tools over \
            shell for reading or writing source files.\n\n\
+         **Web research & browsing**\n\
+         - `web_search` — discover URLs, docs, APIs, or release notes.\n\
+         - `web_fetch` — static pages when you already have the URL (HTML/docs/README/API refs); lightweight HTTP.\n\
+         - `browser` — full CDP control of the **embedded IDE Browser panel** (same page the user sees): \
+           navigate, click, type, snapshot, screenshot, eval_js, assert_*, wait_for.\n\
+         - Do NOT use `shell`+curl for web pages — use `web_fetch` or `browser`.\n\
+         - **When to use which:** static docs → `web_fetch`; JS-rendered SPAs, login flows, \
+           clicking, E2E verification, screenshots → `browser`.\n\
+         - **E2E workflow (recommended):** navigate → lock → snapshot → interact via ref \
+           (e.g. click ref=e3) → assert_url/assert_visible/assert_text → screenshot with save_path → unlock.\n\
+         - **Fallback element discovery:** `get_interactive_elements` or `annotate_screenshot` (vision) → \
+           `click_coords` or CSS selector.\n\
+         - User messages may contain `@browser-element(<css-selector>)` — backend expands tag/selector/text/html; \
+           re-query live state with `browser` when the page may have changed.\n\
+         - **Captcha / login:** stop and ask the user to complete manually; then `wait_for(wait_condition='human_verification')`.\n\
+         - **Page loading:** if content looks incomplete (spinners, skeletons), wait with `wait_for` and backoff before acting.\n\
+         - **Screenshots:** `browser(action=\"screenshot\", save_path=\"...\")` for plan **验收证据**; user may also attach panel screenshots.\n\
+         - **CI E2E:** use project Playwright/Cypress via `code_run` for regression; built-in browser is for dev-time quick verification.\n\n\
          **Research and delegation**\n\
-         - `web_search` — find external docs, APIs, or release notes.\n\
-         - `web_fetch` — read a specific URL when you already have the link.\n\
          - `delegate` — offload scoped read-only investigation to a sub-agent.\n\n\
          **Multi-step work (Agent mode — Level 2)**\n\
          - When executing a plan from `{plans_dir}/`, read the plan file first.\n\
@@ -118,6 +134,8 @@ pub fn plan_mode_context(session_plan_path: &str) -> String {
          ### Hard constraints\n\
          - **ONLY** `plan_write` may modify files.\n\
          - Do NOT use `plan_todo`, `file_write`, `file_edit`, `shell`, `code_run`, or other mutating tools.\n\
+         - **`browser` is NOT available in Plan mode** — do NOT plan steps requiring live browser automation.\n\
+         - Use `web_fetch` for static URL research; `@browser-element(...)` may appear as read-only context only.\n\
          - Allowed: read-only exploration + `plan_mode_ui` + `chat_ui`.\n\n\
          ### Brainstorm-first workflow (mandatory)\n\
          1. **Explore** with read-only tools to understand scope.\n\
@@ -215,6 +233,8 @@ mod tests {
         assert!(p.contains("file_read"));
         assert!(p.contains("read_lints"));
         assert!(p.contains("web_fetch"));
+        assert!(p.contains("browser"));
+        assert!(p.contains("snapshot"));
         assert!(p.contains("/tmp/ws"));
         assert!(p.contains(".agentz/plans"));
     }
@@ -224,6 +244,7 @@ mod tests {
         let p = plan_mode_context(".agentz/plans/test.md");
         assert!(p.contains("plan_write"));
         assert!(p.contains("ONLY"));
+        assert!(p.contains("browser"));
         assert!(p.contains("执行步骤"));
     }
 

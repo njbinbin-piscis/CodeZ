@@ -11,6 +11,7 @@ pub mod connectors;
 pub mod curator;
 pub mod dap;
 pub mod data_scope;
+pub mod debug_scenarios;
 pub mod edit;
 pub mod ext_host;
 pub mod fish;

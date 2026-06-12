@@ -18,6 +18,8 @@ export interface LayoutSnapshot {
   bottom_open: boolean;
   bottom_tab: string;
   bottom_height: number;
+  /** Explorer directory paths that are expanded in the file tree. */
+  explorer_expanded_paths?: string[];
 }
 
 export interface WorkspaceSnapshot {

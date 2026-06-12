@@ -107,6 +107,8 @@
 .agentz-tool-steps-scroll {
   display: flex;
   flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .agentz-plan-panel-inner {

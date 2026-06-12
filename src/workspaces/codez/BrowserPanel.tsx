@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   browserClickAt,
   browserClose,
+  browserCurrentUrl,
   browserInspectAt,
   browserNavigate,
   browserPickAt,
@@ -11,6 +12,8 @@ import {
   browserScrollInfo,
   browserScrollTo,
   browserSetViewport,
+  browserState,
+  onBrowserChanged,
   type PickedElement,
   type ScrollInfo,
 } from "../../services/tauri/browser";
@@ -31,6 +34,12 @@ interface BrowserPanelProps {
   onScreenshotToChat: (base64: string) => void;
   /** When false, hide send-to-chat actions (requires an open project folder). */
   chatEnabled?: boolean;
+  /** Increment to force refresh after agent browser actions. */
+  refreshSignal?: number;
+  /** Latest agent browser action label (from chat tool_start). */
+  agentAction?: string | null;
+  /** Ask parent to confirm before closing (returns true to proceed). */
+  onRequestClose?: () => Promise<boolean>;
 }
 
 function rectStyle(el: PickedElement, img: HTMLImageElement): React.CSSProperties | null {
@@ -56,6 +65,9 @@ export default function BrowserPanel({
   onSendElementToChat,
   onScreenshotToChat,
   chatEnabled = true,
+  refreshSignal = 0,
+  agentAction = null,
+  onRequestClose,
 }: BrowserPanelProps) {
   const { t } = useTranslation();
   const [address, setAddress] = useState("");
@@ -66,6 +78,7 @@ export default function BrowserPanel({
   const [hovered, setHovered] = useState<PickedElement | null>(null);
   const [selected, setSelected] = useState<PickedElement | null>(null);
   const [scroll, setScroll] = useState<ScrollInfo>(EMPTY_SCROLL);
+  const [pageZoom, setPageZoom] = useState(1);
   const scrollRef = useRef<ScrollInfo>(EMPTY_SCROLL);
   scrollRef.current = scroll;
 
@@ -141,9 +154,45 @@ export default function BrowserPanel({
       await refreshShot();
       await refreshScrollInfo();
     } catch (e) {
-      setError(String(e));
+      if (viewportReady.current) setError(String(e));
     }
   }, [measureViewport, refreshShot, refreshScrollInfo]);
+
+  const syncAddressFromBackend = useCallback(async () => {
+    try {
+      const st = await browserState();
+      if (st.url) setAddress(st.url);
+    } catch {
+      try {
+        const url = await browserCurrentUrl();
+        if (url) setAddress(url);
+      } catch {
+        /* browser not launched */
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void syncAddressFromBackend();
+    let unlisten: (() => void) | undefined;
+    void onBrowserChanged(() => {
+      void refreshShot();
+      void syncAddressFromBackend();
+      void refreshScrollInfo();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [refreshShot, refreshScrollInfo, syncAddressFromBackend]);
+
+  useEffect(() => {
+    if (refreshSignal > 0) {
+      void refreshShot();
+      void syncAddressFromBackend();
+    }
+  }, [refreshSignal, refreshShot, syncAddressFromBackend]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -189,6 +238,15 @@ export default function BrowserPanel({
     const el = viewRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setPageZoom((z) => {
+          const next = Math.round((z + delta) * 10) / 10;
+          return Math.min(2, Math.max(0.5, next));
+        });
+        return;
+      }
       if (pickModeRef.current) return;
       e.preventDefault();
       wheelAccum.current.dx += e.deltaX;
@@ -201,6 +259,16 @@ export default function BrowserPanel({
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "0") return;
+      e.preventDefault();
+      setPageZoom(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Inspector sidebar steals horizontal space — re-sync viewport after layout.
@@ -220,6 +288,7 @@ export default function BrowserPanel({
       await syncViewport();
       const finalUrl = await browserNavigate(url);
       setAddress(finalUrl || url);
+      await syncViewport();
       await refreshShot();
       await refreshScrollInfo();
     } catch (e) {
@@ -350,12 +419,18 @@ export default function BrowserPanel({
   }, [onScreenshotToChat]);
 
   const close = useCallback(() => {
-    void browserClose().catch(() => {});
-    setPickMode(false);
-    setHovered(null);
-    setSelected(null);
-    onClose();
-  }, [onClose]);
+    void (async () => {
+      if (onRequestClose) {
+        const ok = await onRequestClose();
+        if (!ok) return;
+      }
+      void browserClose().catch(() => {});
+      setPickMode(false);
+      setHovered(null);
+      setSelected(null);
+      onClose();
+    })();
+  }, [onClose, onRequestClose]);
 
   const togglePick = () => {
     setPickMode((v) => {
@@ -408,6 +483,11 @@ export default function BrowserPanel({
           placeholder={t("browser.addressPlaceholder")}
           spellCheck={false}
         />
+        {agentAction ? (
+          <span className="agentz-browser-agent-badge" title={agentAction}>
+            {t("browser.agentAction", { action: agentAction })}
+          </span>
+        ) : null}
         <button
           className={`agentz-browser-btn${pickMode ? " active" : ""}`}
           onClick={togglePick}
@@ -422,6 +502,13 @@ export default function BrowserPanel({
           title={chatEnabled ? t("browser.screenshotToChat") : t("browser.needsProject")}
         >
           ⎙
+        </button>
+        <button
+          className="agentz-browser-btn"
+          onClick={() => setPageZoom(1)}
+          title={t("browser.zoomReset")}
+        >
+          {t("browser.zoomLevel", { percent: Math.round(pageZoom * 100) })}
         </button>
         <button className="agentz-browser-btn" onClick={close} title={t("browser.close")}>
           ✕
@@ -451,6 +538,14 @@ export default function BrowserPanel({
                   src={`data:image/png;base64,${shot}`}
                   alt="page"
                   draggable={false}
+                  style={{
+                    ...(scroll.client_width > 0
+                      ? { width: scroll.client_width, height: scroll.client_height }
+                      : {}),
+                    ...(pageZoom !== 1
+                      ? { transform: `scale(${pageZoom})`, transformOrigin: "top left" }
+                      : {}),
+                  }}
                 />
                 {pickMode && hoverBox && (
                   <div className="agentz-browser-highlight hover" style={hoverBox} />

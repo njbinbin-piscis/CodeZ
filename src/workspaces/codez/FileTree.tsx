@@ -7,11 +7,55 @@ import { ideApi } from "../../services/tauri/ide";
 import type { FileNode } from "./types";
 import FileIcon from "./FileIcon";
 
-/** Context for expand-all / collapse-all control. */
-const ExpandAllCtx = createContext<{ version: number; expand: boolean }>({
-  version: 0,
-  expand: true,
+/** Context for expand-all / collapse-all and per-node expanded state. */
+const ExpandedPathsCtx = createContext<{
+  expandedPaths: Set<string>;
+  togglePath: (path: string) => void;
+}>({
+  expandedPaths: new Set(),
+  togglePath: () => {},
 });
+
+/** Collect all directory paths in the tree. */
+export function collectAllDirPaths(nodes: FileNode[]): string[] {
+  const out: string[] = [];
+  const walk = (list: FileNode[]) => {
+    for (const n of list) {
+      if (n.is_dir) {
+        out.push(n.path);
+        if (n.children) walk(n.children);
+      }
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
+/** Default expanded dirs: first two levels + ancestors of focus path. */
+export function defaultExplorerExpanded(
+  nodes: FileNode[],
+  focusPath: string | null,
+): Set<string> {
+  const set = new Set<string>();
+  const walk = (list: FileNode[], depth: number) => {
+    for (const n of list) {
+      if (n.is_dir) {
+        if (depth < 2) set.add(n.path);
+        if (n.children) walk(n.children, depth + 1);
+      }
+    }
+  };
+  walk(nodes, 0);
+  if (focusPath) {
+    const parts = focusPath.split("/");
+    let acc = "";
+    for (let i = 0; i < parts.length - 1; i++) {
+      acc = acc ? `${acc}/${parts[i]}` : parts[i];
+      if (acc) set.add(acc);
+    }
+  }
+  return set;
+}
 
 /** Right-click context menu position + the path that was right-clicked. */
 export interface FileTreeContextMenu {
@@ -37,6 +81,9 @@ interface FileTreeProps {
   onContextMenu: (menu: FileTreeContextMenu) => void;
   /** Optional ref to the scrollable tree root (for context-menu actions). */
   containerRef?: Ref<HTMLDivElement>;
+  /** Persisted set of expanded directory paths. */
+  expandedPaths: Set<string>;
+  onExpandedPathsChange: (paths: Set<string>) => void;
   depth?: number;
 }
 
@@ -48,7 +95,7 @@ interface CreatingState {
 }
 
 /** Join project root with a tree-relative path for Tauri `ide_file_action` / read / write. */
-function joinProjectPath(projectDir: string, relativePath: string): string {
+export function joinProjectPath(projectDir: string, relativePath: string): string {
   const root = projectDir.replace(/[/\\]+$/, "");
   const rel = relativePath.replace(/^[/\\]+/, "");
   if (!rel) return root;
@@ -60,6 +107,14 @@ function basenameFromPath(path: string): string {
   const sep = path.includes("\\") ? "\\" : "/";
   const i = path.lastIndexOf(sep);
   return i >= 0 ? path.slice(i + 1) : path;
+}
+
+/** Parent directory for inline create from a context-menu target. */
+export function parentPathForCreate(targetPath: string, isDir: boolean): string {
+  if (isDir) return targetPath;
+  const sep = targetPath.includes("\\") ? "\\" : "/";
+  const lastSep = targetPath.lastIndexOf(sep);
+  return lastSep > 0 ? targetPath.substring(0, lastSep) : "";
 }
 
 /** Inline rename state: the node currently being renamed. */
@@ -168,21 +223,8 @@ function TreeNode({
 }) {
   const isCreateTarget = creating != null && creating.parentPath === node.path;
   const isRenaming = renaming?.path === node.path;
-  const { version: expandVersion, expand: expandDefault } = useContext(ExpandAllCtx);
-  const [expanded, setExpanded] = useState(depth < 2 || !!isCreateTarget);
-
-  // Sync with expand-all / collapse-all signal from parent.
-  const lastExpandVersion = useRef(expandVersion);
-  useEffect(() => {
-    if (expandVersion !== lastExpandVersion.current) {
-      lastExpandVersion.current = expandVersion;
-      if (node.is_dir) setExpanded(expandDefault);
-    }
-  }, [expandVersion, expandDefault, node.is_dir]);
-
-  useEffect(() => {
-    if (isCreateTarget) setExpanded(true);
-  }, [isCreateTarget]);
+  const { expandedPaths, togglePath } = useContext(ExpandedPathsCtx);
+  const expanded = node.is_dir && expandedPaths.has(node.path);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -190,13 +232,13 @@ function TreeNode({
       onSelect(node.path, { multi });
       if (!multi) {
         if (node.is_dir) {
-          setExpanded((x) => !x);
+          togglePath(node.path);
         } else {
           onFileClick(node);
         }
       }
     },
-    [node, onFileClick, onSelect],
+    [node, onFileClick, onSelect, togglePath],
   );
 
   const handleContextMenu = useCallback(
@@ -321,48 +363,77 @@ export default function FileTree({
   onSelect,
   onContextMenu,
   containerRef,
+  expandedPaths,
+  onExpandedPathsChange,
 }: FileTreeProps) {
   const { t } = useTranslation();
   const [creating, setCreating] = useState<CreatingState | null>(null);
   const [renaming, setRenaming] = useState<RenamingState | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [expandSignal, setExpandSignal] = useState({ version: 0, expand: true });
 
-  const expandAll = useCallback(() => setExpandSignal((s) => ({ version: s.version + 1, expand: true })), []);
-  const collapseAll = useCallback(() => setExpandSignal((s) => ({ version: s.version + 1, expand: false })), []);
+  const togglePath = useCallback(
+    (path: string) => {
+      const next = new Set(expandedPaths);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      onExpandedPathsChange(next);
+    },
+    [expandedPaths, onExpandedPathsChange],
+  );
 
-  /** Determine the target parent directory for a new file/folder based on
-   *  the currently selected path. If a directory is selected, create inside
-   *  it. If a file is selected, create inside its parent (sibling level).
-   *  If nothing is selected, create at the project root. */
+  const expandAll = useCallback(() => {
+    onExpandedPathsChange(new Set(collectAllDirPaths(nodes)));
+  }, [nodes, onExpandedPathsChange]);
+
+  const collapseAll = useCallback(() => {
+    onExpandedPathsChange(new Set());
+  }, [onExpandedPathsChange]);
+
+  const expandCtxValue = useMemo(
+    () => ({ expandedPaths, togglePath }),
+    [expandedPaths, togglePath],
+  );
+
+  const findNode = useCallback((list: FileNode[], path: string): FileNode | null => {
+    for (const n of list) {
+      if (n.path === path) return n;
+      if (n.children) {
+        const found = findNode(n.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+
+  /** Parent dir for create: explorer selection first, then project root. */
   const resolveParentPath = useCallback((): string | null => {
     if (!projectDir) return null;
-    if (!activePath) return "";
-    const findNode = (nodes: FileNode[], path: string): FileNode | null => {
-      for (const n of nodes) {
-        if (n.path === path) return n;
-        if (n.children) {
-          const found = findNode(n.children, path);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    const selected = findNode(nodes, activePath);
+    const focusPath =
+      selectedPaths.size > 0 ? [...selectedPaths][0] : activePath;
+    if (!focusPath) return "";
+    const selected = findNode(nodes, focusPath);
     if (!selected) return "";
     if (selected.is_dir) return selected.path;
-    const sep = selected.path.includes("\\") ? "\\" : "/";
-    const lastSep = selected.path.lastIndexOf(sep);
-    return lastSep > 0 ? selected.path.substring(0, lastSep) : "";
-  }, [activePath, nodes, projectDir]);
+    return parentPathForCreate(selected.path, false);
+  }, [activePath, findNode, nodes, projectDir, selectedPaths]);
 
   const startCreate = useCallback(
-    (isDir: boolean) => {
-      const parentPath = resolveParentPath();
-      if (!parentPath) return;
+    (isDir: boolean, parentPathOverride?: string) => {
+      if (!projectDir) {
+        window.alert(t("ide.noProjectDirHint") || "Open a project folder first.");
+        return;
+      }
+      const parentPath =
+        parentPathOverride !== undefined ? parentPathOverride : resolveParentPath();
+      if (parentPath === null) return;
       setCreating({ parentPath, isDir });
+      if (parentPath) {
+        const next = new Set(expandedPaths);
+        next.add(parentPath);
+        onExpandedPathsChange(next);
+      }
     },
-    [resolveParentPath],
+    [expandedPaths, onExpandedPathsChange, projectDir, resolveParentPath, t],
   );
 
   const commitCreate = useCallback(
@@ -495,7 +566,8 @@ export default function FileTree({
     if (!el) return;
     (el as unknown as { deleteSelected?: () => void }).deleteSelected = deleteSelected;
     (el as unknown as { renameActive?: () => void }).renameActive = renameActive;
-    (el as unknown as { startCreate?: (isDir: boolean) => void }).startCreate = startCreate;
+    (el as unknown as { startCreate?: (isDir: boolean, parentPathOverride?: string) => void }).startCreate =
+      startCreate;
   }, [deleteSelected, renameActive, startCreate]);
 
   useEffect(() => {
@@ -567,7 +639,7 @@ export default function FileTree({
         </div>
       ) : (
         <div className="file-tree-root" ref={rootRef} tabIndex={0}>
-          <ExpandAllCtx.Provider value={expandSignal}>
+          <ExpandedPathsCtx.Provider value={expandCtxValue}>
           {isRootCreate && (
             <InlineInput
               depth={0}
@@ -597,7 +669,7 @@ export default function FileTree({
               onCancelRename={cancelRename}
             />
           ))}
-          </ExpandAllCtx.Provider>
+          </ExpandedPathsCtx.Provider>
         </div>
       )}
     </>

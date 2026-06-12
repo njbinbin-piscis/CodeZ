@@ -9,7 +9,7 @@ use piscis_kernel::agent::file_journal::FileJournal;
 use piscis_kernel::agent::hooks::{AgentHooks, ContextHookEvent, HookDecision, ToolHookEvent};
 use piscis_kernel::agent::tool::ToolResult;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex as AsyncMutex;
 
 const FILE_TOOLS: &[&str] = &["file_write", "file_edit"];
@@ -99,6 +99,15 @@ impl AgentHooks for JournalWithIdeNotify {
 
     async fn after_tool(&self, ev: &ToolHookEvent<'_>, result: &ToolResult) {
         self.journal.after_tool(ev, result).await;
+        if ev.tool_name == "browser" && !result.is_error {
+            let _ = self
+                .app
+                .state::<crate::state::AppState>()
+                .browser_activity
+                .mark_browser_tool()
+                .await;
+            crate::browser::events::emit_browser_changed(&self.app, ev.input, None);
+        }
         if result.is_error || !FILE_TOOLS.contains(&ev.tool_name) {
             return;
         }

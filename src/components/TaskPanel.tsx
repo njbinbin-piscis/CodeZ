@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PlanTodoItem } from "../services/tauri/chat";
 import { toolIcon, toolSummary } from "./toolDisplay";
@@ -193,6 +193,13 @@ function TaskPanel({
   className,
 }: TaskPanelProps) {
   const { t } = useTranslation();
+  const toolsScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!busy || tab !== "tools") return;
+    const el = toolsScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [toolSteps, busy, tab]);
 
   if (planItems.length === 0 && toolSteps.length === 0) return null;
 
@@ -246,7 +253,7 @@ function TaskPanel({
           <div className="agentz-task-panel-content">
             {tab === "todo" && planItems.length > 0 && <PlanPanel items={planItems} />}
             {tab === "tools" && toolSteps.length > 0 && (
-              <div className="agentz-tool-steps-scroll">
+              <div className="agentz-tool-steps-scroll" ref={toolsScrollRef}>
                 {toolSteps.map((step) => (
                   <ToolStepCard key={step.id} step={step} onToggle={() => onToggleToolStep(step.id)} />
                 ))}

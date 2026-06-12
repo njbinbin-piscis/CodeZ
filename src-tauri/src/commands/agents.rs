@@ -405,7 +405,11 @@ fn builtin_tool_catalog() -> Vec<BuiltinToolInfo> {
         ("lsp", "LSP diagnostics, hover, definitions", "ide"),
         ("read_lints", "Read linter diagnostics for a file", "ide"),
         ("codebase_search", "Semantic search across the repo", "ide"),
-        ("browser", "Automate the built-in browser panel", "ide"),
+        (
+            "browser",
+            "E2E automation of the embedded Browser panel (snapshot/ref, click, assert, screenshot)",
+            "ide",
+        ),
         ("terminal_read", "Read IDE terminal output", "ide"),
         ("delegate", "Spawn a read-only research sub-agent", "agent"),
         ("chat_ui", "Render interactive UI cards in chat", "ui"),

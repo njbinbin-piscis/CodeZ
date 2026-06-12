@@ -10,6 +10,7 @@ const TOOL_ICONS: Record<string, string> = {
   file_search: "🔍",
   file_diff: "⧉",
   web_search: "🌐",
+  web_fetch: "📡",
   browser: "🌍",
   plan_todo: "📋",
   plan_write: "📝",
@@ -30,6 +31,14 @@ export function toolSummary(name: string, input: unknown): string {
   }
   if (name === "file_list") return String(i.path ?? i.directory ?? ".").slice(0, 80);
   if (name === "web_search") return String(i.query ?? "").slice(0, 80);
+  if (name === "web_fetch") return String(i.url ?? "").slice(0, 80);
+  if (name === "browser") {
+    const parts = [i.action];
+    if (i.url) parts.push(String(i.url).slice(0, 60));
+    else if (i.ref) parts.push(String(i.ref));
+    else if (i.selector) parts.push(String(i.selector).slice(0, 40));
+    return parts.filter(Boolean).join(" → ");
+  }
   if (name === "plan_todo") return `${Array.isArray(i.todos) ? i.todos.length : 0} items`;
   if (name === "plan_write") return String(i.path ?? ".agentz/plans/…").slice(0, 80);
   if (name === "plan_mode_ui") return String(i.action ?? "").slice(0, 80);

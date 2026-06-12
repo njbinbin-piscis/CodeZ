@@ -9,9 +9,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
-/** Reveal a path in the OS file manager (backed by an `open_path` command). */
+/** Open a path with the OS default handler. */
 export function openPath(path: string): Promise<void> {
   return invoke<void>("open_path", { path });
+}
+
+/** Reveal a file or folder in the system file manager. */
+export function revealInFolder(path: string): Promise<void> {
+  return invoke<void>("reveal_in_folder", { path });
 }
 
 /** Prompt the user to choose a project directory. Returns null if cancelled. */

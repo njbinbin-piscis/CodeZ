@@ -5,6 +5,20 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-06-12
+
+### Added
+
+- **CodeZ Browser E2E**: `browser-changed` event sync, auto-open Browser tab on agent actions, close guard when agent is active.
+- **Browser automation**: RobotZ `snapshot`/`ref`/`lock`/`fill`, assert DSL (`assert_url`, `assert_visible`, `assert_text`), `wait_for_text`.
+- **Kernel alignment**: `piscis-engine v0.8.58` (`web_fetch`, `piscis-ide-tools`), shared `robotz-browser v0.1.2` with IDE panel.
+- **Skills / debug**: `codez-e2e-testing` skill; `debug_scenarios_list` with four browser regression prompts.
+
+### Changed
+
+- System prompt and Plan mode docs for `web_fetch` vs `browser` E2E workflow.
+- `toolDisplay` summaries for `browser` and `web_fetch`.
+
 ## [0.5.3] - 2026-06-10
 
 ### Fixed

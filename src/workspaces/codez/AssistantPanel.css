@@ -261,6 +261,48 @@
   z-index: 0;
 }
 
+.agentz-load-more-msgs {
+  align-self: center;
+  margin-bottom: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #2a2a38);
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text-dim, #9a9ab0);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agentz-load-more-msgs:hover {
+  color: var(--text, #e8e8f0);
+  border-color: var(--accent, #7c6af7);
+}
+
+.agentz-turn-user.queued {
+  position: relative;
+  opacity: 0.55;
+}
+
+.agentz-queue-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim, #9a9ab0);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.agentz-queue-remove:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
+}
+
 .agentz-assistant-empty {
   color: var(--text-dim, #9a9ab0);
   font-size: 13px;
@@ -277,10 +319,6 @@
 
 .agentz-turn-user {
   margin-bottom: 10px;
-}
-
-.agentz-turn-user.queued {
-  opacity: 0.55;
 }
 
 .agentz-turn-diffs {
