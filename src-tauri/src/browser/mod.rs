@@ -480,7 +480,9 @@ fn normalise_url(input: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Requires a local Chromium install; CI runners do not ship one.
     #[tokio::test]
+    #[ignore = "requires local Chromium"]
     async fn launch_with_unique_profile() {
         let mgr = BrowserManager::new();
         mgr.set_viewport(800, 600).await.unwrap();
