@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
@@ -183,7 +183,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
@@ -237,7 +237,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
@@ -294,7 +294,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
@@ -352,7 +352,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3 4 5; do
-            if cargo fetch --locked; then exit 0; fi
+            if cargo fetch; then exit 0; fi
             echo "cargo fetch failed (attempt ${attempt}), retrying..."
             sleep $((attempt * 15))
           done
