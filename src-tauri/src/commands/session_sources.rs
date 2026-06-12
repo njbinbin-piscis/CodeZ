@@ -9,6 +9,8 @@ pub const SOURCE_WORKZ: &str = "workz";
 pub const SOURCE_WORKZ_TEAM: &str = "workz-team";
 /// Koi sub-agent turns spawned inside a pool (not user-facing WorkZ tasks).
 pub const SOURCE_POOL: &str = "pool";
+/// Lightweight coordinator turns triggered by pool heartbeat patrol.
+pub const SOURCE_PISCIS_HEARTBEAT_POOL: &str = "piscis-heartbeat-pool";
 /// Pre-isolation sessions (treated as CodeZ for listing).
 pub const SOURCE_LEGACY: &str = "agentz";
 

@@ -296,7 +296,7 @@ export function TagsBlock({
   );
 }
 
-export function KoiPickerBlock({
+export function AssistantPickerBlock({
   block,
   value,
   onChange,

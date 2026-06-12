@@ -122,6 +122,7 @@ export interface DropdownMultiSelectProps {
   label: string;
   disabled?: boolean;
   emptyHint?: string;
+  onEmptyHintClick?: () => void;
 }
 
 /** Multi-select skills-style menu (CodeZ composer). */
@@ -132,6 +133,7 @@ export function DropdownMultiSelect({
   label,
   disabled,
   emptyHint,
+  onEmptyHintClick,
   icon,
 }: DropdownMultiSelectProps & { icon?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -172,7 +174,13 @@ export function DropdownMultiSelect({
       {open && (
         <div className="agentz-dropdown-popup" role="listbox" aria-multiselectable="true">
           {options.length === 0 ? (
-            <div className="agentz-dropdown-empty">{emptyHint ?? "—"}</div>
+            onEmptyHintClick ? (
+              <button type="button" className="agentz-dropdown-empty agentz-dropdown-empty-action" onClick={onEmptyHintClick}>
+                {emptyHint ?? "—"}
+              </button>
+            ) : (
+              <div className="agentz-dropdown-empty">{emptyHint ?? "—"}</div>
+            )
           ) : (
             options.map((opt) => {
               const active = selected.includes(opt.id);

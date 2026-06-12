@@ -11,6 +11,8 @@ interface ProjectEdgePanelProps {
   undoing?: boolean;
 }
 
+type EdgeTabId = "changes" | "artifacts";
+
 /** Extract the bare filename from a path (last segment). */
 function basename(p: string): string {
   const parts = p.split("/");
@@ -34,18 +36,32 @@ export default function ProjectEdgePanel({
     setPreviewPath,
   } = useProjectEdge();
 
-  // Track whether the user explicitly closed the drawer while pinned.
+  const [activeTab, setActiveTab] = useState<EdgeTabId>("changes");
   const [forceDismissed, setForceDismissed] = useState(false);
 
   const hasChanges = gitChanges.length > 0 || pendingReview != null;
   const hasArtifacts = artifacts.length > 0;
-  const totalCount = artifacts.length;
-  // Only pending review pins the drawer (undo/keep). Opening a file in the editor
-  // must not block hover-dismiss or click-outside close.
+
+  const changesCount = useMemo(() => {
+    const paths = new Set<string>();
+    for (const c of gitChanges) paths.add(c.path);
+    for (const c of pendingReview?.changes ?? []) paths.add(c.rel_path);
+    return paths.size;
+  }, [gitChanges, pendingReview]);
+
+  const artifactsCount = artifacts.length;
+
+  const badgeCount = useMemo(() => {
+    const paths = new Set<string>();
+    for (const c of gitChanges) paths.add(c.path);
+    for (const c of pendingReview?.changes ?? []) paths.add(c.rel_path);
+    for (const p of artifacts) paths.add(p);
+    return paths.size;
+  }, [gitChanges, pendingReview, artifacts]);
+
   const isPinned = pendingReview != null && !forceDismissed;
   const isHidden = !hasChanges && !hasArtifacts;
 
-  // Build a flat, deduplicated, sorted list of artifact entries.
   const flatArtifacts = useMemo(() => {
     const seen = new Set<string>();
     const list: { path: string; name: string }[] = [];
@@ -69,22 +85,42 @@ export default function ProjectEdgePanel({
     }
   }, [pendingReview, hasChanges, hasArtifacts]);
 
+  useEffect(() => {
+    if (pendingReview) setActiveTab("changes");
+  }, [pendingReview]);
+
+  // If the changes tab has nothing to show but artifacts exist, land on artifacts.
+  useEffect(() => {
+    if (activeTab === "changes" && !hasChanges && hasArtifacts) {
+      setActiveTab("artifacts");
+    }
+  }, [activeTab, hasChanges, hasArtifacts]);
+
   if (!projectDir) return null;
 
+  const changesLabel = t("agent.changes");
+  const artifactsLabel = t("agent.artifacts");
+  const badgeTitle = `${changesLabel} (${changesCount}) · ${artifactsLabel} (${artifactsCount})`;
+
   return (
-    <div className="agentz-project-edge-panel" aria-label={t("agent.changes")}>
+    <div className="agentz-project-edge-panel" aria-label={badgeTitle}>
       <EdgeBookmarkDrawer
-        label={t("agent.changes")}
-        count={totalCount}
+        badgeTitle={badgeTitle}
+        count={badgeCount}
         top={8}
         pinned={isPinned}
         hidden={isHidden}
         onClose={handleClose}
+        closeLabel={t("common.close")}
+        tabs={[
+          { id: "changes", label: changesLabel, count: changesCount },
+          { id: "artifacts", label: artifactsLabel, count: artifactsCount },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as EdgeTabId)}
       >
-        {/* ── Git changes section ──────────────────────────────── */}
-        {hasChanges && (
+        {activeTab === "changes" && (
           <>
-            <div className="agentz-edge-section-title">{t("agent.changes")}</div>
             {pendingReview && (
               <div className="agentz-edge-review">
                 <span className="agentz-edge-review-title">
@@ -163,24 +199,26 @@ export default function ProjectEdgePanel({
           </>
         )}
 
-        {/* ── Artifacts section ─────────────────────────────────── */}
-        {hasArtifacts && (
+        {activeTab === "artifacts" && (
           <>
-            <div className="agentz-edge-section-title">{t("agent.artifacts")}</div>
-            <ul className="agentz-edge-artifacts-flat">
-              {flatArtifacts.map((a) => (
-                <li key={a.path}>
-                  <button
-                    type="button"
-                    className={`agentz-edge-artifact-item${previewPath === a.path ? " active" : ""}`}
-                    onClick={() => onSelectPath(a.path)}
-                    title={a.path}
-                  >
-                    <span className="agentz-edge-artifact-name">{a.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {flatArtifacts.length > 0 ? (
+              <ul className="agentz-edge-artifacts-flat">
+                {flatArtifacts.map((a) => (
+                  <li key={a.path}>
+                    <button
+                      type="button"
+                      className={`agentz-edge-artifact-item${previewPath === a.path ? " active" : ""}`}
+                      onClick={() => onSelectPath(a.path)}
+                      title={a.path}
+                    >
+                      <span className="agentz-edge-artifact-name">{a.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="agentz-edge-empty">{t("agent.noArtifacts")}</div>
+            )}
           </>
         )}
       </EdgeBookmarkDrawer>

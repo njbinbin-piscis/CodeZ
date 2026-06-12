@@ -4,7 +4,6 @@ import DropdownSelect from "../../../components/DropdownSelect";
 import {
   createApiConnector,
   getConnectorCredentials,
-  installConnector,
   listConnectors,
   saveConnectorCredentials,
   setConnectorEnabled,
@@ -63,13 +62,16 @@ const EMPTY_API: CreateApiConnectorRequest = {
   description: "",
 };
 
-export default function ConnectorsTab() {
+interface ConnectorsInstalledViewProps {
+  expandConnectorId?: string | null;
+}
+
+export default function ConnectorsInstalledView({ expandConnectorId }: ConnectorsInstalledViewProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<ConnectorInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [source, setSource] = useState("");
   const [apiOpen, setApiOpen] = useState(false);
   const [apiForm, setApiForm] = useState<CreateApiConnectorRequest>(EMPTY_API);
 
@@ -105,21 +107,6 @@ export default function ConnectorsTab() {
       parameters: p.parameters,
     }));
   }, []);
-
-  const doInstall = useCallback(async () => {
-    if (!source.trim()) return;
-    setBusy("__install__");
-    setError(null);
-    try {
-      await installConnector(source.trim());
-      setSource("");
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(null);
-    }
-  }, [source, refresh]);
 
   const doCreateApi = useCallback(async () => {
     setBusy("__api__");
@@ -178,6 +165,12 @@ export default function ConnectorsTab() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!expandConnectorId || items.length === 0) return;
+    const c = items.find((x) => x.id === expandConnectorId);
+    if (c) void openCreds(c);
+  }, [expandConnectorId, items, openCreds]);
+
   const saveCreds = useCallback(
     async (id: string) => {
       setBusy(id);
@@ -206,20 +199,6 @@ export default function ConnectorsTab() {
         <h3>{t("connectors.title")}</h3>
         <p className="agentz-settings-hint">{t("connectors.hint")}</p>
         {error && <div className="agentz-settings-error">{error}</div>}
-
-        <div className="agentz-wb-search">
-          <input
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void doInstall();
-            }}
-            placeholder={t("connectors.installPlaceholder")}
-          />
-          <button type="button" onClick={() => void doInstall()} disabled={busy === "__install__"}>
-            {busy === "__install__" ? t("connectors.installing") : t("connectors.install")}
-          </button>
-        </div>
 
         <div className="agentz-settings-field" style={{ marginTop: 12 }}>
           <button type="button" onClick={() => setApiOpen((v) => !v)}>

@@ -89,6 +89,8 @@ export default function BrowserPanel({
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inspectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewportReady = useRef(false);
+  const lastViewportRef = useRef<{ w: number; h: number } | null>(null);
+  const syncingViewportRef = useRef(false);
   // Accumulated wheel deltas, flushed to the page on a short timer so a burst
   // of wheel events becomes one scroll + one screenshot refresh.
   const wheelAccum = useRef({ dx: 0, dy: 0 });
@@ -132,29 +134,34 @@ export default function BrowserPanel({
   const measureViewport = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    // clientWidth/Height = the painted box (excludes scrollbar gutter).
-    let w = canvas.clientWidth;
-    let h = canvas.clientHeight;
-    const si = scrollRef.current;
-    if (si.scroll_height > si.client_height + 1) w = Math.max(0, w - 12);
-    if (si.scroll_width > si.client_width + 1) h = Math.max(0, h - 12);
-    w = Math.max(320, w);
-    h = Math.max(200, h);
+    // Canvas fills the view; synthetic scrollbars are absolute overlays and do
+    // not shrink clientWidth/Height. Do not subtract gutter here — doing so
+    // oscillates with refreshScrollInfo and can spin CPU / crash WebKit.
+    const w = Math.max(320, canvas.clientWidth);
+    const h = Math.max(200, canvas.clientHeight);
     if (w < 8 || h < 8) return null;
     return { w, h };
   }, []);
 
   const syncViewport = useCallback(async () => {
+    if (syncingViewportRef.current) return;
     const dims = measureViewport();
     if (!dims) return;
     const { w, h } = dims;
+    const last = lastViewportRef.current;
+    if (last && last.w === w && last.h === h) return;
+
+    syncingViewportRef.current = true;
     try {
       await browserSetViewport(w, h);
+      lastViewportRef.current = { w, h };
       viewportReady.current = true;
       await refreshShot();
       await refreshScrollInfo();
     } catch (e) {
       if (viewportReady.current) setError(String(e));
+    } finally {
+      syncingViewportRef.current = false;
     }
   }, [measureViewport, refreshShot, refreshScrollInfo]);
 
@@ -208,15 +215,21 @@ export default function BrowserPanel({
 
     const onResize = () => {
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
-      resizeTimer.current = setTimeout(() => void syncViewport(), 120);
+      resizeTimer.current = setTimeout(() => void syncViewport(), 250);
     };
     const ro = new ResizeObserver(onResize);
     if (canvas) ro.observe(canvas);
-    if (view && view !== canvas) ro.observe(view);
     window.addEventListener("resize", onResize);
 
+    const onFontScale = () => {
+      lastViewportRef.current = null;
+      if (resizeTimer.current) clearTimeout(resizeTimer.current);
+      resizeTimer.current = setTimeout(() => void syncViewport(), 400);
+    };
+    window.addEventListener("agentz-font-scale", onFontScale);
+
     pollRef.current = setInterval(() => {
-      if (viewportReady.current) void refreshShot();
+      if (viewportReady.current && !syncingViewportRef.current) void refreshShot();
     }, 1200);
 
     return () => {
@@ -224,6 +237,7 @@ export default function BrowserPanel({
       cancelAnimationFrame(raf2);
       ro.disconnect();
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("agentz-font-scale", onFontScale);
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;

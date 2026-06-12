@@ -12,25 +12,13 @@ import {
   type AgentManifest,
   type BuiltinToolInfo,
 } from "../../../services/tauri/agents";
-import {
-  listTeams,
-  getTeam,
-  saveTeam,
-  uninstallTeam,
-  type TeamInfo,
-  type TeamManifest,
-} from "../../../services/tauri/teams";
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 import { listConnectors, type ConnectorInfo } from "../../../services/tauri/connectors";
 import { getSettings, type SettingsResponse } from "../../../services/tauri/settings";
 import { onSettingsRefresh } from "../../../services/settingsRefresh";
-import { emptyGraph, validateGraph } from "../../../services/tauri/workflow";
-import WorkflowDesigner from "./WorkflowDesigner";
-import "./StudioTab.css";
+import "../settings/StudioTab.css";
 
 const ICON_CHOICES = ["🐙", "🦑", "🐬", "🦈", "🐳", "🐟", "🦞", "🤖", "📊", "🎨", "💻", "🔬", "📝", "🛡️", "🧠", "⚡", "🔧", "🎯", "🏗️"];
-const WORKFLOWS = ["waves", "sequential", "review"] as const;
-
 const EMPTY_AGENT: AgentManifest = {
   id: "",
   name: "",
@@ -48,30 +36,16 @@ const EMPTY_AGENT: AgentManifest = {
   task_timeout_secs: 0,
 };
 
-const EMPTY_TEAM: TeamManifest = {
-  id: "",
-  name: "",
-  description: "",
-  mode: "swarm",
-  org_spec: "",
-  members: [],
-  workflow_hint: "waves",
-  workflow: null,
-  task_timeout_secs: 0,
-};
-
-const ORG_SPEC_TEMPLATE = `# Project Goal\n\n<what this team is trying to accomplish>\n\n# Roles\n\n- <agent>: <responsibility>\n\n# Collaboration Rules\n\n- Coordinate through the shared todo board.\n- Hand off work with clear, self-contained briefs.\n\n# Integration Model\n\n- <how work is merged / reviewed>\n`;
-
-interface StudioTabProps {
-  /** Notify parent to widen the settings panel (workflow designer needs ~80vw). */
-  onWideLayout?: (wide: boolean) => void;
+interface AgentsSectionProps {
+  view: "installed" | "compose";
+  editId?: string | null;
+  onEditDone?: () => void;
+  onGoDiscover?: (target: "skill" | "connector") => void;
 }
 
-export default function StudioTab({ onWideLayout }: StudioTabProps) {
+export default function AgentsSection({ view, editId, onEditDone, onGoDiscover }: AgentsSectionProps) {
   const { t } = useTranslation();
-  const [sub, setSub] = useState<"agents" | "teams">("agents");
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [skills, setSkills] = useState<InstalledSkill[]>([]);
   const [builtinTools, setBuiltinTools] = useState<BuiltinToolInfo[]>([]);
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([]);
@@ -79,21 +53,18 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [agentForm, setAgentForm] = useState<AgentManifest | null>(null);
-  const [teamForm, setTeamForm] = useState<TeamManifest | null>(null);
   const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [a, tm, sk, bt, cn, st] = await Promise.all([
+      const [a, sk, bt, cn, st] = await Promise.all([
         listAgents(),
-        listTeams(),
         listInstalledSkills(),
         listBuiltinTools(),
         listConnectors(),
         getSettings(),
       ]);
       setAgents(a);
-      setTeams(tm);
       setSkills(sk);
       setBuiltinTools(bt);
       setConnectors(cn);
@@ -107,14 +78,6 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
     void refresh();
     return onSettingsRefresh(() => void refresh());
   }, [refresh]);
-
-  const workflowEditing =
-    sub === "teams" && teamForm != null && (teamForm.mode ?? "swarm") === "workflow";
-
-  useEffect(() => {
-    onWideLayout?.(workflowEditing);
-    return () => onWideLayout?.(false);
-  }, [workflowEditing, onWideLayout]);
 
   const mcpNames = useMemo(
     () => (settings?.mcp_servers ?? []).map((s) => s.name).filter(Boolean),
@@ -181,11 +144,6 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
     }
   }, []);
 
-  const newAgent = useCallback(() => {
-    setAgentForm({ ...EMPTY_AGENT });
-    setCreating(true);
-  }, []);
-
   const submitAgent = useCallback(async () => {
     if (!agentForm) return;
     setError(null);
@@ -196,11 +154,25 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
         name: agentForm.name.trim() || agentForm.id.trim(),
       });
       setAgentForm(null);
+      onEditDone?.();
       await refresh();
     } catch (e) {
       setError(String(e));
     }
-  }, [agentForm, refresh]);
+  }, [agentForm, refresh, onEditDone]);
+
+  useEffect(() => {
+    if (view !== "compose") {
+      setAgentForm(null);
+      return;
+    }
+    if (editId === "__new__") {
+      setAgentForm({ ...EMPTY_AGENT });
+      setCreating(true);
+      return;
+    }
+    if (editId) void editAgent(editId);
+  }, [view, editId, editAgent]);
 
   const removeAgent = useCallback(
     async (id: string) => {
@@ -215,93 +187,24 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
     [refresh],
   );
 
-  // ── Team editing ─────────────────────────────────────────────────────────
-  const editTeam = useCallback(async (id: string) => {
-    try {
-      const m = await getTeam(id);
-      setTeamForm({ ...EMPTY_TEAM, ...m });
-      setCreating(false);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
-
-  const newTeam = useCallback(() => {
-    setTeamForm({ ...EMPTY_TEAM, org_spec: ORG_SPEC_TEMPLATE });
-    setCreating(true);
-  }, []);
-
-  const submitTeam = useCallback(async () => {
-    if (!teamForm) return;
-    setError(null);
-    try {
-      // Workflow teams derive their member set from the agents used in the
-      // graph, so the membership checkboxes are swarm-only.
-      const members =
-        (teamForm.mode ?? "swarm") === "workflow"
-          ? Array.from(
-              new Set(
-                (teamForm.workflow?.nodes ?? [])
-                  .filter((n) => n.type === "agent" && n.agent_id)
-                  .map((n) => n.agent_id as string),
-              ),
-            )
-          : teamForm.members;
-      await saveTeam({
-        ...teamForm,
-        members,
-        id: teamForm.id.trim(),
-        name: teamForm.name.trim() || teamForm.id.trim(),
-      });
-      setTeamForm(null);
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    }
-  }, [teamForm, refresh]);
-
-  const removeTeam = useCallback(
-    async (id: string) => {
-      setError(null);
-      try {
-        await uninstallTeam(id);
-        await refresh();
-      } catch (e) {
-        setError(String(e));
-      }
-    },
-    [refresh],
-  );
-
-  const toggleInList = (list: string[], value: string): string[] =>
-    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+  const showForm = view === "compose" || agentForm != null;
 
   return (
     <div className="agentz-studio">
       {error && <div className="agentz-settings-error">{error}</div>}
 
-      <div className="agentz-studio-subtabs">
-        <button
-          type="button"
-          className={sub === "agents" ? "active" : ""}
-          onClick={() => setSub("agents")}
-        >
-          {t("studio.agents")}
-        </button>
-        <button
-          type="button"
-          className={sub === "teams" ? "active" : ""}
-          onClick={() => setSub("teams")}
-        >
-          {t("studio.teams")}
-        </button>
-      </div>
-
-      {sub === "agents" && !agentForm && (
+      {!showForm && (
         <div className="agentz-studio-list">
           <div className="agentz-studio-list-head">
             <span>{t("studio.agentsHint")}</span>
-            <button type="button" className="agentz-settings-save" onClick={newAgent}>
+            <button
+              type="button"
+              className="agentz-settings-save"
+              onClick={() => {
+                setAgentForm({ ...EMPTY_AGENT });
+                setCreating(true);
+              }}
+            >
               + {t("studio.newAgent")}
             </button>
           </div>
@@ -316,7 +219,12 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
                 <span className="agentz-studio-card-meta">{a.role || a.description || a.id}</span>
               </div>
               <div className="agentz-studio-card-actions">
-                <button type="button" onClick={() => void editAgent(a.id)}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void editAgent(a.id);
+                  }}
+                >
                   {t("common.edit")}
                 </button>
                 <button type="button" className="danger" onClick={() => void removeAgent(a.id)}>
@@ -328,7 +236,7 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
         </div>
       )}
 
-      {sub === "agents" && agentForm && (
+      {showForm && agentForm && (
         <div className="agentz-studio-form agentz-studio-form--full">
           <div className="agentz-studio-grid">
             <div className="agentz-settings-field">
@@ -455,6 +363,11 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
               }
             />
             <p className="agentz-settings-hint">{t("studio.connectorsHint")}</p>
+            {connectors.length === 0 && onGoDiscover && (
+              <button type="button" className="agentz-settings-add" onClick={() => onGoDiscover("connector")}>
+                {t("library.goDiscoverConnectors")}
+              </button>
+            )}
           </div>
 
           <div className="agentz-studio-form-actions">
@@ -466,177 +379,14 @@ export default function StudioTab({ onWideLayout }: StudioTabProps) {
             >
               {t("common.save")}
             </button>
-            <button type="button" className="agentz-settings-cancel" onClick={() => setAgentForm(null)}>
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {sub === "teams" && !teamForm && (
-        <div className="agentz-studio-list">
-          <div className="agentz-studio-list-head">
-            <span>{t("studio.teamsHint")}</span>
-            <button type="button" className="agentz-settings-save" onClick={newTeam}>
-              + {t("studio.newTeam")}
-            </button>
-          </div>
-          {teams.length === 0 && <p className="agentz-settings-hint">{t("studio.noTeams")}</p>}
-          {teams.map((tm) => (
-            <div key={tm.id} className="agentz-studio-card">
-              <div className="agentz-studio-card-icon" style={{ background: "#4ecdc4" }}>
-                👥
-              </div>
-              <div className="agentz-studio-card-body">
-                <strong>{tm.name}</strong>
-                <span className="agentz-studio-card-meta">
-                  {tm.mode === "workflow" ? t("workflow.modeWorkflow") : t("workflow.modeSwarm")} ·{" "}
-                  {tm.members.length} {t("studio.members")}
-                </span>
-              </div>
-              <div className="agentz-studio-card-actions">
-                <button type="button" onClick={() => void editTeam(tm.id)}>
-                  {t("common.edit")}
-                </button>
-                <button type="button" className="danger" onClick={() => void removeTeam(tm.id)}>
-                  {t("chat.delete")}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {sub === "teams" && teamForm && (
-        <div
-          className={`agentz-studio-form ${(teamForm.mode ?? "swarm") === "workflow" ? "agentz-studio-form--full" : ""}`}
-        >
-          <div className="agentz-studio-grid">
-            <div className="agentz-settings-field">
-              <label>{t("studio.fieldId")}</label>
-              <input
-                value={teamForm.id}
-                disabled={!creating}
-                onChange={(e) => setTeamForm({ ...teamForm, id: e.target.value })}
-                placeholder="fullstack-squad"
-              />
-            </div>
-            <div className="agentz-settings-field">
-              <label>{t("studio.fieldName")}</label>
-              <input
-                value={teamForm.name}
-                onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })}
-              />
-            </div>
-            <div className="agentz-settings-field">
-              <label>{t("workflow.fieldMode")}</label>
-              <DropdownSelect
-                variant="field"
-                value={teamForm.mode ?? "swarm"}
-                onChange={(v) =>
-                  setTeamForm({
-                    ...teamForm,
-                    mode: v as "swarm" | "workflow",
-                    workflow: v === "workflow" ? teamForm.workflow ?? emptyGraph() : teamForm.workflow,
-                  })
-                }
-                options={[
-                  { id: "swarm", label: t("workflow.modeSwarm") },
-                  { id: "workflow", label: t("workflow.modeWorkflow") },
-                ]}
-              />
-            </div>
-          </div>
-
-          <div className="agentz-settings-field">
-            <label>{t("studio.fieldDescription")}</label>
-            <input
-              value={teamForm.description ?? ""}
-              onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })}
-            />
-          </div>
-
-          {(teamForm.mode ?? "swarm") === "swarm" && (
-            <div className="agentz-settings-field">
-              <label>{t("studio.fieldMembers")}</label>
-              <div className="agentz-studio-checks">
-                {agents.length === 0 && <span className="agentz-settings-hint">{t("studio.noAgents")}</span>}
-                {agents.map((a) => (
-                  <label key={a.id} className="agentz-studio-check">
-                    <input
-                      type="checkbox"
-                      checked={(teamForm.members ?? []).includes(a.id)}
-                      onChange={() =>
-                        setTeamForm({ ...teamForm, members: toggleInList(teamForm.members ?? [], a.id) })
-                      }
-                    />
-                    {a.icon} {a.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(teamForm.mode ?? "swarm") === "swarm" ? (
-            <>
-              <div className="agentz-settings-field">
-                <label>{t("studio.fieldWorkflow")}</label>
-                <DropdownSelect
-                  variant="field"
-                  value={teamForm.workflow_hint ?? "waves"}
-                  options={WORKFLOWS.map((w) => ({ id: w, label: w }))}
-                  onChange={(v) => setTeamForm({ ...teamForm, workflow_hint: v })}
-                />
-              </div>
-              <div className="agentz-settings-field">
-                <label>{t("studio.fieldOrgSpec")}</label>
-                <textarea
-                  className="agentz-settings-textarea-lg"
-                  rows={12}
-                  value={teamForm.org_spec ?? ""}
-                  onChange={(e) => setTeamForm({ ...teamForm, org_spec: e.target.value })}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="agentz-settings-field">
-              <label>{t("workflow.designer")}</label>
-              {(() => {
-                const issues = validateGraph(teamForm.workflow ?? emptyGraph());
-                return issues.length > 0 ? (
-                  <div className="agentz-wf-issues">
-                    <strong>{t("workflow.issues")}</strong>
-                    <ul>
-                      {issues.map((iss, i) => (
-                        <li key={i}>{iss}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null;
-              })()}
-              <WorkflowDesigner
-                graph={teamForm.workflow ?? emptyGraph()}
-                agents={agents}
-                onChange={(g) => setTeamForm({ ...teamForm, workflow: g })}
-              />
-            </div>
-          )}
-
-          <div className="agentz-studio-form-actions">
             <button
               type="button"
-              className="agentz-settings-save"
-              disabled={
-                !teamForm.id.trim() ||
-                ((teamForm.mode ?? "swarm") === "swarm"
-                  ? (teamForm.members ?? []).length === 0
-                  : validateGraph(teamForm.workflow ?? emptyGraph()).length > 0)
-              }
-              onClick={() => void submitTeam()}
+              className="agentz-settings-cancel"
+              onClick={() => {
+                setAgentForm(null);
+                onEditDone?.();
+              }}
             >
-              {t("common.save")}
-            </button>
-            <button type="button" className="agentz-settings-cancel" onClick={() => setTeamForm(null)}>
               {t("common.cancel")}
             </button>
           </div>

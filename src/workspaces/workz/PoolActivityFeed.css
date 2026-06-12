@@ -15,7 +15,7 @@
 }
 
 .agentz-pool-feed-empty {
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   font-size: 0.85rem;
   padding: 0.75rem 0;
 }
@@ -28,10 +28,10 @@
   text-align: left;
   width: 100%;
   padding: 0.45rem 0.55rem;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--border, #2a2a38);
   border-radius: 6px;
-  background: var(--surface-2, #1a1a1a);
-  color: inherit;
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
   cursor: pointer;
   font-size: 0.82rem;
 }
@@ -39,11 +39,11 @@
 .agentz-pool-feed-row:hover,
 .agentz-pool-feed-row.active {
   border-color: var(--accent, #7c6af7);
-  background: color-mix(in srgb, var(--accent, #7c6af7) 8%, var(--surface-2, #1a1a1a));
+  background: color-mix(in srgb, var(--accent, #7c6af7) 8%, var(--bg-elev-2, #1b1b26));
 }
 
 .agentz-pool-feed-time {
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -51,6 +51,7 @@
 .agentz-pool-feed-sender {
   font-weight: 600;
   white-space: nowrap;
+  color: var(--text, #e8e8f0);
 }
 
 .agentz-pool-feed-event {
@@ -61,16 +62,17 @@
 
 .agentz-pool-feed-preview {
   grid-column: 1 / -1;
-  color: var(--text-muted, #aaa);
+  color: var(--text-dim, #9a9ab0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .agentz-pool-feed-detail {
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--border, #2a2a38);
   border-radius: 8px;
-  background: var(--surface-1, #121212);
+  background: var(--bg-elev, #14141c);
+  color: var(--text, #e8e8f0);
   max-height: 45vh;
   display: flex;
   flex-direction: column;
@@ -82,15 +84,16 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.65rem;
-  border-bottom: 1px solid var(--border, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a38);
   font-size: 0.85rem;
+  color: var(--text, #e8e8f0);
 }
 
 .agentz-pool-feed-detail-head button {
   margin-left: auto;
   background: none;
   border: none;
-  color: inherit;
+  color: var(--text-dim, #9a9ab0);
   cursor: pointer;
   opacity: 0.7;
 }
@@ -103,7 +106,7 @@
 
 .agentz-pool-feed-detail-loading,
 .agentz-pool-feed-detail-empty {
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   padding: 0.5rem 0;
 }
 
@@ -113,13 +116,13 @@
   gap: 0.65rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px dashed var(--border, #2a2a2a);
+  border-top: 1px dashed var(--border, #2a2a38);
 }
 
 .agentz-pool-feed-koi-step .agentz-pool-feed-koi-role {
   display: block;
   font-size: 0.72rem;
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   margin-bottom: 0.2rem;
 }
 
@@ -127,7 +130,7 @@
   display: flex;
   gap: 0.35rem;
   padding: 0.35rem 0.5rem 0;
-  border-bottom: 1px solid var(--border, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a38);
 }
 
 .agentz-workz-swarm-tab {
@@ -135,15 +138,19 @@
   border: none;
   border-radius: 6px 6px 0 0;
   background: transparent;
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   cursor: pointer;
   font-size: 0.82rem;
 }
 
+.agentz-workz-swarm-tab:hover {
+  color: var(--text, #e8e8f0);
+}
+
 .agentz-workz-swarm-tab.active {
-  color: inherit;
-  background: var(--surface-2, #1a1a1a);
-  border: 1px solid var(--border, #2a2a2a);
+  color: var(--text, #e8e8f0);
+  background: var(--bg-elev-2, #1b1b26);
+  border: 1px solid var(--border, #2a2a38);
   border-bottom-color: transparent;
 }
 
@@ -153,6 +160,6 @@
   justify-content: center;
   flex: 1;
   min-height: 120px;
-  color: var(--text-muted, #888);
+  color: var(--text-dim, #9a9ab0);
   font-size: 0.85rem;
 }

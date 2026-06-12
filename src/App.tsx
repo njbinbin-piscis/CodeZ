@@ -25,6 +25,7 @@ import {
   uiFontScaleLabel,
   type UiFontScale,
 } from "./theme";
+import { syncEditorThemeWithAppearance } from "./workspaces/codez/themeStore";
 import CodeZWorkspace from "./workspaces/codez";
 import WorkZWorkspace from "./workspaces/workz";
 import AssistantPanel from "./workspaces/codez/AssistantPanel";
@@ -45,7 +46,9 @@ import {
   SunIcon,
   WikiIcon,
 } from "./components/TitleBarIcons";
-import MarketplacePanel from "./workspaces/codez/MarketplacePanel";
+import ResourceLibraryPanel, {
+  type LibraryInitialState,
+} from "./workspaces/codez/ResourceLibraryPanel";
 import AssistantMessagesPanel from "./workspaces/codez/AssistantMessagesPanel";
 import { getImSettings } from "./services/tauri/gateway";
 import ExtensionHostProvider from "./extensions/ui/ExtensionHostProvider";
@@ -87,7 +90,8 @@ export default function App() {
   } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [marketOpen, setMarketOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryInitial, setLibraryInitial] = useState<LibraryInitialState | null>(null);
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false);
   const [hasImAssistant, setHasImAssistant] = useState(false);
   const [wikiBuildNonce, setWikiBuildNonce] = useState(0);
@@ -98,6 +102,8 @@ export default function App() {
   );
   const [appearance, setAppearance] = useState<AppearanceTheme>(() => getAppearanceTheme());
   const [fontScale, setFontScale] = useState<UiFontScale>(() => getUiFontScale());
+  const [fontScaleOpen, setFontScaleOpen] = useState(false);
+  const fontScaleRef = useRef<HTMLDivElement>(null);
   const [exitToast, setExitToast] = useState(false);
   const [workspaceRestore, setWorkspaceRestore] = useState<{
     key: number;
@@ -311,6 +317,17 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!fontScaleOpen) return;
+    const close = (e: MouseEvent) => {
+      if (fontScaleRef.current && !fontScaleRef.current.contains(e.target as Node)) {
+        setFontScaleOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [fontScaleOpen]);
+
   const pickFolder = useCallback(async () => {
     try {
       const dir = await openFolderDialog(projectDir);
@@ -427,6 +444,7 @@ export default function App() {
   const handleThemeToggle = useCallback(() => {
     const next = toggleAppearanceTheme();
     setAppearance(next);
+    syncEditorThemeWithAppearance(next);
   }, []);
 
   // Drag the divider between the editor and the chat panel. The chat sits on
@@ -540,23 +558,39 @@ export default function App() {
           >
             <WikiIcon />
           </button>
-          <select
-            className="agentz-font-scale-select"
-            value={fontScale}
-            title={t("app.fontScaleTitle")}
-            aria-label={t("app.fontScale")}
-            onChange={(e) => {
-              const next = Number(e.target.value) as UiFontScale;
-              applyUiFontScale(next);
-              setFontScale(next);
-            }}
-          >
-            {UI_FONT_SCALES.map((s) => (
-              <option key={s} value={s}>
-                {uiFontScaleLabel(s)}
-              </option>
-            ))}
-          </select>
+          <div className="agentz-font-scale-menu" ref={fontScaleRef}>
+            <button
+              type="button"
+              className={`agentz-titlebar-icon${fontScaleOpen ? " active" : ""}`}
+              title={t("app.fontScaleTitle")}
+              aria-label={t("app.fontScale")}
+              aria-expanded={fontScaleOpen}
+              aria-haspopup="menu"
+              onClick={() => setFontScaleOpen((v) => !v)}
+            >
+              Aa
+            </button>
+            {fontScaleOpen && (
+              <div className="agentz-font-scale-popover" role="menu">
+                {UI_FONT_SCALES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={fontScale === s}
+                    className={fontScale === s ? "active" : ""}
+                    onClick={() => {
+                      applyUiFontScale(s);
+                      setFontScale(s);
+                      setFontScaleOpen(false);
+                    }}
+                  >
+                    {uiFontScaleLabel(s)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className="agentz-titlebar-icon"
@@ -573,9 +607,12 @@ export default function App() {
           <button
             type="button"
             className="agentz-titlebar-icon"
-            onClick={() => setMarketOpen(true)}
-            title={t("market.title")}
-            aria-label={t("market.title")}
+            onClick={() => {
+              setLibraryInitial(null);
+              setLibraryOpen(true);
+            }}
+            title={t("library.title")}
+            aria-label={t("library.title")}
           >
             <StoreIcon />
           </button>
@@ -654,6 +691,10 @@ export default function App() {
             onOpenFolder={pickFolder}
             wikiBuildNonce={wikiBuildNonce}
             onWikiBusyChange={setWikiBusy}
+            onOpenLibrary={(initial) => {
+              setLibraryInitial(initial ?? null);
+              setLibraryOpen(true);
+            }}
           />
         </div>
       </main>
@@ -661,7 +702,15 @@ export default function App() {
       {settingsOpen && (
         <SettingsPanel onClose={() => setSettingsOpen(false)} projectDir={projectDir} />
       )}
-      {marketOpen && <MarketplacePanel onClose={() => setMarketOpen(false)} />}
+      {libraryOpen && (
+        <ResourceLibraryPanel
+          initial={libraryInitial}
+          onClose={() => {
+            setLibraryOpen(false);
+            setLibraryInitial(null);
+          }}
+        />
+      )}
       {assistantPanelOpen && (
         <AssistantMessagesPanel onClose={() => setAssistantPanelOpen(false)} />
       )}

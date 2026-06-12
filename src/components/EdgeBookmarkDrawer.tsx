@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-interface EdgeBookmarkDrawerProps {
-  /** Short label shown in the drawer header (the tab itself no longer displays text). */
+export interface EdgeDrawerTab {
+  id: string;
   label: string;
   count: number;
+}
+
+interface EdgeBookmarkDrawerProps {
+  /** Tooltip on the collapsed badge. */
+  badgeTitle: string;
+  /** Number shown inside the badge. */
+  count: number;
   top: number;
+  tabs: EdgeDrawerTab[];
+  activeTab: string;
+  onTabChange: (id: string) => void;
+  closeLabel?: string;
   /** When true, show a close button that calls `onClose` (e.g. pending review). */
   pinned?: boolean;
   hidden?: boolean;
@@ -16,14 +27,18 @@ interface EdgeBookmarkDrawerProps {
 /**
  * Right-edge hover tab that slides open a drawer.
  *
- * The tab is a compact number badge so it does not overlap title-bar controls.
- * Hover opens the drawer; mouse leave, click-outside, or list-item click closes it.
- * `pinned` only adds a header close affordance — it does not lock the drawer open.
+ * The tab is a compact number badge on the right edge. Chat header actions are
+ * inset separately so they do not overlap. Hover opens the drawer; mouse leave,
+ * click-outside, or list-item click closes it. `pinned` only adds a close button.
  */
 export default function EdgeBookmarkDrawer({
-  label,
+  badgeTitle,
   count,
   top,
+  tabs,
+  activeTab,
+  onTabChange,
+  closeLabel = "Close",
   pinned = false,
   hidden = false,
   children,
@@ -92,18 +107,32 @@ export default function EdgeBookmarkDrawer({
       onMouseEnter={show}
       onMouseLeave={scheduleHide}
     >
-      <div className="agentz-edge-badge" title={label}>
+      <div className="agentz-edge-badge" title={badgeTitle}>
         <span className="agentz-edge-badge-count">{count}</span>
       </div>
       <div className="agentz-edge-drawer">
         <div className="agentz-edge-drawer-head">
-          <span>{label}</span>
+          <div className="agentz-edge-drawer-tabs" role="tablist">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={tab.id === activeTab}
+                className={`agentz-edge-drawer-tab${tab.id === activeTab ? " active" : ""}`}
+                onClick={() => onTabChange(tab.id)}
+              >
+                <span>{tab.label}</span>
+                {tab.count > 0 && <span className="agentz-edge-drawer-tab-count">{tab.count}</span>}
+              </button>
+            ))}
+          </div>
           {(open || pinned) && (
             <button
               type="button"
               className="agentz-edge-drawer-close"
               onClick={handleClose}
-              title="Close"
+              title={closeLabel}
             >
               ✕
             </button>

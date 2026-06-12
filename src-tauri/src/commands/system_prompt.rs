@@ -102,10 +102,10 @@ pub fn agent_system_prompt(
          - `delegate` — a READ-ONLY research sub-agent (find call sites, map a \
            flow, locate config). Multiple `delegate` calls in one turn run in \
            parallel; use it to fan out independent investigations.\n\
-         - `call_fish` — a named, stateless worker for self-contained jobs where \
+         - `call_fish` — a named, stateless sub-agent for self-contained jobs where \
            only the final result matters (scanning, collecting, summarizing, \
-           extraction). Call `call_fish` with action=list to see available Fish, \
-           then action=call with a complete, self-contained task brief (the Fish \
+           extraction). Call `call_fish` with action=list to see available sub-agents, \
+           then action=call with a complete, self-contained task brief (the sub-agent \
            has no access to your conversation).\n\
          - Prefer delegating result-heavy exploration; keep user-facing \
            decisions, edits, and back-and-forth in your own turn.\n\n\
@@ -199,6 +199,57 @@ pub fn subagent_system_prompt(workspace_root: &str) -> String {
     )
 }
 
+/// Hard convergence protocol for WorkZ swarm coordinators (pool-bound turns).
+pub fn swarm_coordinator_append(org_spec_excerpt: Option<&str>, workflow_hint: &str) -> String {
+    let hint = workflow_hint.trim().to_lowercase();
+    let hint_block = match hint.as_str() {
+        "sequential" => "\n### Workflow hint: sequential\n\
+- Do NOT assign multiple todos in parallel.\n\
+- Each new todo MUST set `depends_on` to the previous todo id.\n\
+- Wait for upstream `done` before assigning the next owner.\n",
+        "review" => "\n### Workflow hint: review\n\
+- After implementation todos complete, assign a reviewer assistant.\n\
+- If review fails, create a rework todo (with depends_on as appropriate) — do not silently close the wave.\n",
+        _ => "\n### Workflow hint: waves\n\
+- Todos in the same wave may run in parallel.\n\
+- Cross-wave work MUST use `depends_on` on assign_koi/create_todo.\n\
+- After each wave completes, call `pool_org(action=\"post_status\")` with a short summary before starting the next wave.\n",
+    };
+
+    let org_block = org_spec_excerpt
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|excerpt| {
+            format!(
+                "\n### Organization contract (excerpt)\n\
+                 Full org_spec is on the pool; member assistants receive it too.\n\
+                 ```\n{excerpt}\n```\n"
+            )
+        })
+        .unwrap_or_default();
+
+    format!(
+        "## Swarm coordinator protocol (mandatory)\n\
+         You are the Piscis coordinator for this collaboration pool.\n\
+         - Pass `pool_id` on every `pool_org` / `pool_chat` call (session pool is also bound, but always pass it explicitly).\n\
+         - Break work into todos; use `depends_on` to enforce wave order per org_spec and workflow hint.\n\
+         - Before ending your turn: `pool_org(action=\"get_todos\")` → resolve `needs_review` / `blocked` → only finish when all todos are terminal (`done` / `cancelled`).\n\
+         - Then `pool_org(action=\"post_status\")` with a concise integration summary.\n\
+         - Do NOT reply with empty acks (`heartbeat_ok`, \"无需干预\", \"no change\") — every turn must either advance the board or explain a concrete blocker.\n\
+         {hint_block}{org_block}"
+    )
+}
+
+/// Short follow-up reminder injected on continuation turns (avoids repeating org_spec).
+pub fn swarm_coordinator_followup_reminder(pool_id: &str, open_todos: u32, blocked: u32) -> String {
+    format!(
+        "[Coordinator reminder · pool {pool_id}] \
+         Open todos: {open_todos}; blocked: {blocked}. \
+         Continue coordinating via pool_org — get_todos, resolve blocked/needs_review, assign or post_status as needed. \
+         Pass pool_id on every pool_org call."
+    )
+}
+
 /// System prompt for a named Fish: the read-only sub-agent guardrails plus the
 /// Fish's specialised persona/instructions.
 pub fn fish_system_prompt(workspace_root: &str, fish_name: &str, persona: &str) -> String {
@@ -253,5 +304,21 @@ mod tests {
         let p = agent_active_plan_context(".agentz/plans/s.md", None);
         assert!(p.contains(".agentz/plans/s.md"));
         assert!(p.contains("plan_todo"));
+    }
+
+    #[test]
+    fn swarm_coordinator_append_includes_stop_conditions() {
+        let p = swarm_coordinator_append(Some("roles: coder, reviewer"), "waves");
+        assert!(p.contains("get_todos"));
+        assert!(p.contains("depends_on"));
+        assert!(p.contains("post_status"));
+        assert!(p.contains("Workflow hint: waves"));
+    }
+
+    #[test]
+    fn swarm_followup_reminder_mentions_pool() {
+        let p = swarm_coordinator_followup_reminder("pool-1", 2, 1);
+        assert!(p.contains("pool-1"));
+        assert!(p.contains("Open todos: 2"));
     }
 }

@@ -67,6 +67,15 @@
   font-size: 12px;
 }
 
+.agentz-wfrun-human-banner {
+  padding: 10px 16px;
+  background: rgba(255, 193, 7, 0.15);
+  border-bottom: 1px solid rgba(255, 193, 7, 0.35);
+  color: var(--text, #e8e8f0);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .agentz-wfrun-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

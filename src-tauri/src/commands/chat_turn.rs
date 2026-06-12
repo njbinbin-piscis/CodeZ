@@ -39,7 +39,7 @@ use super::session::{
 use super::session_sources::{default_channel_for, SOURCE_CODEZ};
 use super::system_prompt::{
     agent_active_plan_context, agent_system_prompt, plan_mode_context, session_plan_rel_path,
-    subagent_system_prompt,
+    subagent_system_prompt, swarm_coordinator_append, swarm_coordinator_followup_reminder,
 };
 use super::teams::TeamManifest;
 
@@ -872,6 +872,7 @@ fn build_tool_registry(
     enable_pool: bool,
     enable_skill_manage: bool,
     loop_halt: Arc<std::sync::atomic::AtomicBool>,
+    api_connector_allowlist: Option<Vec<String>>,
 ) -> ToolRegistry {
     let mut builtin_tool_enabled = None;
     if chat_mode == "plan" {
@@ -947,6 +948,7 @@ fn build_tool_registry(
         if let Ok(config_dir) = crate::commands::data_scope::resolve_global_config_dir(&app) {
             registry.register(Box::new(crate::tools::api_connector::ApiConnectorTool {
                 config_dir,
+                allowed_ids: api_connector_allowlist,
             }));
         }
         // SubAgent delegation (M7): only the main agent gets `delegate`; the
@@ -1064,6 +1066,7 @@ fn build_subagent_registry(
         false,
         false,
         Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        None,
     )
 }
 
@@ -1459,6 +1462,7 @@ pub async fn run_agentz_turn(
     journal: Arc<crate::journal::FileJournal>,
     config_dir: PathBuf,
     enabled_skills: Vec<String>,
+    enabled_connectors: Option<Vec<String>>,
     agent_id: Option<String>,
     workz_team_id: Option<String>,
     workz_pool_id: Option<String>,
@@ -1571,6 +1575,7 @@ pub async fn run_agentz_turn(
     }
 
     let loop_halt = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let api_connector_allowlist = enabled_connectors.clone();
     let mut registry = build_tool_registry(
         app.clone(),
         db.clone(),
@@ -1587,6 +1592,7 @@ pub async fn run_agentz_turn(
         chat_mode != "plan",
         chat_mode == "agent",
         loop_halt.clone(),
+        api_connector_allowlist,
     );
     // Register MCP server tools (M6) from settings.mcp_servers — async because
     // it connects to stdio/SSE servers. Plan mode keeps them (read-context).
@@ -1610,28 +1616,42 @@ pub async fn run_agentz_turn(
             piscis_kernel::tools::register_mcp_tools(&mut registry, &bound).await;
         }
     }
-    // Connectors (Phase 0B): enabled + authorized external services resolve to
-    // MCP configs and register their tools alongside the regular MCP servers.
-    let connector_configs = crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
-    if !connector_configs.is_empty() {
-        piscis_kernel::tools::register_mcp_tools(&mut registry, &connector_configs).await;
-    }
-    // A selected agent can additionally bind its own connectors (even if they
-    // are globally disabled). Register any that the global pass didn't cover.
-    if let Some(agent) = agent.as_ref() {
-        if !agent.connectors.is_empty() {
-            let already: std::collections::HashSet<String> =
-                connector_configs.iter().map(|c| c.name.clone()).collect();
-            let agent_connectors: Vec<piscis_kernel::store::settings::McpServerConfig> =
-                crate::commands::connectors::resolve_named_connector_mcp_configs(
-                    &config_dir,
-                    &agent.connectors,
-                )
-                .into_iter()
-                .filter(|c| !already.contains(&c.name))
-                .collect();
-            if !agent_connectors.is_empty() {
-                piscis_kernel::tools::register_mcp_tools(&mut registry, &agent_connectors).await;
+    // Connectors (Phase 0B): globally enabled services, unless the caller passed
+    // an explicit allowlist (WorkZ generic agent). Named agents may also bind
+    // their own connectors on top of the global pass.
+    match &enabled_connectors {
+        Some(ids) => {
+            let selected =
+                crate::commands::connectors::resolve_named_connector_mcp_configs(&config_dir, ids);
+            if !selected.is_empty() {
+                piscis_kernel::tools::register_mcp_tools(&mut registry, &selected).await;
+            }
+        }
+        None => {
+            let connector_configs =
+                crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
+            if !connector_configs.is_empty() {
+                piscis_kernel::tools::register_mcp_tools(&mut registry, &connector_configs).await;
+            }
+            if let Some(agent) = agent.as_ref() {
+                if !agent.connectors.is_empty() {
+                    let already: std::collections::HashSet<String> = connector_configs
+                        .iter()
+                        .map(|c| c.name.clone())
+                        .collect();
+                    let agent_connectors: Vec<piscis_kernel::store::settings::McpServerConfig> =
+                        crate::commands::connectors::resolve_named_connector_mcp_configs(
+                            &config_dir,
+                            &agent.connectors,
+                        )
+                        .into_iter()
+                        .filter(|c| !already.contains(&c.name))
+                        .collect();
+                    if !agent_connectors.is_empty() {
+                        piscis_kernel::tools::register_mcp_tools(&mut registry, &agent_connectors)
+                            .await;
+                    }
+                }
             }
         }
     }
@@ -1666,7 +1686,7 @@ pub async fn run_agentz_turn(
         guard.clone()
     };
     let with_terminal = expand_terminal_snippets(&with_browser, &snippets);
-    let llm_user_content = expand_file_refs(&with_terminal, &workspace_root);
+    let mut llm_user_content = expand_file_refs(&with_terminal, &workspace_root);
 
     let expected_source = request
         .channel
@@ -1740,6 +1760,41 @@ pub async fn run_agentz_turn(
             .context("failed to append user message")?;
         let _ = db.update_session_status(&session_id, "running");
         let _ = maybe_autotitle_session_from_first_prompt(&db, &session_id, &display_for_db);
+    }
+
+    // WorkZ swarm follow-up: short coordinator reminder (org_spec stays in turn 1 history).
+    if let (Some(_team_id), Some(pool_id)) = (
+        workz_team_id.as_deref().filter(|s| !s.is_empty()),
+        workz_pool_id.as_deref().filter(|s| !s.is_empty()),
+    ) {
+        let prior_user_turns = {
+            let guard = db.lock().await;
+            guard
+                .get_messages_latest(&session_id, 2000)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|m| m.role == "user")
+                .count()
+        };
+        if prior_user_turns > 1 {
+            let (open, blocked) = {
+                let guard = db.lock().await;
+                let todos = guard.list_koi_todos(None).unwrap_or_default();
+                let mut open = 0u32;
+                let mut blocked = 0u32;
+                for t in todos.iter().filter(|t| t.pool_session_id.as_deref() == Some(pool_id))
+                {
+                    match t.status.as_str() {
+                        "blocked" => blocked += 1,
+                        "todo" | "in_progress" | "needs_review" => open += 1,
+                        _ => {}
+                    }
+                }
+                (open, blocked)
+            };
+            let reminder = swarm_coordinator_followup_reminder(pool_id, open, blocked);
+            llm_user_content = format!("{reminder}\n\n{llm_user_content}");
+        }
     }
 
     let (
@@ -1850,6 +1905,13 @@ pub async fn run_agentz_turn(
     if let Some(skills) = skills_context(&config_dir, &enabled_skills) {
         extra_sections.push(skills);
     }
+    if let Some(ids) = enabled_connectors.as_ref() {
+        if let Some(connectors) =
+            crate::commands::connectors::connectors_prompt_context(&config_dir, ids)
+        {
+            extra_sections.push(connectors);
+        }
+    }
     if let Some(rules) = project_rules_context(&workspace_root) {
         extra_sections.push(rules);
     }
@@ -1861,6 +1923,23 @@ pub async fn run_agentz_turn(
         extra_sections.push(plan_mode_context(&plan_path));
     } else if let Some((plan_path, excerpt)) = active_plan_excerpt(&workspace_root, &session_id) {
         extra_sections.push(agent_active_plan_context(&plan_path, Some(&excerpt)));
+    }
+    if let (Some(team_id), Some(_pool_id)) = (
+        workz_team_id.as_deref().filter(|s| !s.is_empty()),
+        workz_pool_id.as_deref().filter(|s| !s.is_empty()),
+    ) {
+        if let Ok(team) = TeamManifest::load_by_id(&app, team_id) {
+            let excerpt: String = team.org_spec.chars().take(2000).collect();
+            let excerpt = if team.org_spec.chars().count() > 2000 {
+                format!("{excerpt}…")
+            } else {
+                excerpt
+            };
+            extra_sections.push(swarm_coordinator_append(
+                Some(excerpt.as_str()).filter(|s| !s.trim().is_empty()),
+                &team.workflow_hint,
+            ));
+        }
     }
     // Run user-defined `beforeAgentTurn` hooks and inject their output as
     // additional system context (project hooks.json, M6+).
@@ -1922,7 +2001,9 @@ pub async fn run_agentz_turn(
         settings: tool_settings,
         max_iterations: Some(max_iterations),
         memory_owner_id: "piscis".to_string(),
-        pool_session_id: None,
+        pool_session_id: workz_pool_id
+            .clone()
+            .filter(|s| !s.trim().is_empty()),
         tool_use_id: None,
         cancel: cancel.clone(),
         loop_halt: Some(loop_halt),

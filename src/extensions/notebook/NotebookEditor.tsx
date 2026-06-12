@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as monaco from "monaco-editor";
 import { parseIpynb, serializeIpynb, emptyCell, type NbCell } from "./ipynb";
 import { extensionService } from "../extensionService";
 import MarkdownPreview from "../../workspaces/codez/MarkdownPreview";
+import { themeStore } from "../../workspaces/codez/themeStore";
 import "./notebook.css";
 
 interface NotebookEditorProps {
@@ -15,13 +16,14 @@ interface NotebookEditorProps {
 function CodeCell({ cell, onSource }: { cell: NbCell; onSource: (v: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorTheme = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot);
 
   useEffect(() => {
     if (!hostRef.current) return;
     const editor = monaco.editor.create(hostRef.current, {
       value: cell.source,
       language: cell.language,
-      theme: "vs-dark",
+      theme: editorTheme,
       minimap: { enabled: false },
       lineNumbers: "off",
       scrollBeyondLastLine: false,
@@ -48,6 +50,10 @@ function CodeCell({ cell, onSource }: { cell: NbCell; onSource: (v: string) => v
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    monaco.editor.setTheme(editorTheme);
+  }, [editorTheme]);
 
   return <div className="agentz-nb-code" ref={hostRef} />;
 }

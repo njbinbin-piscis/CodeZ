@@ -5,10 +5,24 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-06-12
+
+### Added
+
+- **统一资源库**：标题栏 Store 图标打开「资源库」面板，合并技能/工具/智能体/团队/连接器/匿名代理的已安装、发现与编排视图；设置仅保留模型、消息渠道、扩展、规则、钩子。
+- **WorkZ 通用智能体**：输入框下方技能/连接器多选；空列表可深链到资源库发现页。
+- **协作增强**：pool 按 `team_id` / `workflow_run_id` 隔离（`piscis-engine v0.8.59`）、depends_on 等待 UI、patrol/heartbeat、连接器白名单。
+
+### Changed
+
+- 设置「助理」改名为「消息渠道」；匿名代理文案与资源库 i18n 统一（中英文）。
+- 移除 MarketplacePanel、ClawHubPanel 及设置内技能/工作室/子代理/连接器 Tab。
+
 ## [0.5.4] - 2026-06-12
 
 ### Added
 
+- **WorkZ 协作机制全面修复**：协调者 `pool_session_id` 绑定、`swarm_coordinator` 收敛协议、成员 Koi **Stop Gate** 六层 prompt、pool 按 `team_id` 隔离、workflow run 独立 pool、depends_on 等待 UI、patrol/heartbeat、workflow driver 互斥与 LLM 分支 fail-fast。
 - **CodeZ Browser E2E**: `browser-changed` event sync, auto-open Browser tab on agent actions, close guard when agent is active.
 - **Browser automation**: RobotZ `snapshot`/`ref`/`lock`/`fill`, assert DSL (`assert_url`, `assert_visible`, `assert_text`), `wait_for_text`.
 - **Kernel alignment**: `piscis-engine v0.8.58` (`web_fetch`, `piscis-ide-tools`), shared `robotz-browser v0.1.2` with IDE panel.

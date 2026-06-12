@@ -4,7 +4,7 @@ import { respondInteractiveUi } from "../../services/tauri/interactive";
 import {
   ActionsBlock,
   DateTimeBlock,
-  KoiPickerBlock,
+  AssistantPickerBlock,
   NumberInputBlock,
   ProjectPickerBlock,
   SectionBlock,
@@ -424,7 +424,7 @@ export default function InteractiveCard({
           );
         case "koi_picker":
           return (
-            <KoiPickerBlock
+            <AssistantPickerBlock
               key={key}
               block={block}
               value={(values[block.id!] as string[]) ?? []}

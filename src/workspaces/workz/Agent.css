@@ -583,26 +583,10 @@
   font-family: Consolas, "Courier New", monospace;
 }
 
-/* ── Sidebar foot / ClawHub ─────────────────────────────────────────────── */
+/* ── Sidebar foot ───────────────────────────────────────────────────────── */
 .agentz-workz-sidebar-foot {
   padding: 10px 12px;
   border-top: 1px solid var(--border, #2a2a38);
-}
-
-.agentz-workz-clawhub-btn {
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--border, #2a2a38);
-  border-radius: 8px;
-  color: var(--text-dim, #9a9ab0);
-  padding: 8px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.agentz-workz-clawhub-btn:hover {
-  border-color: var(--accent, #7c6af7);
-  color: var(--accent, #7c6af7);
 }
 
 /* ── Artifacts drawer ───────────────────────────────────────────────────── */

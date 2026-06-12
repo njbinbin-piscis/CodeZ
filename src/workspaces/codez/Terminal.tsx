@@ -66,11 +66,13 @@ function TerminalSession({
   const fitTerminal = useCallback(() => {
     if (!containerRef.current || !fitRef.current || !termRef.current) return;
     try {
+      const prevCols = termRef.current.cols;
+      const prevRows = termRef.current.rows;
       fitRef.current.fit();
       const { cols, rows } = termRef.current;
-      if (cols > 0 && rows > 0) {
-        ideApi.terminalResize(terminalId, cols, rows).catch(() => {});
-      }
+      if (cols <= 0 || rows <= 0) return;
+      if (cols === prevCols && rows === prevRows) return;
+      ideApi.terminalResize(terminalId, cols, rows).catch(() => {});
     } catch {
       // Container may still be laying out.
     }
@@ -175,11 +177,31 @@ function TerminalSession({
     return () => observer.disconnect();
   }, []);
 
+  const fontScalePauseRef = useRef(0);
+  useEffect(() => {
+    const onFontScale = () => {
+      fontScalePauseRef.current = performance.now() + 400;
+    };
+    window.addEventListener("agentz-font-scale", onFontScale);
+    return () => window.removeEventListener("agentz-font-scale", onFontScale);
+  }, []);
+
   useEffect(() => {
     if (!active || !panelVisible || !containerRef.current) return;
-    const ro = new ResizeObserver(() => fitTerminal());
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (performance.now() < fontScalePauseRef.current) return;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        fitTerminal();
+      });
+    });
     ro.observe(containerRef.current);
-    return () => ro.disconnect();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [active, panelVisible, fitTerminal]);
 
   useEffect(() => {

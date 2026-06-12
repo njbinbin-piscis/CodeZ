@@ -1,5 +1,5 @@
 /**
- * Teams IPC (Phase 3) — installable Pool templates. A team bundles an
+ * Teams IPC — installable swarm / workflow team templates.
  * `org_spec` (organization contract) with its member agents and a workflow.
  */
 import { invoke } from "@tauri-apps/api/core";

@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  listFish,
-  saveFish,
-  deleteFish,
-  type FishDef,
-} from "../../../services/tauri/fish";
-import {
-  listInstalledSkills,
-  type InstalledSkill,
-} from "../../../services/tauri/workbench";
+import { listFish, saveFish, deleteFish, type FishDef } from "../../../services/tauri/fish";
+import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 
 interface FishForm {
   id: string;
@@ -20,15 +12,13 @@ interface FishForm {
 
 const EMPTY_FORM: FishForm = { id: "", name: "", description: "", system_prompt: "" };
 
-/** Settings tab: manage Fish (named stateless sub-agent personas). */
-export default function FishTab() {
+export default function AnonymousAgentsView() {
   const { t } = useTranslation();
   const [fish, setFish] = useState<FishDef[]>([]);
   const [skills, setSkills] = useState<InstalledSkill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // null = not editing; "" id = new fish; otherwise editing existing id.
   const [editing, setEditing] = useState<FishForm | null>(null);
   const [isNew, setIsNew] = useState(false);
 
@@ -62,7 +52,6 @@ export default function FishTab() {
       description: f.description,
       system_prompt: f.system_prompt,
     });
-    // Builtin fish keep their id (editing creates a user override).
     setIsNew(false);
   };
 
@@ -72,7 +61,7 @@ export default function FishTab() {
       name: s.name || s.slug,
       description: s.description || "",
       system_prompt:
-        `You are a Fish derived from the "${s.name || s.slug}" skill.\n` +
+        `You are an anonymous agent derived from the "${s.name || s.slug}" skill.\n` +
         `${s.description || ""}\n\n` +
         `Apply this skill to complete the brief and return only the final result.`,
     });
@@ -119,10 +108,10 @@ export default function FishTab() {
   );
 
   return (
-    <div className="agentz-settings-body">
+    <div className="agentz-settings-tabpanel">
       <section className="agentz-settings-section">
-        <h3>{t("fish.title")}</h3>
-        <p className="agentz-settings-hint">{t("fish.hint")}</p>
+        <h3>{t("anonymousAgent.title")}</h3>
+        <p className="agentz-settings-hint">{t("anonymousAgent.hint")}</p>
 
         {error && <div className="agentz-settings-error">{error}</div>}
         {loading ? (
@@ -135,7 +124,7 @@ export default function FishTab() {
                   <div className="agentz-fish-info">
                     <strong>{f.name || f.id}</strong>
                     <span className={`agentz-fish-badge ${f.source}`}>
-                      {f.source === "builtin" ? t("fish.builtin") : t("fish.user")}
+                      {f.source === "builtin" ? t("anonymousAgent.builtin") : t("anonymousAgent.user")}
                     </span>
                     <span className="agentz-fish-meta">
                       <code>{f.id}</code> · {f.description || "—"}
@@ -143,7 +132,7 @@ export default function FishTab() {
                   </div>
                   <div className="agentz-fish-actions">
                     <button type="button" onClick={() => startEdit(f)} disabled={busy}>
-                      {f.source === "builtin" ? t("fish.override") : t("common.edit")}
+                      {f.source === "builtin" ? t("anonymousAgent.override") : t("common.edit")}
                     </button>
                     {f.source === "user" && (
                       <button
@@ -162,43 +151,42 @@ export default function FishTab() {
 
             {editing ? (
               <div className="agentz-fish-form">
-                <h4>{isNew ? t("fish.add") : t("fish.edit")}</h4>
+                <h4>{isNew ? t("anonymousAgent.add") : t("anonymousAgent.edit")}</h4>
                 <div className="agentz-settings-field">
-                  <label>{t("fish.id")}</label>
+                  <label>{t("anonymousAgent.id")}</label>
                   <input
                     value={editing.id}
                     disabled={!isNew}
                     onChange={(e) => setEditing((f) => f && { ...f, id: e.target.value })}
-                    placeholder="my-fish"
+                    placeholder="my-anonymous-agent"
                   />
                 </div>
                 <div className="agentz-settings-field">
-                  <label>{t("fish.name")}</label>
+                  <label>{t("anonymousAgent.name")}</label>
                   <input
                     value={editing.name}
                     onChange={(e) => setEditing((f) => f && { ...f, name: e.target.value })}
-                    placeholder="My sub-agent"
                   />
                 </div>
                 <div className="agentz-settings-field">
-                  <label>{t("fish.description")}</label>
+                  <label>{t("anonymousAgent.description")}</label>
                   <input
                     value={editing.description}
                     onChange={(e) =>
                       setEditing((f) => f && { ...f, description: e.target.value })
                     }
-                    placeholder={t("fish.descriptionPlaceholder")}
+                    placeholder={t("anonymousAgent.descriptionPlaceholder")}
                   />
                 </div>
                 <div className="agentz-settings-field">
-                  <label>{t("fish.systemPrompt")}</label>
+                  <label>{t("anonymousAgent.systemPrompt")}</label>
                   <textarea
                     rows={6}
                     value={editing.system_prompt}
                     onChange={(e) =>
                       setEditing((f) => f && { ...f, system_prompt: e.target.value })
                     }
-                    placeholder={t("fish.systemPromptPlaceholder")}
+                    placeholder={t("anonymousAgent.systemPromptPlaceholder")}
                   />
                 </div>
                 <div className="agentz-fish-form-actions">
@@ -222,7 +210,7 @@ export default function FishTab() {
               </div>
             ) : (
               <button type="button" className="agentz-settings-add" onClick={startNew}>
-                + {t("fish.add")}
+                + {t("anonymousAgent.add")}
               </button>
             )}
           </>
@@ -231,8 +219,8 @@ export default function FishTab() {
 
       {!loading && skills.length > 0 && (
         <section className="agentz-settings-section">
-          <h3>{t("fish.fromSkillTitle")}</h3>
-          <p className="agentz-settings-hint">{t("fish.fromSkillHint")}</p>
+          <h3>{t("anonymousAgent.fromSkillTitle")}</h3>
+          <p className="agentz-settings-hint">{t("anonymousAgent.fromSkillHint")}</p>
           <div className="agentz-fish-skill-list">
             {skills.map((s) => (
               <div key={s.slug} className="agentz-fish-row">
@@ -242,7 +230,7 @@ export default function FishTab() {
                 </div>
                 <div className="agentz-fish-actions">
                   <button type="button" onClick={() => fromSkill(s)} disabled={busy}>
-                    {t("fish.fromSkillAction")}
+                    {t("anonymousAgent.fromSkillAction")}
                   </button>
                 </div>
               </div>

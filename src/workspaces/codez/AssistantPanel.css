@@ -121,6 +121,8 @@
 .agentz-assistant-actions {
   display: flex;
   gap: 2px;
+  /* Leave room for the fixed changes/artifacts badge on the right edge. */
+  margin-right: 28px;
 }
 
 .agentz-assistant-actions button {

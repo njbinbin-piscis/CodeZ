@@ -104,6 +104,8 @@ export function chatSend(args: {
   taskKey?: string | null;
   /** Skill slugs the user enabled for this turn (Phase 1). Empty = none. */
   enabledSkills?: string[] | null;
+  /** Connector ids explicitly enabled for this turn. Omit = global connector policy. */
+  enabledConnectors?: string[] | null;
   /** Agent persona id to run as (Phase 2). Null = default assistant. */
   agentId?: string | null;
   /** DB `sessions.source` tag — defaults to CodeZ. */
@@ -126,6 +128,7 @@ export function chatSend(args: {
     clearPlan: args.clearPlan ?? true,
     taskKey: args.taskKey ?? null,
     enabledSkills: args.enabledSkills ?? null,
+    enabledConnectors: args.enabledConnectors ?? null,
     agentId: args.agentId ?? null,
     sessionSource: args.sessionSource ?? SESSION_SOURCE_CODEZ,
     teamId: args.teamId ?? null,

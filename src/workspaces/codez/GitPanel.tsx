@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ideApi } from "../../services/tauri/ide";
 import type { GitFileStatus, GitRepoSnapshot, BranchInfo } from "./types";
@@ -13,7 +13,6 @@ interface GitPanelProps {
 interface GitRepoSectionProps {
   projectDir: string;
   repo: GitRepoSnapshot;
-  showDivider: boolean;
   onDiffClick: (path: string) => void;
   onOpenFile: (path: string) => void;
   onMutate: () => Promise<void>;
@@ -33,7 +32,6 @@ function statusBadge(s: string) {
 function GitRepoSection({
   projectDir,
   repo,
-  showDivider,
   onDiffClick,
   onOpenFile,
   onMutate,
@@ -45,7 +43,7 @@ function GitRepoSection({
 
   const changed = repo.files.filter((s) => !s.staged);
   const staged = repo.files.filter((s) => s.staged);
-  const koiBranches = repo.branches.filter((b) => b.is_koi);
+  const assistantBranches = repo.branches.filter((b) => b.is_koi);
   const mainBranches = repo.branches.filter((b) => !b.is_koi);
 
   const refreshRepo = useCallback(async () => {
@@ -173,7 +171,6 @@ function GitRepoSection({
 
   return (
     <div className="git-repo-section">
-      {showDivider && <div className="git-repo-divider" role="separator" />}
       <div className="git-repo-header">
         <span className="git-repo-title" title={repo.repo_root || projectDir}>
           {repoLabel}
@@ -288,17 +285,17 @@ function GitRepoSection({
         {mainBranches.map((b) => (
           <GitBranchRow key={`${repo.repo_root}-${b.name}`} branch={b} onCheckout={handleCheckout} />
         ))}
-        {koiBranches.length > 0 && (
+        {assistantBranches.length > 0 && (
           <>
-            <div className="git-panel-title" style={{ marginTop: 10 }}>
-              Koi {t("ide.koiBranches")} ({koiBranches.length})
+            <div className="git-panel-title git-panel-title-nested">
+              {t("ide.assistantBranches")} ({assistantBranches.length})
             </div>
-            {koiBranches.map((b) => (
+            {assistantBranches.map((b) => (
               <GitBranchRow
-                key={`koi-${repo.repo_root}-${b.name}`}
+                key={`assistant-${repo.repo_root}-${b.name}`}
                 branch={b}
                 onCheckout={handleCheckout}
-                koi
+                assistant
               />
             ))}
           </>
@@ -329,7 +326,11 @@ function GitFileRow({
   return (
     <div className="git-file-item">
       <span className={`git-file-status-badge ${file.status}`}>{statusBadge(file.status)}</span>
-      <span className="git-file-path" onClick={() => onDiffClick(file.path)}>
+      <span
+        className="git-file-path"
+        title={file.path}
+        onClick={() => onDiffClick(file.path)}
+      >
         {file.path}
       </span>
       {!staged && (
@@ -365,16 +366,16 @@ function GitFileRow({
 function GitBranchRow({
   branch,
   onCheckout,
-  koi,
+  assistant,
 }: {
   branch: BranchInfo;
   onCheckout: (name: string) => void;
-  koi?: boolean;
+  assistant?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <div
-      className={`git-branch-item ${branch.is_current ? "current" : ""} ${koi ? "koi" : ""}`}
+      className={`git-branch-item ${branch.is_current ? "current" : ""} ${assistant ? "assistant-branch" : ""}`}
       title={branch.is_current ? (branch.last_commit || "") : `Checkout ${branch.name}`}
       onClick={() => {
         if (!branch.is_current) void onCheckout(branch.name);
@@ -442,15 +443,18 @@ export default function GitPanel({
       )}
 
       {repos.map((repo, index) => (
-        <GitRepoSection
-          key={repo.repo_root || "__root__"}
-          projectDir={projectDir}
-          repo={repo}
-          showDivider={index > 0}
-          onDiffClick={onDiffClick}
-          onOpenFile={onOpenFile}
-          onMutate={handleMutate}
-        />
+        <Fragment key={repo.repo_root || `__root__-${index}`}>
+          {index > 0 && (
+            <div className="git-repo-divider" role="separator" aria-orientation="horizontal" />
+          )}
+          <GitRepoSection
+            projectDir={projectDir}
+            repo={repo}
+            onDiffClick={onDiffClick}
+            onOpenFile={onOpenFile}
+            onMutate={handleMutate}
+          />
+        </Fragment>
       ))}
     </div>
   );

@@ -1,5 +1,5 @@
 /**
- * Agents IPC (Phase 2) — installable single-Koi personas. An agent bundles a
+ * Agents IPC — installable assistant personas bundled as prompt + skills + tools.
  * system prompt with the skills / tools / MCP servers and model it runs with.
  */
 import { invoke } from "@tauri-apps/api/core";
@@ -68,7 +68,7 @@ export function uninstallAgent(id: string): Promise<void> {
   return invoke<void>("agents_uninstall", { id });
 }
 
-/** Mirror installed agents into a project's `kois` table. Returns synced count. */
+/** Mirror installed agents into a project's member-assistant table. Returns synced count. */
 export function syncAgents(projectDir: string): Promise<number> {
   return invoke<number>("agents_sync", { projectDir });
 }

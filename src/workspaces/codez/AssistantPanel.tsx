@@ -61,6 +61,10 @@ import type { FileNode } from "./types";
 import { useInteractiveCards } from "../../hooks/useInteractiveCards";
 import { chipsSnapshot, composerDbg, composerDbgMark, promptPreview } from "../../utils/composerDebug";
 import { useProjectEdge } from "../../contexts/ProjectEdgeContext";
+import {
+  collectArtifactsFromToolSteps,
+  pathFromToolEvent,
+} from "../workz/agentArtifacts";
 import "./AssistantPanel.css";
 
 interface ChatMessage {
@@ -147,7 +151,6 @@ export default function AssistantPanel({
   const {
     setPendingReview,
     setArtifacts,
-    gitChanges,
     onSelectPath,
     setAgentTurnBusy,
     scheduleWorkspaceRefresh,
@@ -192,16 +195,6 @@ export default function AssistantPanel({
   const [activeAgent, setActiveAgent] = useState<string>(
     () => localStorage.getItem("agentz-active-agent") ?? "",
   );
-
-  useEffect(() => {
-    const paths = new Set<string>();
-    for (const step of toolSteps) {
-      const input = step.input as { path?: string } | null;
-      if (input?.path) paths.add(input.path.replace(/\\/g, "/"));
-    }
-    for (const c of gitChanges) paths.add(c.path);
-    setArtifacts([...paths].sort((a, b) => a.localeCompare(b)));
-  }, [toolSteps, gitChanges, setArtifacts]);
 
   const {
     pendingCards,
@@ -252,6 +245,19 @@ export default function AssistantPanel({
   /** Bumped on send/clear so in-flight paste/attach callbacks cannot re-add chips. */
   const composerGenRef = useRef(0);
   const handledAttachNonceRef = useRef<number | null>(null);
+  /** Session-scoped agent tool outputs (not git status). */
+  const sessionArtifactsRef = useRef<Set<string>>(new Set());
+
+  const clearSessionArtifacts = useCallback(() => {
+    sessionArtifactsRef.current = new Set();
+    setArtifacts([]);
+  }, [setArtifacts]);
+
+  useEffect(() => {
+    const paths = new Set(sessionArtifactsRef.current);
+    for (const p of collectArtifactsFromToolSteps(toolSteps)) paths.add(p);
+    setArtifacts([...paths].sort((a, b) => a.localeCompare(b)));
+  }, [toolSteps, setArtifacts]);
 
   useEffect(() => {
     sessionRef.current = null;
@@ -265,6 +271,7 @@ export default function AssistantPanel({
     setError(null);
     setShowSessions(false);
     setContextUsage(null);
+    clearSessionArtifacts();
     clearCards();
     composerGenRef.current += 1;
     handledAttachNonceRef.current = null;
@@ -272,7 +279,7 @@ export default function AssistantPanel({
       revokeImageChipPreviews(cur);
       return [];
     });
-  }, [projectDir, clearCards]);
+  }, [projectDir, clearCards, clearSessionArtifacts]);
 
   useEffect(() => {
     setModelId((id) => pruneModelId(id, llmProviders));
@@ -468,8 +475,8 @@ export default function AssistantPanel({
         setToolSteps((prev) => upsertToolStep(prev, evt));
         break;
       case "tool_end": {
-        setToolSteps((prev) =>
-          prev.map((step) =>
+        setToolSteps((prev) => {
+          const next = prev.map((step) =>
             step.id === evt.id
               ? {
                   ...step,
@@ -478,8 +485,14 @@ export default function AssistantPanel({
                   isError: evt.is_error,
                 }
               : step,
-          ),
-        );
+          );
+          const ended = next.find((step) => step.id === evt.id);
+          if (ended) {
+            const p = pathFromToolEvent(ended.name, ended.input, evt.result);
+            if (p) sessionArtifactsRef.current.add(p);
+          }
+          return next;
+        });
         break;
       }
       case "plan_update":
@@ -818,7 +831,8 @@ export default function AssistantPanel({
     setError(null);
     setShowSessions(false);
     setContextUsage(null);
-  }, []);
+    clearSessionArtifacts();
+  }, [clearSessionArtifacts]);
 
   const switchSession = useCallback(
     async (id: string) => {
@@ -831,11 +845,12 @@ export default function AssistantPanel({
         setError(null);
         setShowSessions(false);
         setContextUsage(null);
+        clearSessionArtifacts();
       } catch (e) {
         setError(String(e));
       }
     },
-    [syncMessagesFromDb],
+    [syncMessagesFromDb, clearSessionArtifacts],
   );
 
   const forkFromCheckpoint = useCallback(

@@ -71,6 +71,28 @@ impl WorkflowGraph {
         }
         Ok(())
     }
+
+    /// Derive loop `body_to` from edges labelled `body` (matches WorkflowDesigner).
+    pub fn normalize_loop_nodes(&mut self) {
+        for node in &mut self.nodes {
+            if node.kind != "loop" {
+                continue;
+            }
+            if node.body_to.as_deref().unwrap_or("").trim().is_empty() {
+                node.body_to = self
+                    .edges
+                    .iter()
+                    .find(|e| {
+                        e.from == node.id
+                            && e.label
+                                .as_deref()
+                                .map(|l| l.trim().eq_ignore_ascii_case("body"))
+                                .unwrap_or(false)
+                    })
+                    .map(|e| e.to.clone());
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -340,11 +362,19 @@ pub async fn workflow_start(
     if team.mode != "workflow" {
         return Err(format!("team '{}' is not a workflow team", team.id));
     }
-    let graph = team
+    let mut graph = team
         .workflow
         .clone()
         .ok_or_else(|| "workflow team has no graph".to_string())?;
+    graph.normalize_loop_nodes();
     graph.validate()?;
+
+    let run_id = format!("wf-{}", uuid::Uuid::new_v4());
+    let pool_name = format!(
+        "{} · {}",
+        team.name,
+        &run_id[..8.min(run_id.len())]
+    );
 
     let (db, _settings) = open_project_kernel_state(&app, &project_dir)?;
     let pool_id = {
@@ -363,22 +393,15 @@ pub async fn workflow_start(
                 member_koi_ids.push(id);
             }
         }
-        // Reuse an active pool with the same name, else create one.
-        let existing = db.list_pool_sessions().ok().and_then(|pools| {
-            pools
-                .into_iter()
-                .find(|p| p.name == team.name && p.status != "archived")
-        });
-        let pool = match existing {
-            Some(p) => p,
-            None => db
-                .create_pool_session_with_dir(
-                    &team.name,
-                    Some(&project_dir),
-                    team.task_timeout_secs,
-                )
-                .map_err(|e| e.to_string())?,
-        };
+        let pool = db
+            .create_pool_session_with_meta(
+                &pool_name,
+                Some(&project_dir),
+                team.task_timeout_secs,
+                Some(&team.id),
+                Some(&run_id),
+            )
+            .map_err(|e| e.to_string())?;
         let _ = db.update_pool_session_dir(&pool.id, &project_dir);
         for koi_id in &member_koi_ids {
             if !db.is_pool_member(&pool.id, koi_id).unwrap_or(false) {
@@ -388,7 +411,6 @@ pub async fn workflow_start(
         pool.id
     };
 
-    let run_id = format!("wf-{}", uuid::Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     let mut blackboard = Map::new();
     blackboard.insert("goal".to_string(), Value::String(goal));
@@ -611,6 +633,27 @@ mod tests {
         assert_eq!(remaining.len(), 2);
         assert!(remaining.iter().all(|r| is_active_status(&r.status)));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn normalize_loop_nodes_derives_body_to_from_edges() {
+        let mut g: WorkflowGraph = serde_json::from_value(serde_json::json!({
+            "entry": "start",
+            "nodes": [
+                { "id": "start", "type": "start" },
+                { "id": "loop", "type": "loop" },
+                { "id": "body", "type": "agent", "agent_id": "coder" },
+                { "id": "end", "type": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "loop" },
+                { "from": "loop", "to": "body", "label": "body" },
+                { "from": "loop", "to": "end" }
+            ]
+        }))
+        .unwrap();
+        g.normalize_loop_nodes();
+        assert_eq!(g.node("loop").unwrap().body_to.as_deref(), Some("body"));
     }
 }
 

@@ -48,16 +48,38 @@ export function normalizeArtifactPath(raw: string): string {
   return raw.replace(/\\/g, "/").replace(/^[/\\]+/, "");
 }
 
-/** Merge tool-touched paths and git changes into a deduped artifact list. */
-export function collectArtifacts(steps: AgentStep[], changes: GitFileStatus[]): string[] {
+export interface ToolStepLike {
+  name: string;
+  input: unknown;
+  result?: string;
+}
+
+/** Agent-produced paths from tool invocations in the current UI step list. */
+export function collectArtifactsFromToolSteps(toolSteps: ToolStepLike[]): string[] {
+  const paths = new Set<string>();
+  for (const step of toolSteps) {
+    const p = pathFromToolEvent(step.name, step.input, step.result);
+    if (p) paths.add(p);
+  }
+  return [...paths].sort((a, b) => a.localeCompare(b));
+}
+
+/** Agent-produced paths from persisted WorkZ step history (not git status). */
+export function collectArtifactsFromSteps(steps: AgentStep[]): string[] {
   const paths = new Set<string>();
   for (const step of steps) {
     for (const tool of step.tools) {
-      if (tool.path) paths.add(normalizeArtifactPath(tool.path));
+      const p =
+        tool.path != null
+          ? normalizeArtifactPath(tool.path)
+          : pathFromToolEvent(tool.name, tool.input, tool.result);
+      if (p) paths.add(p);
     }
   }
-  for (const c of changes) {
-    if (c.path) paths.add(normalizeArtifactPath(c.path));
-  }
   return [...paths].sort((a, b) => a.localeCompare(b));
+}
+
+/** @deprecated Prefer {@link collectArtifactsFromSteps} — git changes belong in the Changes tab. */
+export function collectArtifacts(steps: AgentStep[], _changes?: GitFileStatus[]): string[] {
+  return collectArtifactsFromSteps(steps);
 }

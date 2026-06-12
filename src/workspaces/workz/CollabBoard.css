@@ -157,6 +157,38 @@
   color: var(--text-dim, #9a9ab0);
 }
 
+.agentz-collab-card-wait {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #ffb020;
+  line-height: 1.35;
+}
+
+.agentz-collab-card-cli {
+  margin: 6px 0 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  line-height: 1.4;
+  /* 2 lines tall, then scroll */
+  max-height: calc(10px * 1.4 * 2);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: #b8c0a8;
+}
+
+.agentz-collab-card-cli::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agentz-collab-card-cli::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+
 .agentz-collab-prio.high {
   color: #fc5c65;
 }

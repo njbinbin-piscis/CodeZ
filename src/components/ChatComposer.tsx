@@ -104,13 +104,26 @@ function SkillGlyph() {
   );
 }
 
+function ConnectorGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
 export interface SkillSelector {
   options: ComposerMenuOption[];
   selected: string[];
   onChange: (slugs: string[]) => void;
   label: string;
   emptyHint?: string;
+  onEmptyHintClick?: () => void;
 }
+
+/** Same shape as {@link SkillSelector} — multi-select of connector ids. */
+export type ConnectorSelector = SkillSelector;
 
 export interface ChatComposerProps {
   value: string;
@@ -143,6 +156,8 @@ export interface ChatComposerProps {
   };
   /** Optional multi-select of installed skills to enable for the conversation. */
   skillSelector?: SkillSelector;
+  /** Optional multi-select of connectors to enable for the conversation. */
+  connectorSelector?: ConnectorSelector;
   /** Optional single-select of an installed agent persona to run as. */
   agentSelector?: {
     value: string;
@@ -184,6 +199,7 @@ export default function ChatComposer({
   sendTitle = "Send",
   modeSelector,
   skillSelector,
+  connectorSelector,
   agentSelector,
   modeNotice,
   mentionPopup,
@@ -332,7 +348,20 @@ export default function ChatComposer({
                 onChange={skillSelector.onChange}
                 label={skillSelector.label}
                 emptyHint={skillSelector.emptyHint}
+                onEmptyHintClick={skillSelector.onEmptyHintClick}
                 icon={<SkillGlyph />}
+                disabled={busy || locked}
+              />
+            )}
+            {connectorSelector && (
+              <DropdownMultiSelect
+                options={connectorSelector.options}
+                selected={connectorSelector.selected}
+                onChange={connectorSelector.onChange}
+                label={connectorSelector.label}
+                emptyHint={connectorSelector.emptyHint}
+                onEmptyHintClick={connectorSelector.onEmptyHintClick}
+                icon={<ConnectorGlyph />}
                 disabled={busy || locked}
               />
             )}

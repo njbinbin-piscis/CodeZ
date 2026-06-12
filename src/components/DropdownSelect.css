@@ -176,6 +176,20 @@
   color: var(--text-dim, #9a9ab0);
 }
 
+.agentz-dropdown-empty-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--accent, #7c6af7);
+}
+
+.agentz-dropdown-empty-action:hover {
+  background: color-mix(in srgb, var(--accent, #7c6af7) 10%, transparent);
+}
+
 .agentz-dropdown-trigger.has-value-accent {
   color: var(--accent, #7c6af7);
 }

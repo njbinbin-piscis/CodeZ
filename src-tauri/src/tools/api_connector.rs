@@ -11,6 +11,8 @@ use crate::commands::connectors::{call_api_connector, list_api_connectors};
 
 pub struct ApiConnectorTool {
     pub config_dir: PathBuf,
+    /// When set, only these connector ids are visible to list/call (generic agent explicit selection).
+    pub allowed_ids: Option<Vec<String>>,
 }
 
 #[async_trait]
@@ -63,7 +65,12 @@ impl Tool for ApiConnectorTool {
             .unwrap_or("list");
 
         if action == "list" {
-            let entries = list_api_connectors(&self.config_dir);
+            let mut entries = list_api_connectors(&self.config_dir);
+            if let Some(allowed) = &self.allowed_ids {
+                let wanted: std::collections::HashSet<&str> =
+                    allowed.iter().map(|s| s.as_str()).collect();
+                entries.retain(|e| wanted.contains(e.id.as_str()));
+            }
             if entries.is_empty() {
                 return Ok(ToolResult::ok(
                     "No enabled API connectors. Add one in Settings → Connectors → New API connector.",
@@ -91,6 +98,13 @@ impl Tool for ApiConnectorTool {
                 return Ok(ToolResult::err(
                     "'connector_id' is required for action=call",
                 ));
+            }
+            if let Some(allowed) = &self.allowed_ids {
+                if !allowed.iter().any(|a| a == id) {
+                    return Ok(ToolResult::err(format!(
+                        "Connector '{id}' is not enabled for this turn"
+                    )));
+                }
             }
             let body = input.get("body").cloned();
             match call_api_connector(&self.config_dir, id, body).await {

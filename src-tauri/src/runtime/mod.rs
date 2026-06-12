@@ -6,6 +6,7 @@
 //! injected into the kernel pool coordinator so team (Pool) collaboration fans
 //! out to member Koi without leaving the desktop process.
 
+pub mod heartbeat;
 pub mod journal_hooks;
 pub mod koi;
 pub mod patrol;

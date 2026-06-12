@@ -35,18 +35,18 @@ impl Tool for CallFishTool {
     }
 
     fn description(&self) -> &str {
-        "Invoke a named, stateless 'Fish' sub-agent for a self-contained, \
-         result-first job (scan, collect, summarize, extract). The Fish runs \
+        "Invoke a named, stateless sub-agent for a self-contained, \
+         result-first job (scan, collect, summarize, extract). The sub-agent runs \
          READ-ONLY on a lightweight flash model and returns only its final \
          report — its steps never enter your context. It has NO access to your \
          conversation, so the brief must be complete.\n\
          \n\
          Parameters:\n\
-         - 'action' (string): 'list' to see available Fish, or 'call' to run one.\n\
-         - 'fish' (string): the Fish id (required for action=call).\n\
+         - 'action' (string): 'list' to see available sub-agents, or 'call' to run one.\n\
+         - 'fish' (string): the sub-agent id (required for action=call).\n\
          - 'task' (string): a self-contained brief (required for action=call).\n\
          \n\
-         Start with action=list if unsure which Fish fits."
+         Start with action=list if unsure which sub-agent fits."
     }
 
     fn input_schema(&self) -> Value {
@@ -56,15 +56,15 @@ impl Tool for CallFishTool {
                 "action": {
                     "type": "string",
                     "enum": ["list", "call"],
-                    "description": "'list' available Fish, or 'call' one."
+                    "description": "'list' available sub-agents, or 'call' one."
                 },
                 "fish": {
                     "type": "string",
-                    "description": "Fish id to run (action=call)."
+                    "description": "Sub-agent id to run (action=call)."
                 },
                 "task": {
                     "type": "string",
-                    "description": "Self-contained brief for the Fish (action=call)."
+                    "description": "Self-contained brief for the sub-agent (action=call)."
                 }
             },
             "required": ["action"]
@@ -94,7 +94,7 @@ impl Tool for CallFishTool {
                 .map(|f| format!("- {} ({}): {}", f.id, f.name, f.description))
                 .collect();
             return Ok(ToolResult::ok(format!(
-                "Available Fish:\n{}",
+                "Available sub-agents:\n{}",
                 lines.join("\n")
             )));
         }
@@ -124,7 +124,7 @@ impl Tool for CallFishTool {
 
         let Some(fish) = find_fish(&config_dir, &fish_id) else {
             return Ok(ToolResult::err(format!(
-                "unknown fish '{fish_id}' — use action=list to see available ids"
+                "unknown sub-agent '{fish_id}' — use action=list to see available ids"
             )));
         };
 

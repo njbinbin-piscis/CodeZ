@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   poolGet,
@@ -11,7 +11,31 @@ import {
   type KoiTodo,
   type PoolMessage,
 } from "../../services/tauri/pool";
+import { onChatEvent, type AgentEvent, type ChatEventEnvelope } from "../../services/tauri/chat";
 import "./CollabBoard.css";
+
+/** Live koi-turn output is keyed by this session id (see kernel pool dispatch). */
+const koiTaskSessionId = (td: KoiTodo) => `koi_task_${td.owner_id}_${td.id.slice(0, 8)}`;
+
+/** Keep only the tail of each agent's live buffer so the board can't grow unbounded. */
+const CLI_BUFFER_LIMIT = 4000;
+
+/**
+ * 2-line CLI window that auto-scrolls to the latest output as it streams in.
+ */
+function CardCli({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <pre ref={ref} className="agentz-collab-card-cli">
+      {text || t("collab.cliWaiting")}
+    </pre>
+  );
+}
 
 interface CollabBoardProps {
   projectDir: string;
@@ -35,6 +59,7 @@ export default function CollabBoard({ projectDir, poolId, onClose }: CollabBoard
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [todos, setTodos] = useState<KoiTodo[]>([]);
   const [messages, setMessages] = useState<PoolMessage[]>([]);
+  const [liveOutput, setLiveOutput] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -73,6 +98,36 @@ export default function CollabBoard({ projectDir, poolId, onClose }: CollabBoard
     };
   }, [refresh]);
 
+  // Stream each working koi's tokens into a per-session buffer. Koi turns emit
+  // over the shared chat channel keyed by `koi_task_{owner}_{todo8}`.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    onChatEvent((env: ChatEventEnvelope) => {
+      if (env.channel !== "agent_event") return;
+      if (!env.sessionId || !env.sessionId.startsWith("koi_task_")) return;
+      const sid = env.sessionId;
+      const evt = env.payload as AgentEvent;
+      let chunk = "";
+      if (evt.type === "text_delta") {
+        chunk = evt.delta;
+      } else if (evt.type === "tool_start") {
+        chunk = `\n▸ ${evt.name}\n`;
+      } else {
+        return;
+      }
+      setLiveOutput((prev) => {
+        const next = (prev[sid] ?? "") + chunk;
+        return {
+          ...prev,
+          [sid]: next.length > CLI_BUFFER_LIMIT ? next.slice(next.length - CLI_BUFFER_LIMIT) : next,
+        };
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
+
   const memberName = useCallback(
     (koiId: string) => {
       if (koiId === "piscis") return t("agent.role");
@@ -89,6 +144,16 @@ export default function CollabBoard({ projectDir, poolId, onClose }: CollabBoard
       })),
     [todos],
   );
+
+  const dependencyWaiting = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.event_type === "dependency_waiting" && msg.todo_id) {
+        map.set(msg.todo_id, msg.content);
+      }
+    }
+    return map;
+  }, [messages]);
 
   return (
     <div className="agentz-collab-overlay" onClick={onClose}>
@@ -130,6 +195,15 @@ export default function CollabBoard({ projectDir, poolId, onClose }: CollabBoard
                       <span className={`agentz-collab-prio ${td.priority}`}>{td.priority}</span>
                       <span>{memberName(td.owner_id)}</span>
                     </div>
+                    {td.status === "in_progress" && (
+                      <CardCli text={liveOutput[koiTaskSessionId(td)] ?? ""} />
+                    )}
+                    {(dependencyWaiting.has(td.id) || td.depends_on) && (
+                      <div className="agentz-collab-card-wait">
+                        {dependencyWaiting.get(td.id) ??
+                          t("agent.todoWaitingDependency", { id: td.depends_on ?? "?" })}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {col.items.length === 0 && <div className="agentz-collab-col-empty">—</div>}

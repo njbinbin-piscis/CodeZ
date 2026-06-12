@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from "react";
 import Editor, { DiffEditor, type OnMount } from "@monaco-editor/react";
-import { themeStore } from "./themeStore";
+import { themeStore, ACTIVE_EDITOR_THEME_KEY, syncEditorThemeWithAppearance } from "./themeStore";
 import type { OpenTab } from "./types";
 import {
   lspApi,
@@ -395,12 +395,15 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
       // Restore a previously imported .vsix theme (persisted by ExtensionsPanel)
       // so it applies on startup without opening the Extensions panel.
       try {
-        const raw = localStorage.getItem("agentz.activeTheme");
+        const raw = localStorage.getItem(ACTIVE_EDITOR_THEME_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as { id: string; data: unknown };
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           monaco.editor.defineTheme(saved.id, saved.data as any);
+          monaco.editor.setTheme(saved.id);
           themeStore.set(saved.id);
+        } else {
+          syncEditorThemeWithAppearance();
         }
       } catch {
         // ignore corrupt persisted theme
@@ -549,21 +552,23 @@ export default function CodeEditor({ tab, projectDir, onChange, onSave, reveal }
 
   if (tab.isDiff && tab.originalContent !== undefined) {
     return (
-      <DiffEditor
-        height="100%"
-        theme={editorTheme}
-        language={tab.language || "plaintext"}
-        original={tab.originalContent}
-        modified={tab.content}
-        options={{
-          readOnly: true,
-          renderSideBySide: true,
-          minimap: { enabled: false },
-          fontSize: 13,
-          fontFamily: 'Consolas, "Courier New", monospace',
-          scrollBeyondLastLine: false,
-        }}
-      />
+      <div className="agentz-editor-wrap">
+        <DiffEditor
+          height="100%"
+          theme={editorTheme}
+          language={tab.language || "plaintext"}
+          original={tab.originalContent}
+          modified={tab.content}
+          options={{
+            readOnly: true,
+            renderSideBySide: true,
+            minimap: { enabled: false },
+            fontSize: 13,
+            fontFamily: 'Consolas, "Courier New", monospace',
+            scrollBeyondLastLine: false,
+          }}
+        />
+      </div>
     );
   }
 

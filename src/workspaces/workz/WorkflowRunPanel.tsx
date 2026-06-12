@@ -151,6 +151,12 @@ export default function WorkflowRunPanel({ runId, onClose, onRerun }: Props) {
 
         {run?.error && <div className="agentz-wfrun-error">{run.error}</div>}
 
+        {humanNode && (
+          <div className="agentz-wfrun-human-banner" role="status">
+            {t("workflow.waitingHumanBanner")}
+          </div>
+        )}
+
         <div className="agentz-wfrun-body">
           <div className="agentz-wfrun-col">
             <h4>{t("workflow.designer")}</h4>

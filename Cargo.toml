@@ -20,9 +20,9 @@ anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 
 # Shared agent runtime — pin to tagged releases on piscis-engine.
-piscis-core = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-core", rev = "v0.8.58" }
-piscis-kernel = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-kernel", rev = "v0.8.58" }
-piscis-ide-tools = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-ide-tools", rev = "v0.8.58" }
+piscis-core = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-core", rev = "v0.8.59" }
+piscis-kernel = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-kernel", rev = "v0.8.59" }
+piscis-ide-tools = { git = "https://github.com/njbinbin-piscis/piscis-engine.git", package = "piscis-ide-tools", rev = "v0.8.59" }
 
 # Local monorepo override — uncomment when hacking sibling checkouts:
 # [patch."https://github.com/njbinbin-piscis/piscis-engine.git"]

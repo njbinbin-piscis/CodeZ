@@ -52,6 +52,8 @@ import WorkflowRunPanel from "./WorkflowRunPanel";
 import WorkflowRunsList from "./WorkflowRunsList";
 import { listTeams, createPoolFromTeam, type TeamInfo } from "../../services/tauri/teams";
 import { listAgents, type AgentInfo } from "../../services/tauri/agents";
+import { listInstalledSkills, type InstalledSkill } from "../../services/tauri/workbench";
+import { listConnectors, type ConnectorInfo } from "../../services/tauri/connectors";
 import {
   startWorkflow,
   subscribeWorkflowEvents,
@@ -65,12 +67,15 @@ import { applyToolEnd, applyToolStart, finalizeTools } from "./agentTools";
 import { taskDisplayTitle, workzGoalFromText } from "./taskTitle";
 import "./Agent.css";
 
+import type { LibraryInitialState } from "../codez/resources/types";
+
 interface WorkZWorkspaceProps {
   projectDir: string | null;
   onOpenFolder: () => void;
   /** Increment from title bar to trigger repo wiki generation. */
   wikiBuildNonce?: number;
   onWikiBusyChange?: (busy: boolean) => void;
+  onOpenLibrary?: (initial?: LibraryInitialState) => void;
 }
 
 /**
@@ -85,10 +90,10 @@ export default function WorkZWorkspace({
   onOpenFolder,
   wikiBuildNonce = 0,
   onWikiBusyChange,
+  onOpenLibrary,
 }: WorkZWorkspaceProps) {
   const { t } = useTranslation();
   const {
-    gitChanges,
     setArtifacts,
     setPreviewPath,
     previewPath,
@@ -131,6 +136,24 @@ export default function WorkZWorkspace({
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [runsOpen, setRunsOpen] = useState(false);
   const [swarmMainTab, setSwarmMainTab] = useState<"main" | "chatroom" | "coordination">("main");
+  const [installedSkills, setInstalledSkills] = useState<InstalledSkill[]>([]);
+  const [enabledSkills, setEnabledSkills] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("agentz-workz-enabled-skills");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [connectors, setConnectors] = useState<ConnectorInfo[]>([]);
+  const [enabledConnectors, setEnabledConnectors] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("agentz-workz-enabled-connectors");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
 
   /** All WorkZ user tasks — sidebar lists single-agent and team sessions together. */
   const workzTaskSources = useMemo(
@@ -205,11 +228,33 @@ export default function WorkZWorkspace({
         setActiveAgentId((cur) => (cur && !list.some((a) => a.id === cur) ? "" : cur));
       })
       .catch(() => setAgents([]));
+    listInstalledSkills()
+      .then((skills) => {
+        setInstalledSkills(skills);
+        const slugs = new Set(skills.map((s) => s.slug));
+        setEnabledSkills((cur) => cur.filter((s) => slugs.has(s)));
+      })
+      .catch(() => setInstalledSkills([]));
+    listConnectors()
+      .then((list) => {
+        setConnectors(list);
+        const ids = new Set(list.map((c) => c.id));
+        setEnabledConnectors((cur) => cur.filter((id) => ids.has(id)));
+      })
+      .catch(() => setConnectors([]));
   }, []);
 
   useEffect(() => {
     localStorage.setItem("agentz-workz-agent", activeAgentId);
   }, [activeAgentId]);
+
+  useEffect(() => {
+    localStorage.setItem("agentz-workz-enabled-skills", JSON.stringify(enabledSkills));
+  }, [enabledSkills]);
+
+  useEffect(() => {
+    localStorage.setItem("agentz-workz-enabled-connectors", JSON.stringify(enabledConnectors));
+  }, [enabledConnectors]);
 
   // Swarm team selected → materialise/reuse the pool immediately so the
   // collaboration board is available before the first coordinator turn
@@ -227,7 +272,14 @@ export default function WorkZWorkspace({
           activePoolRef.current = created.pool_id;
         }
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (!cancelled) {
+          const msg = String(e);
+          setError(msg);
+          setToast(msg);
+          window.setTimeout(() => setToast(null), 5000);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -329,8 +381,8 @@ export default function WorkZWorkspace({
   }, [refreshTasks, refreshGitChanges]);
 
   useEffect(() => {
-    setArtifacts(collectArtifacts(steps, gitChanges));
-  }, [steps, gitChanges, setArtifacts]);
+    setArtifacts(collectArtifacts(steps));
+  }, [steps, setArtifacts]);
 
   // Stream kernel events into the in-flight step. The event channel is shared
   // with the IDE chat panel and with any background Agent tasks, so we only
@@ -549,7 +601,7 @@ export default function WorkZWorkspace({
       let effectivePrompt = text;
       if (activeTeam) {
         try {
-          // Re-sync member agent models into kois on every task start (idempotent pool).
+          // Re-sync member agent models into the collaboration pool on every task start.
           const created = await createPoolFromTeam(projectDir!, activeTeam);
           const poolId = created.pool_id;
           setActivePoolId(poolId);
@@ -561,12 +613,12 @@ export default function WorkZWorkspace({
             const orgSpec = teams.find((tm) => tm.id === activeTeam)?.org_spec?.trim();
             const orgSection = orgSpec
               ? `\n\nYour team operates under this organization contract (org_spec); ` +
-                `every member Koi receives it too, so hold yourself and them to it:\n${orgSpec}`
+                `every member assistant receives it too, so hold yourself and them to it:\n${orgSpec}`
               : "";
             effectivePrompt =
-              `You are the coordinator of team pool "${activeTeam}" (pool_id: ${poolId}). ` +
+              `You are the coordinator of swarm team "${activeTeam}" (collaboration pool id: ${poolId}). ` +
               `Use the pool_org and pool_chat tools to break this down into todos, assign them ` +
-              `to member Koi, and integrate their results.${orgSection}\n\nTask:\n${text}`;
+              `to member assistants, and integrate their results.${orgSection}\n\nTask:\n${text}`;
           }
         } catch (e) {
           setError(String(e));
@@ -585,6 +637,8 @@ export default function WorkZWorkspace({
         // Single-agent mode: run as the chosen persona. Team mode uses the
         // coordinator path, so no per-agent persona is applied there.
         agentId: activeTeam ? null : activeAgentId || null,
+        enabledSkills: showModelSelector && enabledSkills.length > 0 ? enabledSkills : null,
+        enabledConnectors: showModelSelector ? enabledConnectors : null,
         sessionSource: activeTeam ? SESSION_SOURCE_WORKZ_TEAM : SESSION_SOURCE_WORKZ,
         teamId: activeTeam || null,
         poolId: activePoolRef.current,
@@ -963,8 +1017,9 @@ export default function WorkZWorkspace({
   );
   const isSwarmTeam = selectedTeam?.mode === "swarm";
   const isWorkflowTeam = selectedTeam?.mode === "workflow";
-  /** UI model picker only applies to single-agent + generic persona (no team, no named agent). */
+  /** Generic single-agent: model + skill + connector pickers (no team, no named agent). */
   const showModelSelector = !activeTeam && !activeAgentId;
+  const showGenericComposerTools = showModelSelector;
   const composerModeNotice = useMemo(() => {
     if (taskBound) return t("agent.modeLocked");
     if (activeTeam) {
@@ -1291,6 +1346,44 @@ export default function WorkZWorkspace({
           modelOptions={modelOptions}
           onModelChange={setModelId}
           showModelSelector={showModelSelector}
+          skillSelector={
+            showGenericComposerTools
+              ? {
+                  label: t("chat.skills"),
+                  emptyHint: t("chat.skillsEmpty"),
+                  onEmptyHintClick: onOpenLibrary
+                    ? () => onOpenLibrary({ category: "skill", view: "discover" })
+                    : undefined,
+                  selected: enabledSkills,
+                  onChange: setEnabledSkills,
+                  options: installedSkills.map((s) => ({
+                    id: s.slug,
+                    label: s.name,
+                    hint: s.description,
+                  })),
+                }
+              : undefined
+          }
+          connectorSelector={
+            showGenericComposerTools
+              ? {
+                  label: t("chat.connectors"),
+                  emptyHint: t("chat.connectorsEmpty"),
+                  onEmptyHintClick: onOpenLibrary
+                    ? () => onOpenLibrary({ category: "connector", view: "discover" })
+                    : undefined,
+                  selected: enabledConnectors,
+                  onChange: setEnabledConnectors,
+                  options: connectors.map((c) => ({
+                    id: c.id,
+                    label: `${c.icon ? `${c.icon} ` : ""}${c.name}`,
+                    hint: [c.category, c.authorized ? undefined : t("studio.connectorUnauthorized"), c.description]
+                      .filter(Boolean)
+                      .join(" · "),
+                  })),
+                }
+              : undefined
+          }
           modeNotice={composerModeNotice}
           attachment={attachment}
           attachmentPreview={attachmentPreview}

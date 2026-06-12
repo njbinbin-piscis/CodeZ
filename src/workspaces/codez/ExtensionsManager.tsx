@@ -18,7 +18,7 @@ import {
   type OpenVsxResult,
 } from "../../services/tauri/vsix";
 import { vscodeThemeToMonaco, parseSnippets } from "./vscodeTheme";
-import { themeStore } from "./themeStore";
+import { themeStore, ACTIVE_EDITOR_THEME_KEY, resolveDefaultEditorTheme, hasImportedEditorTheme } from "./themeStore";
 import { loadExtensions, saveExtensions } from "./extensionStore";
 import { extensionService } from "../../extensions/extensionService";
 import { compatStore } from "../../extensions/compatStore";
@@ -27,7 +27,7 @@ import { HOST_VSCODE_VERSION } from "../../extensions/common/protocol";
 import CompatIcon from "./CompatIcon";
 import "./ExtensionsPanel.css";
 
-const STORAGE_KEY = "agentz.activeTheme";
+const STORAGE_KEY = ACTIVE_EDITOR_THEME_KEY;
 
 function themeId(ext: VsixManifest, t: VsixTheme): string {
   return `vsix-${ext.name}-${t.label}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
@@ -320,9 +320,10 @@ export default function ExtensionsManager({ projectDir = null }: ExtensionsManag
 
   const resetTheme = useCallback(() => {
     if (!monaco) return;
-    monaco.editor.setTheme("vs-dark");
-    themeStore.set("vs-dark");
-    setActiveTheme("vs-dark");
+    const name = resolveDefaultEditorTheme();
+    monaco.editor.setTheme(name);
+    themeStore.set(name);
+    setActiveTheme(name);
     localStorage.removeItem(STORAGE_KEY);
   }, [monaco]);
 
@@ -532,7 +533,7 @@ export default function ExtensionsManager({ projectDir = null }: ExtensionsManag
             type="button"
             className="agentz-ext-btn agentz-ext-btn-secondary"
             onClick={resetTheme}
-            disabled={activeTheme === "vs-dark"}
+            disabled={!hasImportedEditorTheme() && activeTheme === resolveDefaultEditorTheme()}
           >
             {tr("extensions.resetTheme")}
           </button>

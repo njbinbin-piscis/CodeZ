@@ -257,6 +257,7 @@ pub async fn teams_create_pool(
     // Ensure member agents exist as kois and resolve their koi ids.
     let synced = sync_agents_to_kois(&db, &config_dir);
     let mut member_koi_ids: Vec<String> = Vec::new();
+    let mut missing_members: Vec<String> = Vec::new();
     for member in &team.members {
         let slug = safe_id(member);
         let koi_id = synced
@@ -266,20 +267,32 @@ pub async fn teams_create_pool(
             .or_else(|| db.find_koi_by_name(&slug).ok().flatten().map(|k| k.id));
         match koi_id {
             Some(id) => member_koi_ids.push(id),
-            None => warn!("team '{}' member '{}' has no koi", team.id, member),
+            None => missing_members.push(slug),
         }
     }
+    if !missing_members.is_empty() {
+        return Err(format!(
+            "team '{}' has members without registered assistants: {}",
+            team.id,
+            missing_members.join(", ")
+        ));
+    }
 
-    // Reuse an existing active pool with the same name, else create one.
-    let existing = db.list_pool_sessions().ok().and_then(|pools| {
-        pools
-            .into_iter()
-            .find(|p| p.name == team.name && p.status != "archived")
-    });
+    // Reuse an active pool for this team + project, else create one.
+    let existing = db
+        .find_active_pool(&project_dir, &team.id, &team.name)
+        .ok()
+        .flatten();
     let pool = match existing {
         Some(p) => p,
         None => db
-            .create_pool_session_with_dir(&team.name, Some(&project_dir), team.task_timeout_secs)
+            .create_pool_session_with_meta(
+                &team.name,
+                Some(&project_dir),
+                team.task_timeout_secs,
+                Some(&team.id),
+                None,
+            )
             .map_err(|e| e.to_string())?,
     };
 
@@ -310,6 +323,7 @@ pub async fn teams_create_pool(
     drop(db);
     if team.mode == "swarm" {
         crate::runtime::patrol::ensure_pool_patrol(&app, &project_dir);
+        crate::runtime::heartbeat::ensure_pool_heartbeat(&app, &project_dir);
     }
 
     Ok(PoolCreated {

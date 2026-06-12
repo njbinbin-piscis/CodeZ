@@ -14,26 +14,13 @@ import {
 import { setLanguage } from "../../i18n";
 import { notifySettingsRefresh } from "../../services/settingsRefresh";
 import ExtensionsManager from "./ExtensionsManager";
-import SkillsTab from "./settings/SkillsTab";
 import AssistantsTab from "./settings/AssistantsTab";
-import ConnectorsTab from "./settings/ConnectorsTab";
-import StudioTab from "./settings/StudioTab";
-import FishTab from "./settings/FishTab";
 import RulesTab from "./settings/RulesTab";
 import HooksTab from "./settings/HooksTab";
 import DropdownSelect from "../../components/DropdownSelect";
 import "./SettingsPanel.css";
 
-type SettingsTab =
-  | "models"
-  | "skills"
-  | "studio"
-  | "assistants"
-  | "fish"
-  | "connectors"
-  | "extensions"
-  | "rules"
-  | "hooks";
+type SettingsTab = "models" | "assistants" | "extensions" | "rules" | "hooks";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -162,8 +149,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
   const [llmEditIdx, setLlmEditIdx] = useState<number | null>(null);
   const [llmEditForm, setLlmEditForm] = useState<LlmProviderConfig>(EMPTY_LLM_PROVIDER);
   const [llmShowKey, setLlmShowKey] = useState(false);
-  const [widePanel, setWidePanel] = useState(false);
-  // Global "flash" (small/fast) model used by delegated sub-agents (Fish).
+  // Global flash model used by delegated sub-agents.
   const [flashProviderId, setFlashProviderId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -270,12 +256,12 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
 
   const panel = (
     <div className="agentz-settings-overlay" onClick={onClose}>
-      <div
-        className={`agentz-settings-panel${widePanel && tab === "studio" ? " agentz-settings-panel--wide" : ""}`}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="agentz-settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="agentz-settings-header">
-          <span>{t("settings.titleHub")}</span>
+          <div>
+            <span>{t("settings.titleHub")}</span>
+            <p className="agentz-settings-subtitle">{t("settings.subtitleHub")}</p>
+          </div>
           <button type="button" onClick={onClose} title={t("common.close")}>
             ✕
           </button>
@@ -285,11 +271,7 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
           {(
             [
               ["models", t("settings.tabModels")],
-              ["skills", t("settings.tabSkills")],
-              ["studio", t("settings.tabStudio")],
-              ["assistants", t("settings.tabAssistants")],
-              ["fish", t("settings.tabFish")],
-              ["connectors", t("settings.tabConnectors")],
+              ["assistants", t("settings.tabChannels")],
               ["extensions", t("settings.tabExtensions")],
               ["rules", t("settings.tabRules")],
               ["hooks", t("settings.tabHooks")],
@@ -301,35 +283,16 @@ export default function SettingsPanel({ onClose, projectDir = null }: SettingsPa
               role="tab"
               aria-selected={tab === key}
               className={`agentz-settings-tab ${tab === key ? "active" : ""}`}
-              onClick={() => {
-                setTab(key);
-                if (key !== "studio") setWidePanel(false);
-              }}
+              onClick={() => setTab(key)}
             >
               {label}
             </button>
           ))}
         </div>
 
-        {tab === "skills" && (
-          <div className="agentz-settings-body">
-            <SkillsTab />
-          </div>
-        )}
-        {tab === "studio" && (
-          <div className="agentz-settings-body">
-            <StudioTab onWideLayout={setWidePanel} />
-          </div>
-        )}
         {tab === "assistants" && (
           <div className="agentz-settings-body">
             <AssistantsTab />
-          </div>
-        )}
-        {tab === "fish" && <FishTab />}
-        {tab === "connectors" && (
-          <div className="agentz-settings-body">
-            <ConnectorsTab />
           </div>
         )}
         {tab === "extensions" && (

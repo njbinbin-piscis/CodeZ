@@ -11,8 +11,8 @@
 .agentz-edge-zone {
   position: absolute;
   right: 4px;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   pointer-events: none;
 }
 
@@ -28,8 +28,8 @@
   position: absolute;
   right: 0;
   top: 0;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
@@ -49,7 +49,7 @@
 }
 
 .agentz-edge-badge-count {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   color: var(--text-dim, #9a9ab0);
@@ -64,14 +64,14 @@
 .agentz-edge-drawer {
   position: absolute;
   top: 0;
-  right: 20px;
+  right: 26px;
   width: 256px;
   max-height: min(420px, 70vh);
   background: var(--bg-elev, #14141c);
   border: 1px solid var(--border, #2a2a38);
   border-radius: 8px 0 0 8px;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
-  transform: translateX(calc(100% + 20px));
+  transform: translateX(calc(100% + 26px));
   opacity: 0;
   transition: transform 0.18s ease, opacity 0.18s ease;
   display: flex;
@@ -86,17 +86,61 @@
 }
 
 .agentz-edge-drawer-head {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-dim, #9a9ab0);
+  padding: 6px 8px 0;
   border-bottom: 1px solid var(--border, #2a2a38);
   flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 4px;
+}
+
+.agentz-edge-drawer-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agentz-edge-drawer-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dim, #9a9ab0);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.agentz-edge-drawer-tab:hover {
+  color: var(--text, #e8e8f0);
+}
+
+.agentz-edge-drawer-tab.active {
+  color: var(--text, #e8e8f0);
+  border-bottom-color: var(--accent, #7c6af7);
+}
+
+.agentz-edge-drawer-tab-count {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text-dim, #9a9ab0);
+}
+
+.agentz-edge-drawer-tab.active .agentz-edge-drawer-tab-count {
+  background: rgba(124, 106, 247, 0.2);
+  color: var(--accent, #7c6af7);
 }
 
 .agentz-edge-drawer-close {
@@ -105,9 +149,10 @@
   color: var(--text-dim, #9a9ab0);
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px 8px;
   border-radius: 3px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .agentz-edge-drawer-close:hover {
@@ -119,21 +164,6 @@
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-}
-
-/* ── Section title (inside combined drawer) ─────────────────────────── */
-.agentz-edge-section-title {
-  padding: 8px 12px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim, #9a9ab0);
-  opacity: 0.7;
-}
-
-.agentz-edge-section-title + .agentz-edge-changes-toolbar {
-  margin-top: 0;
 }
 
 /* ── Review banner ──────────────────────────────────────────────────── */

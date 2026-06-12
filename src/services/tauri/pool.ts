@@ -1,5 +1,5 @@
 /**
- * Pool (team collaboration) IPC (Phase 3) — board reads + lifecycle. The kernel
+ * Collaboration pool (swarm team) IPC — board reads + lifecycle. The kernel
  * owns orchestration; these expose the project DB rows the collaboration board
  * renders, plus a single typed `agentz:pool-event` stream for live updates.
  */
@@ -53,6 +53,7 @@ export interface KoiTodo {
   assigned_by: string;
   pool_session_id: string | null;
   claimed_by: string | null;
+  depends_on?: string | null;
   [key: string]: unknown;
 }
 

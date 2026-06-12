@@ -156,11 +156,28 @@ fn clear_cancel(run_id: &str) {
     }
 }
 
+fn driver_locks() -> &'static Mutex<HashSet<String>> {
+    static REG: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    REG.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
 /// Spawn the background driver for a run. Safe to call again after a `human`
-/// pause (it picks up from the persisted cursor).
+/// pause (it picks up from the persisted cursor). No-ops if a driver is already
+/// active for the same run id.
 pub fn spawn_driver(app: AppHandle, run_id: String) {
+    {
+        let mut locks = driver_locks().lock().unwrap_or_else(|e| e.into_inner());
+        if !locks.insert(run_id.clone()) {
+            return;
+        }
+    }
     tokio::spawn(async move {
-        if let Err(e) = drive(app.clone(), &run_id).await {
+        let result = drive(app.clone(), &run_id).await;
+        driver_locks()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&run_id);
+        if let Err(e) = result {
             tracing::warn!("workflow run {} driver error: {}", run_id, e);
             if let Ok(mut run) = load_run(&app, &run_id) {
                 run.status = "failed".to_string();
@@ -600,13 +617,26 @@ async fn evaluate_branch(
             unregister_active(&run.run_id);
             let outcome = wait.map_err(|e| e.to_string())?;
             let text = outcome.response_text.to_lowercase();
-            // Pick the first declared label that appears in the response.
-            let chosen = labels
+            if let Some(label) = labels
                 .iter()
                 .find(|l| text.contains(&l.to_lowercase()))
                 .cloned()
-                .unwrap_or_else(|| labels.first().cloned().unwrap_or_else(|| "default".into()));
-            Ok(chosen)
+            {
+                return Ok(label);
+            }
+            if let Some(ref default_node) = node.default_to {
+                if let Some(case) = node.cases.iter().find(|c| &c.to == default_node) {
+                    return Ok(case.label.clone());
+                }
+                return Err(format!(
+                    "LLM branch on node '{}' has default_to '{}' but no matching case",
+                    node.id, default_node
+                ));
+            }
+            Err(format!(
+                "LLM branch on node '{}' matched no label among {:?} and has no default_to",
+                node.id, labels
+            ))
         }
     }
 }

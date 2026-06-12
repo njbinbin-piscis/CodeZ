@@ -29,6 +29,7 @@ const COORDINATOR_SENDER_ID = "piscis";
 
 /** A pool message belongs to the "coordination records" bucket when it carries a lifecycle event. */
 function isCoordinationEvent(msg: PoolMessage): boolean {
+  if (msg.event_type === "dependency_waiting") return true;
   if (msg.event_type && msg.event_type.trim()) return true;
   return msg.msg_type === "status_update";
 }
@@ -153,7 +154,10 @@ export default function PoolActivityFeed({ projectDir, poolId, filter = "all" }:
     <div className="agentz-pool-feed">
       <div className="agentz-pool-feed-list">
         {visibleMessages.length === 0 && (
-          <div className="agentz-pool-feed-empty">{emptyText}</div>
+          <div className="agentz-workz-empty">
+            <div className="agentz-workz-title">{t("agent.title")}</div>
+            <p className="agentz-workz-sub">{emptyText}</p>
+          </div>
         )}
         {visibleMessages.map((msg) => (
           <button
@@ -175,7 +179,7 @@ export default function PoolActivityFeed({ projectDir, poolId, filter = "all" }:
       {activeMsg && (
         <div className="agentz-pool-feed-detail">
           <div className="agentz-pool-feed-detail-head">
-            <strong>{t("agent.poolKoiDetail")}</strong>
+            <strong>{t("agent.poolMemberDetail")}</strong>
             <span>{memberName(activeMsg.sender_id)}</span>
             <button type="button" onClick={() => setDetailId(null)} title={t("common.close")}>
               ✕

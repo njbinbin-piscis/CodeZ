@@ -1,4 +1,4 @@
-/** App shell appearance (light / dark) — separate from Monaco editor themes. */
+/** App shell appearance (light / dark). Built-in Monaco themes follow unless a .vsix theme is pinned. */
 
 export type AppearanceTheme = "dark" | "light";
 
@@ -37,14 +37,30 @@ export function getUiFontScale(): UiFontScale {
     : 1;
 }
 
-export function applyUiFontScale(scale: UiFontScale): void {
+function applyUiFontScaleNow(scale: UiFontScale): void {
   document.documentElement.style.setProperty("--ui-font-scale", String(scale));
   localStorage.setItem(FONT_SCALE_KEY, String(scale));
 }
 
+let fontScaleApplyTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingFontScale: UiFontScale | null = null;
+
+/** Debounced so rapid select changes do not trigger a layout storm. */
+export function applyUiFontScale(scale: UiFontScale): void {
+  pendingFontScale = scale;
+  if (fontScaleApplyTimer) clearTimeout(fontScaleApplyTimer);
+  fontScaleApplyTimer = setTimeout(() => {
+    fontScaleApplyTimer = null;
+    const next = pendingFontScale ?? scale;
+    pendingFontScale = null;
+    applyUiFontScaleNow(next);
+    window.dispatchEvent(new CustomEvent("agentz-font-scale", { detail: next }));
+  }, 250);
+}
+
 export function initUiFontScale(): UiFontScale {
   const scale = getUiFontScale();
-  applyUiFontScale(scale);
+  applyUiFontScaleNow(scale);
   return scale;
 }
 

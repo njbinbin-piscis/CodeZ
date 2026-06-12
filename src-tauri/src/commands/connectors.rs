@@ -483,6 +483,57 @@ pub fn resolve_named_connector_mcp_configs(
     out
 }
 
+/// System-prompt section for user-selected connectors (generic agent mode).
+pub fn connectors_prompt_context(config_dir: &Path, ids: &[String]) -> Option<String> {
+    let wanted: std::collections::HashSet<&str> = ids
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if wanted.is_empty() {
+        return None;
+    }
+    let dir = config_dir.join("connectors");
+    let mut lines = Vec::new();
+    for mdir in list_manifest_dirs(&dir) {
+        let manifest = match ConnectorManifest::load(&mdir.join("connector.json")) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if !wanted.contains(manifest.id.as_str()) {
+            continue;
+        }
+        let creds = load_credentials(&dir, &manifest.id);
+        let auth_note = if is_authorized(&manifest, &creds) {
+            ""
+        } else {
+            " (not authorized — ask the user to complete setup in Settings → Connectors)"
+        };
+        let usage = if manifest.kind == "api" {
+            "Use the `api_connector` tool with this connector_id."
+        } else {
+            "Its MCP tools are registered for this turn."
+        };
+        lines.push(format!(
+            "- **{}** (id: `{}`, kind: {}){} — {}\n  {}",
+            manifest.name,
+            manifest.id,
+            manifest.kind,
+            auth_note,
+            manifest.description.trim(),
+            usage
+        ));
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "## Enabled connectors (user-selected for this conversation)\n\
+         The user explicitly enabled these connectors. Use only them:\n{}",
+        lines.join("\n")
+    ))
+}
+
 // ─── Commands ──────────────────────────────────────────────────────────────
 
 #[tauri::command]

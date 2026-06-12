@@ -118,15 +118,6 @@ async fn run_round(app: &AppHandle, project_dir: &str, max_busy_secs: i64) -> Op
     let (db, _settings) = open_project_kernel_state(app, project_dir).ok()?;
     let store = PoolStore::new(db.clone());
 
-    let (stale_koi, stale_todo) = coordinator::watchdog_recover(&store, max_busy_secs).await;
-    if stale_koi > 0 || stale_todo > 0 {
-        info!(
-            target: "pool::patrol",
-            project_dir = %project_dir,
-            "recovered {stale_koi} stale Koi, {stale_todo} stale todos"
-        );
-    }
-
     let pools = {
         let guard = db.lock().await;
         guard
@@ -139,6 +130,36 @@ async fn run_round(app: &AppHandle, project_dir: &str, max_busy_secs: i64) -> Op
     let active_pools = pools.iter().filter(|p| p.status == "active").count() as u32;
     if pools.is_empty() {
         return Some(0);
+    }
+
+    let effective_max_busy = if max_busy_secs <= 0 {
+        0
+    } else {
+        pools
+            .iter()
+            .filter(|p| p.status == "active")
+            .map(|p| {
+                if p.task_timeout_secs > 0 {
+                    ((p.task_timeout_secs as i64 * 12) / 10).max(STALE_BUSY_SECS)
+                } else {
+                    STALE_BUSY_SECS
+                }
+            })
+            .max()
+            .unwrap_or(STALE_BUSY_SECS)
+    };
+
+    if effective_max_busy > 0 {
+        let (stale_koi, stale_todo) =
+            coordinator::watchdog_recover(&store, effective_max_busy).await;
+        if stale_koi > 0 || stale_todo > 0 {
+            info!(
+                target: "pool::patrol",
+                project_dir = %project_dir,
+                max_busy = effective_max_busy,
+                "recovered {stale_koi} stale Koi, {stale_todo} stale todos"
+            );
+        }
     }
 
     let (subagent, sink) = pool_wiring(app);

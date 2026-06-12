@@ -23,6 +23,7 @@ use piscis_core::host::{
     EventSink, HeadlessCliMode, HeadlessCliRequest, KoiTurnExit, KoiTurnHandle, KoiTurnOutcome,
     KoiTurnRequest, PoolEvent, PoolEventSink, SubagentRuntime,
 };
+use piscis_core::koi_prompt::build_koi_task_system_prompt;
 use piscis_kernel::agent::tool::ToolRegistry;
 use piscis_kernel::headless::{run_piscis_turn_cancellable, HeadlessDeps};
 use piscis_kernel::store::settings::Settings;
@@ -224,6 +225,7 @@ async fn build_koi_registry(
     if let Ok(config_dir) = resolve_global_config_dir(app) {
         registry.register(Box::new(crate::tools::api_connector::ApiConnectorTool {
             config_dir: config_dir.clone(),
+            allowed_ids: None,
         }));
         let connector_configs =
             crate::commands::connectors::resolve_connector_mcp_configs(&config_dir);
@@ -297,41 +299,100 @@ async fn run_in_process_koi_turn(
     let sink: Arc<dyn EventSink> = Arc::new(PoolTurnEventSink { app: app.clone() });
     let registry = build_koi_registry(&app, db.clone(), settings.clone(), sink.clone()).await;
 
-    // Inject the team's org_spec (规约) so every member Koi shares the same
-    // organizational contract, not just the coordinator. The kernel coordinator
-    // does not pre-inject it on the desktop path, so we read it from the pool
-    // session in the project DB the turn already runs against.
-    let org_spec_ctx = {
-        let guard = db.lock().await;
-        match guard.get_pool_session(&request.pool_id) {
-            Ok(Some(session)) if !session.org_spec.trim().is_empty() => {
-                Some(truncate_chars(&session.org_spec, 4000))
-            }
-            _ => None,
-        }
-    };
-
-    // Assemble extra system context layered after the kernel's headless core
-    // prompt: the coordinator-assembled Koi prompt, then the shared org_spec,
-    // then any coordinator-provided extra context.
+    // Inject org_spec / assemble the member system prompt. Todo turns use the
+    // kernel 6-layer contract (Stop Gate last); workflow agent nodes keep a
+    // lighter stack.
     let extra_context = {
-        let mut sections: Vec<String> = Vec::new();
-        let base = request.system_prompt.trim();
-        if !base.is_empty() {
-            sections.push(base.to_string());
+        let guard = db.lock().await;
+        let pool_org = guard
+            .get_pool_session(&request.pool_id)
+            .ok()
+            .flatten()
+            .map(|s| s.org_spec)
+            .filter(|s| !s.trim().is_empty());
+        drop(guard);
+
+        if request.todo_id.is_some() {
+            let guard = db.lock().await;
+            let koi = guard.get_koi(&request.koi_id).ok().flatten();
+            let todo = request
+                .todo_id
+                .as_ref()
+                .and_then(|id| guard.get_koi_todo(id).ok().flatten());
+            match (koi, todo) {
+                (Some(koi), Some(todo)) => {
+                    let org_spec_ctx = pool_org
+                        .as_deref()
+                        .map(truncate_org_spec)
+                        .filter(|s| !s.is_empty())
+                        .map(|body| format!("\n\n## Project Organization\n{body}"))
+                        .unwrap_or_default();
+                    let assignment_ctx = format!(
+                        "\n\n## Current Assignment\nTitle: {}\n{}\nTodo id: {}",
+                        todo.title,
+                        if todo.description.trim().is_empty() {
+                            String::new()
+                        } else {
+                            format!("Description: {}\n", todo.description.trim())
+                        },
+                        todo.id
+                    );
+                    build_koi_task_system_prompt(
+                        &koi.system_prompt,
+                        &koi.name,
+                        koi.icon.as_str(),
+                        "",
+                        "",
+                        &org_spec_ctx,
+                        "",
+                        &assignment_ctx,
+                    )
+                }
+                _ => {
+                    let mut sections: Vec<String> = Vec::new();
+                    let base = request.system_prompt.trim();
+                    if !base.is_empty() {
+                        sections.push(base.to_string());
+                    }
+                    if let Some(org) = pool_org.as_deref() {
+                        sections.push(format!(
+                            "## Project Organization\n{}",
+                            truncate_org_spec(org)
+                        ));
+                    }
+                    if let Some(extra) = request
+                        .extra_system_context
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                    {
+                        sections.push(extra.to_string());
+                    }
+                    sections.join("\n\n")
+                }
+            }
+        } else {
+            let mut sections: Vec<String> = Vec::new();
+            let base = request.system_prompt.trim();
+            if !base.is_empty() {
+                sections.push(base.to_string());
+            }
+            if let Some(org) = pool_org.as_deref() {
+                sections.push(format!(
+                    "## Project Organization\n{}",
+                    truncate_org_spec(org)
+                ));
+            }
+            if let Some(extra) = request
+                .extra_system_context
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                sections.push(extra.to_string());
+            }
+            sections.join("\n\n")
         }
-        if let Some(org) = org_spec_ctx {
-            sections.push(format!("## Project Organization\n{}", org));
-        }
-        if let Some(extra) = request
-            .extra_system_context
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            sections.push(extra.to_string());
-        }
-        sections.join("\n\n")
     };
 
     let cli_request = HeadlessCliRequest {
@@ -339,7 +400,7 @@ async fn run_in_process_koi_turn(
         workspace: Some(project_dir),
         mode: HeadlessCliMode::Piscis,
         session_id: Some(request.session_id.clone()),
-        session_title: Some(format!("Koi {}", request.koi_id)),
+        session_title: Some(format!("Assistant {}", request.koi_id)),
         channel: Some("pool".to_string()),
         pool_id: Some(request.pool_id.clone()),
         task_timeout_secs: request.task_timeout_secs,
@@ -384,13 +445,17 @@ async fn run_in_process_koi_turn(
     }
 }
 
-/// Clip a context slice to a character budget so a large org_spec cannot crowd
-/// out the actual assignment in a member Koi's context window.
-fn truncate_chars(content: &str, max_chars: usize) -> String {
-    if max_chars == 0 || content.chars().count() <= max_chars {
+/// Clip org_spec with a pointer to pool_org(read) when truncated.
+fn truncate_org_spec(content: &str) -> String {
+    const MAX: usize = 12000;
+    if MAX == 0 || content.chars().count() <= MAX {
         return content.to_string();
     }
-    format!("{}...", content.chars().take(max_chars).collect::<String>())
+    format!(
+        "{}...\n\n## (org_spec truncated, see pool org_spec action)\n\
+         Use pool_org(action=\"read\") to load the full organization contract when needed.",
+        content.chars().take(MAX).collect::<String>()
+    )
 }
 
 fn cancelled_outcome(handle: KoiTurnHandle, reason: &str) -> KoiTurnOutcome {

@@ -5,26 +5,18 @@ import {
   uninstallSkill,
   type InstalledSkill,
 } from "../../../services/tauri/workbench";
-import { clawHubApi, type ClawHubSkill } from "../../../services/tauri/clawhub";
 import {
   skillEvolutionApi,
   type CuratorStatus,
   type SkillEvolutionSettings,
 } from "../../../services/tauri/skillEvolution";
 
-/** Settings tab: installed skills, evolution drafts, ClawHub, and Curator. */
-export default function SkillsTab() {
+export default function SkillsInstalledView() {
   const { t } = useTranslation();
   const [installed, setInstalled] = useState<InstalledSkill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
-
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ClawHubSkill[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-
   const [curatorStatus, setCuratorStatus] = useState<CuratorStatus | null>(null);
   const [evoSettings, setEvoSettings] = useState<SkillEvolutionSettings | null>(null);
   const [curatorMsg, setCuratorMsg] = useState<string | null>(null);
@@ -52,7 +44,6 @@ export default function SkillsTab() {
     void refresh();
   }, [refresh]);
 
-  const installedSlugs = new Set(installed.map((s) => s.slug));
   const stableSkills = useMemo(
     () => installed.filter((s) => (s.quadrant ?? "installed") === "installed"),
     [installed],
@@ -90,35 +81,6 @@ export default function SkillsTab() {
         await refresh();
       } catch (e) {
         setError(String(e));
-      } finally {
-        setBusySlug(null);
-      }
-    },
-    [refresh],
-  );
-
-  const doSearch = useCallback(async () => {
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const res = await clawHubApi.search(query, 20);
-      setResults(res.items);
-    } catch (e) {
-      setSearchError(String(e));
-    } finally {
-      setSearching(false);
-    }
-  }, [query]);
-
-  const doInstall = useCallback(
-    async (skill: ClawHubSkill) => {
-      setBusySlug(skill.slug);
-      setSearchError(null);
-      try {
-        await clawHubApi.install(skill.slug, skill.version);
-        await refresh();
-      } catch (e) {
-        setSearchError(String(e));
       } finally {
         setBusySlug(null);
       }
@@ -236,9 +198,7 @@ export default function SkillsTab() {
                   <button
                     type="button"
                     disabled={busySlug === s.slug}
-                    onClick={() =>
-                      void doEvolution(s.slug, s.locked ? "unlock" : "lock")
-                    }
+                    onClick={() => void doEvolution(s.slug, s.locked ? "unlock" : "lock")}
                   >
                     {s.locked ? t("skills.unlock") : t("skills.lock")}
                   </button>
@@ -270,56 +230,6 @@ export default function SkillsTab() {
           </button>
         </div>
         {curatorMsg && <p className="agentz-wb-desc">{curatorMsg}</p>}
-      </section>
-
-      <section className="agentz-settings-section">
-        <h3>{t("skills.marketTitle")}</h3>
-        <p className="agentz-settings-hint">{t("skills.marketHint")}</p>
-        <div className="agentz-wb-search">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void doSearch();
-            }}
-            placeholder={t("skills.searchPlaceholder")}
-          />
-          <button type="button" onClick={() => void doSearch()} disabled={searching}>
-            {searching ? t("skills.searching") : t("skills.search")}
-          </button>
-        </div>
-        {searchError && <div className="agentz-settings-error">{searchError}</div>}
-        <div className="agentz-wb-list">
-          {results.map((r) => {
-            const already = installedSlugs.has(r.slug);
-            return (
-              <div key={r.slug} className="agentz-wb-row">
-                <div className="agentz-wb-info">
-                  <strong>{r.name}</strong>
-                  <span className="agentz-wb-meta">
-                    {r.slug}
-                    {r.version ? ` · v${r.version}` : ""}
-                    {r.stars ? ` · ★${r.stars}` : ""}
-                  </span>
-                  {r.description && <span className="agentz-wb-desc">{r.description}</span>}
-                </div>
-                <div className="agentz-wb-actions">
-                  <button
-                    type="button"
-                    disabled={already || busySlug === r.slug}
-                    onClick={() => void doInstall(r)}
-                  >
-                    {already
-                      ? t("skills.installed")
-                      : busySlug === r.slug
-                        ? t("skills.installing")
-                        : t("skills.install")}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </section>
     </div>
   );
