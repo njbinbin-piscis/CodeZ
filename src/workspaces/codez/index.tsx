@@ -71,7 +71,13 @@ interface IDEProps {
     editor: EditorSnapshot;
     layout: Pick<
       LayoutSnapshot,
-      "sidebar_tab" | "sidebar_collapsed" | "sidebar_width" | "bottom_open" | "bottom_tab" | "bottom_height"
+      | "sidebar_tab"
+      | "sidebar_collapsed"
+      | "sidebar_width"
+      | "bottom_open"
+      | "bottom_tab"
+      | "bottom_height"
+      | "explorer_expanded_paths"
     >;
   }) => void;
 }
