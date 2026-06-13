@@ -5,6 +5,21 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-06-13
+
+### Added
+
+- **WorkZ 协作看板**：进行中任务卡片内嵌 2 行 CLI 窗，实时显示 Koi 流式输出。
+- **技能卸载保护**：已被「从技能生成」的匿名代理引用的技能，须先删除代理方可卸载。
+
+### Changed
+
+- **资源库 UI**：内容区内边距、书页式分类标签；修复发现页 `MarketGridView` 误用 pill 样式导致巨大圆角框；空列表改为轻量提示。
+- **Composer 技能列表**：列表仅显示名称，悬停以 toast 展示说明。
+- **匿名代理**：内置标签与名称同行；内置项操作改为「重定义」；钩子保存按钮文案缩短为「保存钩子」。
+- **工作流设计器**：打开与自动布局后自动适应视野并居中（等待宽面板动画完成后再 `fitView`）。
+- **WorkZ 文案**：副标题与团队模式空状态 i18n 更新（变更浮窗在右上角）。
+
 ## [0.5.7] - 2026-06-13
 
 ### Fixed

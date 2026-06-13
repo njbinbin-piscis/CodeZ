@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listFish, saveFish, deleteFish, type FishDef } from "../../../services/tauri/fish";
+import { fishIdForSkillSlug, listFish, saveFish, deleteFish, type FishDef } from "../../../services/tauri/fish";
 import { listInstalledSkills, type InstalledSkill } from "../../../services/tauri/workbench";
 
 interface FishForm {
@@ -57,7 +57,7 @@ export default function AnonymousAgentsView() {
 
   const fromSkill = (s: InstalledSkill) => {
     setEditing({
-      id: `skill-${s.slug}`,
+      id: fishIdForSkillSlug(s.slug),
       name: s.name || s.slug,
       description: s.description || "",
       system_prompt:
@@ -122,10 +122,14 @@ export default function AnonymousAgentsView() {
               {fish.map((f) => (
                 <div key={f.id} className="agentz-fish-row">
                   <div className="agentz-fish-info">
-                    <strong>{f.name || f.id}</strong>
-                    <span className={`agentz-fish-badge ${f.source}`}>
-                      {f.source === "builtin" ? t("anonymousAgent.builtin") : t("anonymousAgent.user")}
-                    </span>
+                    <strong>
+                      {f.name || f.id}
+                      <span className={`agentz-fish-badge ${f.source}`}>
+                        {f.source === "builtin"
+                          ? t("anonymousAgent.builtin")
+                          : t("anonymousAgent.user")}
+                      </span>
+                    </strong>
                     <span className="agentz-fish-meta">
                       <code>{f.id}</code> · {f.description || "—"}
                     </span>

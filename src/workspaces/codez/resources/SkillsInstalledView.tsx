@@ -10,6 +10,7 @@ import {
   type CuratorStatus,
   type SkillEvolutionSettings,
 } from "../../../services/tauri/skillEvolution";
+import { listFish, type FishDef } from "../../../services/tauri/fish";
 
 export default function SkillsInstalledView() {
   const { t } = useTranslation();
@@ -20,19 +21,22 @@ export default function SkillsInstalledView() {
   const [curatorStatus, setCuratorStatus] = useState<CuratorStatus | null>(null);
   const [evoSettings, setEvoSettings] = useState<SkillEvolutionSettings | null>(null);
   const [curatorMsg, setCuratorMsg] = useState<string | null>(null);
+  const [linkedFish, setLinkedFish] = useState<FishDef[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [skills, status, settings] = await Promise.all([
+      const [skills, status, settings, fish] = await Promise.all([
         listInstalledSkills(),
         skillEvolutionApi.curatorStatus().catch(() => null),
         skillEvolutionApi.getSettings().catch(() => null),
+        listFish().catch(() => [] as FishDef[]),
       ]);
       setInstalled(skills);
       setCuratorStatus(status);
       setEvoSettings(settings);
+      setLinkedFish(fish.filter((f) => f.source === "user" && f.id.startsWith("skill-")));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -53,8 +57,31 @@ export default function SkillsInstalledView() {
     [installed],
   );
 
+  const fishBySkillSlug = useMemo(() => {
+    const map = new Map<string, FishDef>();
+    for (const fish of linkedFish) {
+      if (!fish.id.startsWith("skill-")) continue;
+      map.set(fish.id.slice("skill-".length), fish);
+    }
+    return map;
+  }, [linkedFish]);
+
+  const blockingAgentName = useCallback(
+    (slug: string) => {
+      const fish = fishBySkillSlug.get(slug);
+      if (!fish) return null;
+      return fish.name.trim() || fish.id;
+    },
+    [fishBySkillSlug],
+  );
+
   const doUninstall = useCallback(
     async (slug: string) => {
+      const agent = blockingAgentName(slug);
+      if (agent) {
+        setError(t("skills.uninstallBlockedByAnonymousAgent", { agent }));
+        return;
+      }
       setBusySlug(slug);
       setError(null);
       try {
@@ -66,7 +93,7 @@ export default function SkillsInstalledView() {
         setBusySlug(null);
       }
     },
-    [refresh],
+    [refresh, blockingAgentName, t],
   );
 
   const doEvolution = useCallback(
@@ -125,25 +152,32 @@ export default function SkillsInstalledView() {
           <div className="agentz-wb-empty">{t("skills.empty")}</div>
         ) : (
           <div className="agentz-wb-list">
-            {stableSkills.map((s) => (
+            {stableSkills.map((s) => {
+              const agent = blockingAgentName(s.slug);
+              return (
               <div key={s.slug} className="agentz-wb-row">
                 <div className="agentz-wb-info">
                   <strong>{s.name}</strong>
                   <span className="agentz-wb-meta">{s.slug}</span>
                   {s.description && <span className="agentz-wb-desc">{s.description}</span>}
+                  {agent && (
+                    <span className="agentz-wb-desc">{t("skills.linkedAnonymousAgent", { agent })}</span>
+                  )}
                 </div>
                 <div className="agentz-wb-actions">
                   <button
                     type="button"
                     className="danger"
-                    disabled={busySlug === s.slug}
+                    disabled={busySlug === s.slug || !!agent}
+                    title={agent ? t("skills.uninstallBlockedByAnonymousAgent", { agent }) : undefined}
                     onClick={() => void doUninstall(s.slug)}
                   >
                     {busySlug === s.slug ? t("common.saving") : t("skills.uninstall")}
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

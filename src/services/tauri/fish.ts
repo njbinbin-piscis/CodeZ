@@ -10,6 +10,11 @@ export interface FishDef {
   source: FishSource;
 }
 
+/** Id used when wrapping an installed skill as an anonymous agent. */
+export function fishIdForSkillSlug(slug: string): string {
+  return `skill-${slug.trim()}`;
+}
+
 /** List all available sub-agents (builtin + user-defined from FISH.toml). */
 export function listFish(): Promise<FishDef[]> {
   return invoke<FishDef[]>("fish_list");

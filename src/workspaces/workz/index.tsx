@@ -1356,6 +1356,8 @@ export default function WorkZWorkspace({
                     : undefined,
                   selected: enabledSkills,
                   onChange: setEnabledSkills,
+                  hintPresentation: "toast",
+                  onHintToast: showToast,
                   options: installedSkills.map((s) => ({
                     id: s.slug,
                     label: s.name,

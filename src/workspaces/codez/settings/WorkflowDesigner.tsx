@@ -231,23 +231,51 @@ function positionsFromNodes(nodes: Node[]): Map<string, { x: number; y: number }
 
 const FIT_VIEW_OPTS = { padding: 0.2, duration: 250 } as const;
 
-/** Wait for React Flow to paint nodes before fitView. */
-function scheduleFitView(fitView: ReturnType<typeof useReactFlow>["fitView"]) {
-  requestAnimationFrame(() => {
+/** Fit after the canvas has real dimensions and nodes have painted (wide-panel width transition). */
+function scheduleFitViewWhenReady(
+  fitView: ReturnType<typeof useReactFlow>["fitView"],
+  container: HTMLElement | null,
+) {
+  if (!container) return () => {};
+  let cancelled = false;
+  let attempts = 0;
+  const maxAttempts = 40;
+
+  const tryFit = () => {
+    if (cancelled) return;
+    attempts += 1;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    if (w < 80 || h < 80) {
+      if (attempts < maxAttempts) requestAnimationFrame(tryFit);
+      return;
+    }
     requestAnimationFrame(() => {
-      void fitView(FIT_VIEW_OPTS);
+      requestAnimationFrame(() => {
+        if (!cancelled) void fitView(FIT_VIEW_OPTS);
+      });
     });
-  });
+  };
+
+  // Resource library / settings panel animates to ~80vw (~200ms); fit before that reads wrong bounds.
+  const bootTimer = window.setTimeout(tryFit, 300);
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(bootTimer);
+  };
 }
 
 function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
   const { t } = useTranslation();
   const { fitView } = useReactFlow();
+  const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const draggingRef = useRef(false);
-  const graphRevRef = useRef(0);
-  const shouldFitViewRef = useRef(true);
+  /** Increment to request fitView (initial open, auto-layout, …). */
+  const [fitRequestId, setFitRequestId] = useState(1);
+  const requestFitView = useCallback(() => setFitRequestId((n) => n + 1), []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node<WfNodeData>[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
@@ -261,15 +289,13 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
     const pos = positionsFromGraph(graph);
     setNodes(graphToRfNodes(graph, selectedNode));
     setEdges(graphToRfEdges(graph, selectedEdge, pos));
-    graphRevRef.current += 1;
   }, [graph, selectedNode, selectedEdge, setNodes, setEdges]);
 
-  // Enter editor or finish auto-layout: fit once nodes are on canvas.
+  // Fit viewport when opening the designer or after auto-layout — wait for canvas size + node paint.
   useEffect(() => {
-    if (nodes.length === 0 || !shouldFitViewRef.current) return;
-    shouldFitViewRef.current = false;
-    scheduleFitView(fitView);
-  }, [nodes, fitView]);
+    if (fitRequestId === 0 || nodes.length === 0) return;
+    return scheduleFitViewWhenReady(fitView, canvasRef.current);
+  }, [fitRequestId, nodes.length, fitView]);
 
   const commit = useCallback(
     (nodesIn: WorkflowNode[], edgesIn: WorkflowGraph["edges"]) => {
@@ -450,13 +476,13 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
     const pos = new Map(
       laid.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]),
     );
-    shouldFitViewRef.current = true;
     onChange({
       ...graph,
       nodes: laid,
       edges: withAutoHandles(graph.edges, pos),
     });
-  }, [graph, onChange]);
+    requestFitView();
+  }, [graph, onChange, requestFitView]);
 
   const active = graph.nodes.find((n) => n.id === selectedNode) ?? null;
   const blackboardKeys = useMemo(() => blackboardKeysFromGraph(graph), [graph]);
@@ -489,7 +515,7 @@ function WorkflowDesignerInner({ graph, agents, onChange }: Props) {
       </div>
 
       <div className="wf-canvas-wrap">
-        <div className="wf-canvas">
+        <div className="wf-canvas" ref={canvasRef}>
           <ReactFlow
             nodes={nodes}
             edges={edges}

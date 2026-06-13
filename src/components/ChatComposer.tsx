@@ -120,6 +120,9 @@ export interface SkillSelector {
   label: string;
   emptyHint?: string;
   onEmptyHintClick?: () => void;
+  /** Show option hints via toast (e.g. on hover) instead of inline under each row. */
+  hintPresentation?: "inline" | "toast";
+  onHintToast?: (message: string) => void;
 }
 
 /** Same shape as {@link SkillSelector} — multi-select of connector ids. */
@@ -349,6 +352,8 @@ export default function ChatComposer({
                 label={skillSelector.label}
                 emptyHint={skillSelector.emptyHint}
                 onEmptyHintClick={skillSelector.onEmptyHintClick}
+                hintPresentation={skillSelector.hintPresentation}
+                onHintToast={skillSelector.onHintToast}
                 icon={<SkillGlyph />}
                 disabled={busy || locked}
               />

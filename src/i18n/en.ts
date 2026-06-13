@@ -192,7 +192,7 @@ const en = {
     user: "Custom",
     add: "Add anonymous agent",
     edit: "Edit anonymous agent",
-    override: "Override",
+    override: "Redefine",
     id: "ID (unique)",
     name: "Name",
     description: "Description",
@@ -519,6 +519,9 @@ const en = {
       "Skills (SKILL.md) are installed in the global config dir and injected into the agent when a task matches.",
     empty: "No skills installed yet. Go to Resource library → Skills · Discover to search ClawHub.",
     uninstall: "Uninstall",
+    uninstallBlockedByAnonymousAgent:
+      "Delete anonymous agent \"{{agent}}\" before uninstalling this skill",
+    linkedAnonymousAgent: "Referenced by anonymous agent \"{{agent}}\"",
     marketTitle: "Skill marketplace (ClawHub)",
     marketHint: "Search and install community skills. Leave empty to browse popular skills.",
     searchPlaceholder: "Search skills, e.g. figma, finance…",

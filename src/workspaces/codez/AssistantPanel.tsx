@@ -308,6 +308,8 @@ export default function AssistantPanel({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const showToast = useCallback((msg: string) => setToast(msg), []);
+
   useEffect(() => {
     localStorage.setItem("agentz-chat-mode", chatMode);
   }, [chatMode]);
@@ -1243,6 +1245,8 @@ export default function AssistantPanel({
           emptyHint: t("chat.skillsEmpty"),
           selected: enabledSkills,
           onChange: setEnabledSkills,
+          hintPresentation: "toast",
+          onHintToast: showToast,
           options: installedSkills.map((s) => ({
             id: s.slug,
             label: s.name,

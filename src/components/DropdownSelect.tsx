@@ -123,6 +123,9 @@ export interface DropdownMultiSelectProps {
   disabled?: boolean;
   emptyHint?: string;
   onEmptyHintClick?: () => void;
+  /** When "toast", hints are not rendered inline — use onHintToast (e.g. on hover). */
+  hintPresentation?: "inline" | "toast";
+  onHintToast?: (message: string) => void;
 }
 
 /** Multi-select skills-style menu (CodeZ composer). */
@@ -134,6 +137,8 @@ export function DropdownMultiSelect({
   disabled,
   emptyHint,
   onEmptyHintClick,
+  hintPresentation = "inline",
+  onHintToast,
   icon,
 }: DropdownMultiSelectProps & { icon?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -184,6 +189,7 @@ export function DropdownMultiSelect({
           ) : (
             options.map((opt) => {
               const active = selected.includes(opt.id);
+              const showInlineHint = hintPresentation === "inline";
               return (
                 <button
                   key={opt.id}
@@ -192,6 +198,12 @@ export function DropdownMultiSelect({
                   aria-selected={active}
                   className={active ? "active" : ""}
                   onClick={() => toggle(opt.id)}
+                  onPointerEnter={() => {
+                    const hint = opt.hint?.trim();
+                    if (hintPresentation === "toast" && hint && onHintToast) {
+                      onHintToast(hint);
+                    }
+                  }}
                 >
                   <span className="agentz-dropdown-option-head">
                     <span className="agentz-dropdown-check" aria-hidden>
@@ -199,7 +211,9 @@ export function DropdownMultiSelect({
                     </span>
                     <span className="agentz-dropdown-option-label">{opt.label}</span>
                   </span>
-                  {opt.hint && <span className="agentz-dropdown-option-hint">{opt.hint}</span>}
+                  {showInlineHint && opt.hint && (
+                    <span className="agentz-dropdown-option-hint">{opt.hint}</span>
+                  )}
                 </button>
               );
             })

@@ -91,6 +91,17 @@ pub async fn skills_list_installed(app: AppHandle) -> Result<Vec<InstalledSkill>
 #[tauri::command]
 pub async fn skills_uninstall(app: AppHandle, slug: String) -> Result<(), String> {
     let slug = sanitize_slug(&slug)?;
+    let config_dir = resolve_global_config_dir(&app)?;
+    if let Some(fish) = crate::commands::fish::find_user_fish_for_skill(&config_dir, &slug) {
+        let agent = if fish.name.trim().is_empty() {
+            fish.id.clone()
+        } else {
+            fish.name.clone()
+        };
+        return Err(format!(
+            "skill '{slug}' is referenced by anonymous agent '{agent}'; delete the anonymous agent first"
+        ));
+    }
     let ctx = crate::commands::skill_evolution_ctx::SkillEvolutionCtx::open(&app)?;
     let root = ctx.skills_root();
     if let Some(path) = crate::skills::provenance::find_skill_md(&root, &slug) {

@@ -107,7 +107,7 @@ export default function MarketGridView({ category, mode, onInstalled }: MarketGr
   }, [category, localSource, query, search, t]);
 
   return (
-    <div className="agentz-library-view">
+    <div className="agentz-market-panel">
       {mode === "discover" && SEARCHABLE.has(category) && (
         <div className="agentz-market-search">
           <input

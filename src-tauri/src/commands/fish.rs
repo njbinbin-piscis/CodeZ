@@ -170,6 +170,19 @@ pub fn find_fish(config_dir: &Path, id: &str) -> Option<FishDef> {
         .find(|f| f.id == id)
 }
 
+/// Id convention when an anonymous agent is created from an installed skill.
+pub fn fish_id_for_skill_slug(slug: &str) -> String {
+    format!("skill-{}", slug.trim())
+}
+
+/// User-defined anonymous agent derived from `slug`, if any.
+pub fn find_user_fish_for_skill(config_dir: &Path, slug: &str) -> Option<FishDef> {
+    let id = fish_id_for_skill_slug(slug);
+    load_user_fish(config_dir)
+        .into_iter()
+        .find(|f| f.id == id)
+}
+
 /// List all available Fish (for the settings/management UI).
 #[tauri::command]
 pub async fn fish_list(app: AppHandle) -> Result<Vec<FishDef>, String> {
