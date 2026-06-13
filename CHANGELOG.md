@@ -5,6 +5,12 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-06-13
+
+### Fixed
+
+- **Composer 下拉菜单**：CodeZ / WorkZ 输入框下方模式、模型、技能等选择列表改用视口 `fixed` 定位，避免被聊天侧栏 `overflow` 裁切右侧。
+
 ## [0.5.8] - 2026-06-13
 
 ### Added

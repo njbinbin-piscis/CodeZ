@@ -123,6 +123,12 @@
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+.agentz-dropdown-popup.is-fixed {
+  /* top/left/z-index set inline from useFixedPopupPosition (viewport coords). */
+  bottom: auto;
+  right: auto;
+}
+
 .agentz-dropdown.popup-up .agentz-dropdown-popup {
   bottom: calc(100% + 6px);
 }

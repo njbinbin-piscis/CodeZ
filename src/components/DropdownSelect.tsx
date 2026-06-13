@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import "./DropdownSelect.css";
 
 export interface DropdownOption {
@@ -13,6 +13,66 @@ function ChevronDown() {
       <path d="M6 9l6 6 6-6" />
     </svg>
   );
+}
+
+/** Escape overflow:hidden ancestors (CodeZ chat panel) by anchoring the menu to the viewport. */
+function useFixedPopupPosition(
+  open: boolean,
+  triggerRef: RefObject<HTMLElement | null>,
+  popupRef: RefObject<HTMLElement | null>,
+  placement: "up" | "down",
+) {
+  const [style, setStyle] = useState<CSSProperties>({});
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setStyle({});
+      return;
+    }
+    const trigger = triggerRef.current;
+    const popup = popupRef.current;
+    if (!trigger || !popup) return;
+
+    const reposition = () => {
+      const tr = trigger.getBoundingClientRect();
+      const pw = popup.offsetWidth || 280;
+      const ph = popup.offsetHeight || 240;
+      const gap = 6;
+      const margin = 8;
+
+      let top = placement === "up" ? tr.top - gap - ph : tr.bottom + gap;
+      if (placement === "up" && top < margin) {
+        top = tr.bottom + gap;
+      } else if (placement === "down" && top + ph > window.innerHeight - margin) {
+        top = Math.max(margin, tr.top - gap - ph);
+      }
+
+      let left = tr.left;
+      if (left + pw > window.innerWidth - margin) {
+        left = tr.right - pw;
+      }
+      left = Math.max(margin, Math.min(left, window.innerWidth - pw - margin));
+
+      setStyle({
+        position: "fixed",
+        top,
+        left,
+        bottom: "auto",
+        right: "auto",
+        zIndex: 10000,
+      });
+    };
+
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open, placement, triggerRef, popupRef]);
+
+  return style;
 }
 
 export interface DropdownSelectProps {
@@ -49,7 +109,16 @@ export default function DropdownSelect({
 }: DropdownSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const resolvedPlacement = placement ?? (variant === "pill" || variant === "text" ? "up" : "down");
+  const useFixedMenu = variant === "pill" || variant === "text";
+  const popupStyle = useFixedPopupPosition(
+    open && useFixedMenu,
+    triggerRef,
+    popupRef,
+    resolvedPlacement,
+  );
   const selected = options.find((o) => o.id === value);
   const displayLabel = selected?.label ?? placeholder ?? options[0]?.label ?? "—";
 
@@ -70,6 +139,7 @@ export default function DropdownSelect({
       ref={rootRef}
     >
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         className={`agentz-dropdown-trigger${accentWhenSet && value ? " has-value-accent" : ""}`}
@@ -88,7 +158,12 @@ export default function DropdownSelect({
         )}
       </button>
       {open && (
-        <div className="agentz-dropdown-popup" role="listbox">
+        <div
+          ref={popupRef}
+          className={`agentz-dropdown-popup${useFixedMenu ? " is-fixed" : ""}`}
+          style={useFixedMenu ? popupStyle : undefined}
+          role="listbox"
+        >
           {options.length === 0 ? (
             <div className="agentz-dropdown-empty">{placeholder ?? "—"}</div>
           ) : (
@@ -143,6 +218,9 @@ export function DropdownMultiSelect({
 }: DropdownMultiSelectProps & { icon?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const popupStyle = useFixedPopupPosition(open, triggerRef, popupRef, "up");
 
   useEffect(() => {
     if (!open) return;
@@ -162,6 +240,7 @@ export function DropdownMultiSelect({
   return (
     <div className="agentz-dropdown text popup-up" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={`agentz-dropdown-trigger${count > 0 ? " has-value-accent" : ""}`}
         disabled={disabled}
@@ -177,7 +256,13 @@ export function DropdownMultiSelect({
         </span>
       </button>
       {open && (
-        <div className="agentz-dropdown-popup" role="listbox" aria-multiselectable="true">
+        <div
+          ref={popupRef}
+          className="agentz-dropdown-popup is-fixed"
+          style={popupStyle}
+          role="listbox"
+          aria-multiselectable="true"
+        >
           {options.length === 0 ? (
             onEmptyHintClick ? (
               <button type="button" className="agentz-dropdown-empty agentz-dropdown-empty-action" onClick={onEmptyHintClick}>

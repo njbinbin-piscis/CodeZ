@@ -219,7 +219,7 @@
   align-content: flex-end;
   max-width: 100%;
   min-width: 0;
-  overflow-x: clip;
+  overflow: visible;
 }
 
 .agentz-composer-footer-right {
