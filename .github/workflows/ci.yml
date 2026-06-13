@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  CARGO_HTTP_MULTIPLEXING: false
   RUST_BACKTRACE: 1
   # `vite build` of the heavy frontend (mermaid / monaco / katex) OOMs under
   # Node's default ~2 GB heap; give it more headroom.

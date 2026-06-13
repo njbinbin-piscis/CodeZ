@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import io
 import struct
 from pathlib import Path
 
@@ -62,8 +63,32 @@ def render_android_foreground(size: int) -> "Image.Image":
 
 
 def write_ico(path: Path, sizes: list[int]) -> None:
+    """Write a multi-resolution .ico with embedded PNG frames (Windows Vista+).
+
+    Pillow's ICO writer often emits only the 16×16 frame; pack PNG blobs manually
+    so taskbar / Start / desktop icons stay sharp on HiDPI displays.
+    """
     images = [render_icon(s) for s in sizes]
-    images[0].save(path, format="ICO", sizes=[(s, s) for s in sizes], append_images=images[1:])
+    pngs: list[bytes] = []
+    for img in images:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        pngs.append(buf.getvalue())
+
+    count = len(pngs)
+    header = struct.pack("<HHH", 0, 1, count)
+    offset = 6 + 16 * count
+    entries = bytearray()
+    for size, png in zip(sizes, pngs):
+        dim = 0 if size >= 256 else size
+        entries.extend(struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(png), offset))
+        offset += len(png)
+
+    with path.open("wb") as f:
+        f.write(header)
+        f.write(entries)
+        for png in pngs:
+            f.write(png)
 
 
 def write_icns(path: Path, size: int = 512) -> None:
@@ -113,7 +138,7 @@ def main() -> None:
         render_icon(px).save(ICONS / name, format="PNG")
         print(f"wrote {name}")
 
-    write_ico(ICONS / "icon.ico", [16, 32, 48, 64, 128, 256])
+    write_ico(ICONS / "icon.ico", [16, 24, 32, 48, 64, 128, 256])
     print("wrote icon.ico")
     write_icns(ICONS / "icon.icns")
     print("wrote icon.icns")

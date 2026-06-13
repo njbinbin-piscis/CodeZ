@@ -5,6 +5,13 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-06-13
+
+### Fixed
+
+- **Windows icons**: regenerate `icon.ico` with 16–256px frames (was single 16×16, blurry on HiDPI).
+- **Release CI**: `cargo fetch` retry + `CARGO_NET_RETRY` for flaky crates.io; job `timeout-minutes` to avoid zombie runners.
+
 ## [0.5.6] - 2026-06-13
 
 ### Changed

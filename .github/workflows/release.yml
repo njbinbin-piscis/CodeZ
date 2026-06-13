@@ -12,6 +12,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Retry flaky crates.io downloads (HTTP2 reset / connection reset by peer).
+  CARGO_NET_RETRY: 10
+  CARGO_HTTP_MULTIPLEXING: false
   # The frontend (mermaid / monaco / katex) needs more than Node's default
   # ~2 GB heap to bundle, otherwise `vite build` OOMs (exit 134) during the
   # tauri-action beforeBuildCommand.
@@ -22,6 +25,7 @@ jobs:
   bundle-linux-x86_64:
     name: Bundle Linux x86_64 (.deb + AppImage)
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -52,6 +56,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Build + bundle with tauri-action
         uses: tauri-apps/tauri-action@v0
@@ -80,6 +94,7 @@ jobs:
   bundle-linux-aarch64:
     name: Bundle Linux aarch64 (.deb + AppImage)
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -111,6 +126,16 @@ jobs:
         with:
           workspaces: ". -> target"
 
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
+
       - name: Build + bundle with tauri-action
         uses: tauri-apps/tauri-action@v0
         env:
@@ -136,6 +161,7 @@ jobs:
   bundle-windows-x86_64:
     name: Bundle Windows x86_64 (.msi + .exe)
     runs-on: windows-latest
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -152,6 +178,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Build + bundle with tauri-action
         uses: tauri-apps/tauri-action@v0
@@ -179,6 +215,7 @@ jobs:
   bundle-windows-aarch64:
     name: Bundle Windows aarch64 (.msi + .exe)
     runs-on: windows-11-arm
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -195,6 +232,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Build + bundle with tauri-action
         uses: tauri-apps/tauri-action@v0
@@ -225,6 +272,7 @@ jobs:
   bundle-macos-aarch64:
     name: Bundle macOS aarch64 (.dmg + .app)
     runs-on: macos-14
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -241,6 +289,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Build + bundle with tauri-action
         uses: tauri-apps/tauri-action@v0
@@ -269,6 +327,7 @@ jobs:
   bundle-macos-universal:
     name: Bundle macOS Universal (.dmg + .app)
     runs-on: macos-14
+    timeout-minutes: 150
     permissions:
       contents: write
     steps:
@@ -288,6 +347,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+
+      - name: Prefetch Cargo dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if cargo fetch --locked; then exit 0; fi
+            echo "cargo fetch failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Build + bundle universal2 with tauri-action
         uses: tauri-apps/tauri-action@v0
