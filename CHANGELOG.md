@@ -5,6 +5,12 @@ All notable changes to AgentZ are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-06-13
+
+### Fixed
+
+- **Composer 技能说明 toast**：CodeZ / WorkZ 悬停技能项时的提示改用主题 CSS 变量（背景、文字、边框），浅色模式下不再显示黑底金字。
+
 ## [0.5.9] - 2026-06-13
 
 ### Fixed

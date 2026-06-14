@@ -552,12 +552,12 @@
   z-index: 30;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  background: rgba(30, 24, 12, 0.96);
-  color: #fde68a;
+  border: 1px solid var(--border, #2a2a38);
+  background: var(--bg-elev-2, #1b1b26);
+  color: var(--text, #e8e8f0);
   font-size: 12px;
   line-height: 1.45;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text, #e8e8f0) 12%, transparent);
   pointer-events: none;
 }
 
